@@ -38,6 +38,11 @@ if ! command -v wslpath >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required to build the Vite frontend." >&2
+    exit 1
+fi
+
 copy_file() {
     local src="$1"
     local dst="$2"
@@ -45,6 +50,19 @@ copy_file() {
     if ! cp "$src" "$dst"; then
         echo "Failed to copy ${src} to ${dst}." >&2
         echo "The destination file may be locked by Skyrim, MO2, or another Windows process." >&2
+        exit 1
+    fi
+}
+
+copy_tree() {
+    local src_dir="$1"
+    local dst_dir="$2"
+
+    rm -rf "$dst_dir"
+    mkdir -p "$dst_dir"
+
+    if ! cp -r "${src_dir}/." "$dst_dir/"; then
+        echo "Failed to copy ${src_dir} to ${dst_dir}." >&2
         exit 1
     fi
 }
@@ -59,6 +77,12 @@ VIEW_DST_DIR="${MOD_DIR}/PrismaUI/views/${VIEW_NAME}"
 if ((CLEAN)); then
     rm -rf "${REPO_ROOT}/build" "${REPO_ROOT}/.xmake"
 fi
+
+if [[ ! -d "${REPO_ROOT}/frontend/node_modules" ]]; then
+    npm --prefix "${REPO_ROOT}/frontend" install
+fi
+
+npm --prefix "${REPO_ROOT}/frontend" run build
 
 POWERSHELL_CMD="
 \$ErrorActionPreference = 'Stop'
@@ -77,7 +101,7 @@ fi
 mkdir -p "$PLUGIN_DST_DIR" "$VIEW_DST_DIR"
 
 copy_file "$PLUGIN_SRC" "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"
-copy_file "${REPO_ROOT}/view/index.html" "${VIEW_DST_DIR}/index.html"
+copy_tree "${REPO_ROOT}/view" "$VIEW_DST_DIR"
 
 if [[ -f "$PDB_SRC" ]]; then
     copy_file "$PDB_SRC" "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb"
@@ -87,4 +111,4 @@ fi
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
 echo "Deployed plugin to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"
-echo "Deployed Prisma view to ${VIEW_DST_DIR}/index.html"
+echo "Deployed Prisma view to ${VIEW_DST_DIR}"

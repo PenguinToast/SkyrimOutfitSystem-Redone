@@ -25,8 +25,21 @@ xmake build
 
 This generates output under `build/windows/` in the project root.
 
-Move `view/index.html` into your mod's PrismaUI view folder as:
-`<YourModFolder>/PrismaUI/views/skyrim-outfit-system-ng/index.html`
+The Prisma UI frontend now lives under `frontend/` and is built with Vite, Svelte, and TypeScript.
+Its production output is generated into `view/`.
+
+To work on the frontend directly:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+To build only the frontend bundle:
+```bash
+cd frontend
+npm run build
+```
 
 To build from WSL and deploy directly into the local test mod folder:
 ```bash
@@ -40,6 +53,9 @@ For a full clean rebuild:
 
 This deploys the plugin to:
 `/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng`
+
+and deploys the built Prisma view to:
+`/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng/PrismaUI/views/skyrim-outfit-system-ng`
 
 ## Optional Output Paths
 You can redirect install output with either of these environment variables:
