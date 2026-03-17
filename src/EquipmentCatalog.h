@@ -10,56 +10,66 @@ namespace sosng
 
     struct GearEntry
     {
-        std::string_view id;
-        std::string_view name;
-        std::string_view editorID;
-        std::string_view plugin;
+        RE::FormID formID;
+        std::string id;
+        std::string name;
+        std::string editorID;
+        std::string plugin;
         GearKind kind;
-        std::string_view category;
-        std::string_view slot;
+        std::string category;
+        std::string slot;
         int statValue;
         float weight;
         int value;
-        std::vector<std::string_view> keywords;
+        std::vector<std::string> keywords;
+        std::string keywordsText;
+        std::string searchText;
     };
 
     struct OutfitEntry
     {
-        std::string_view id;
-        std::string_view name;
-        std::string_view editorID;
-        std::string_view plugin;
-        std::string_view summary;
-        std::vector<std::string_view> pieces;
-        std::vector<std::string_view> tags;
+        RE::FormID formID;
+        std::string id;
+        std::string name;
+        std::string editorID;
+        std::string plugin;
+        std::string summary;
+        std::vector<std::string> pieces;
+        std::vector<std::string> tags;
+        std::string piecesText;
+        std::string tagsText;
+        std::string searchText;
     };
 
     class EquipmentCatalog
     {
     public:
-        static const EquipmentCatalog& Get();
+        static EquipmentCatalog& Get();
+
+        void RefreshFromGame();
 
         const std::vector<GearEntry>& GetGear() const { return gear_; }
         const std::vector<OutfitEntry>& GetOutfits() const { return outfits_; }
 
-        const std::vector<std::string_view>& GetGearPlugins() const { return gearPlugins_; }
-        const std::vector<std::string_view>& GetGearSlots() const { return gearSlots_; }
-        const std::vector<std::string_view>& GetOutfitPlugins() const { return outfitPlugins_; }
-        const std::vector<std::string_view>& GetOutfitTags() const { return outfitTags_; }
+        const std::vector<std::string>& GetGearPlugins() const { return gearPlugins_; }
+        const std::vector<std::string>& GetGearSlots() const { return gearSlots_; }
+        const std::vector<std::string>& GetOutfitPlugins() const { return outfitPlugins_; }
+        const std::vector<std::string>& GetOutfitTags() const { return outfitTags_; }
 
         std::string_view GetSource() const { return source_; }
         std::string_view GetRevision() const { return revision_; }
 
     private:
         EquipmentCatalog();
+        void RebuildDerivedData();
 
         std::vector<GearEntry> gear_;
         std::vector<OutfitEntry> outfits_;
-        std::vector<std::string_view> gearPlugins_;
-        std::vector<std::string_view> gearSlots_;
-        std::vector<std::string_view> outfitPlugins_;
-        std::vector<std::string_view> outfitTags_;
-        std::string_view source_;
-        std::string_view revision_;
+        std::vector<std::string> gearPlugins_;
+        std::vector<std::string> gearSlots_;
+        std::vector<std::string> outfitPlugins_;
+        std::vector<std::string> outfitTags_;
+        std::string source_;
+        std::string revision_;
     };
 }

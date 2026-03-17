@@ -1,73 +1,586 @@
 #include "EquipmentCatalog.h"
 
+#include <cstdio>
+#include <iterator>
+
 namespace
 {
-    template <class Entries, class Projection>
-    std::vector<std::string_view> BuildSortedUniqueOptions(const Entries& a_entries, Projection a_projection)
+    using BipedSlot = RE::BIPED_MODEL::BipedObjectSlot;
+
+    constexpr std::array<std::pair<BipedSlot, std::string_view>, 32> kArmorSlotNames{ {
+        { BipedSlot::kHead, "30 - Head" },
+        { BipedSlot::kHair, "31 - Hair" },
+        { BipedSlot::kBody, "32 - Body" },
+        { BipedSlot::kHands, "33 - Hands" },
+        { BipedSlot::kForearms, "34 - Forearms" },
+        { BipedSlot::kAmulet, "35 - Amulet" },
+        { BipedSlot::kRing, "36 - Ring" },
+        { BipedSlot::kFeet, "37 - Feet" },
+        { BipedSlot::kCalves, "38 - Calves" },
+        { BipedSlot::kShield, "39 - Shield" },
+        { BipedSlot::kTail, "40 - Tail" },
+        { BipedSlot::kLongHair, "41 - Long Hair" },
+        { BipedSlot::kCirclet, "42 - Circlet" },
+        { BipedSlot::kEars, "43 - Ears" },
+        { BipedSlot::kModMouth, "44 - Mod Mouth" },
+        { BipedSlot::kModNeck, "45 - Mod Neck" },
+        { BipedSlot::kModChestPrimary, "46 - Mod Chest Primary" },
+        { BipedSlot::kModBack, "47 - Mod Back" },
+        { BipedSlot::kModMisc1, "48 - Mod Misc1" },
+        { BipedSlot::kModPelvisPrimary, "49 - Mod Pelvis Primary" },
+        { BipedSlot::kDecapitateHead, "50 - Decapitate Head" },
+        { BipedSlot::kDecapitate, "51 - Decapitate" },
+        { BipedSlot::kModPelvisSecondary, "52 - Mod Pelvis Secondary" },
+        { BipedSlot::kModLegRight, "53 - Mod Leg Right" },
+        { BipedSlot::kModLegLeft, "54 - Mod Leg Left" },
+        { BipedSlot::kModFaceJewelry, "55 - Mod Face Jewelry" },
+        { BipedSlot::kModChestSecondary, "56 - Mod Chest Secondary" },
+        { BipedSlot::kModShoulder, "57 - Mod Shoulder" },
+        { BipedSlot::kModArmLeft, "58 - Mod Arm Left" },
+        { BipedSlot::kModArmRight, "59 - Mod Arm Right" },
+        { BipedSlot::kModMisc2, "60 - Mod Misc2" },
+        { BipedSlot::kFX01, "61 - FX01" }
+    } };
+
+    template <class Strings>
+    std::string JoinStrings(const Strings& a_strings)
     {
-        std::vector<std::string_view> values;
+        std::string output;
+        for (const auto& value : a_strings) {
+            if (!output.empty()) {
+                output.append(", ");
+            }
+            output.append(value);
+        }
+        return output;
+    }
+
+    void SortUniqueStrings(std::vector<std::string>& a_values)
+    {
+        std::ranges::sort(a_values);
+        a_values.erase(std::unique(a_values.begin(), a_values.end()), a_values.end());
+    }
+
+    std::string CopyCString(const char* a_text)
+    {
+        if (!a_text || a_text[0] == '\0') {
+            return {};
+        }
+        return a_text;
+    }
+
+    std::string FormatFormID(RE::FormID a_formID)
+    {
+        char buffer[16]{};
+        std::snprintf(buffer, sizeof(buffer), "%08X", a_formID);
+        return buffer;
+    }
+
+    std::string GetPluginName(const RE::TESForm* a_form)
+    {
+        if (!a_form) {
+            return "Unknown";
+        }
+
+        const auto* file = a_form->GetFile(0);
+        if (!file) {
+            return "Unknown";
+        }
+
+        const auto filename = file->GetFilename();
+        if (filename.empty()) {
+            return "Unknown";
+        }
+
+        return std::string(filename);
+    }
+
+    std::string GetEditorID(const RE::TESForm* a_form)
+    {
+        return a_form ? CopyCString(a_form->GetFormEditorID()) : std::string{};
+    }
+
+    std::string GetName(const RE::TESForm* a_form)
+    {
+        return a_form ? CopyCString(a_form->GetName()) : std::string{};
+    }
+
+    std::string GetDisplayName(const RE::TESForm* a_form)
+    {
+        if (!a_form) {
+            return "Unknown";
+        }
+
+        auto name = GetName(a_form);
+        if (!name.empty()) {
+            return name;
+        }
+
+        auto editorID = GetEditorID(a_form);
+        if (!editorID.empty()) {
+            return editorID;
+        }
+
+        return "Form " + FormatFormID(a_form->GetFormID());
+    }
+
+    std::string BuildEntryID(const RE::TESForm* a_form)
+    {
+        if (!a_form) {
+            return "unknown|00000000";
+        }
+
+        return GetPluginName(a_form) + "|" + FormatFormID(a_form->GetLocalFormID());
+    }
+
+    std::string GetArmorCategory(const RE::TESObjectARMO* a_armor)
+    {
+        if (!a_armor) {
+            return "Armor";
+        }
+
+        switch (a_armor->GetArmorType()) {
+        case RE::TESObjectARMO::ArmorType::kLightArmor:
+            return "Light Armor";
+        case RE::TESObjectARMO::ArmorType::kHeavyArmor:
+            return "Heavy Armor";
+        case RE::TESObjectARMO::ArmorType::kClothing:
+            return "Clothing";
+        default:
+            return "Armor";
+        }
+    }
+
+    std::vector<std::string> GetArmorSlots(const RE::TESObjectARMO* a_armor)
+    {
+        std::vector<std::string> slots;
+        if (!a_armor) {
+            return slots;
+        }
+
+        const auto slotMask = a_armor->GetSlotMask().underlying();
+        for (const auto& [slot, label] : kArmorSlotNames) {
+            if ((slotMask & static_cast<std::uint32_t>(std::to_underlying(slot))) != 0) {
+                slots.emplace_back(label);
+            }
+        }
+
+        if (slots.empty()) {
+            slots.emplace_back("None");
+        }
+
+        return slots;
+    }
+
+    std::string GetPrimaryArmorSlot(const RE::TESObjectARMO* a_armor)
+    {
+        auto slots = GetArmorSlots(a_armor);
+        return slots.empty() ? std::string{ "None" } : std::move(slots.front());
+    }
+
+    std::string GetWeaponCategory(const RE::TESObjectWEAP* a_weapon)
+    {
+        if (!a_weapon) {
+            return "Weapon";
+        }
+
+        switch (a_weapon->GetWeaponType()) {
+        case RE::WEAPON_TYPE::kHandToHandMelee:
+            return "Unarmed";
+        case RE::WEAPON_TYPE::kOneHandSword:
+            return "Sword";
+        case RE::WEAPON_TYPE::kOneHandDagger:
+            return "Dagger";
+        case RE::WEAPON_TYPE::kOneHandAxe:
+            return "War Axe";
+        case RE::WEAPON_TYPE::kOneHandMace:
+            return "Mace";
+        case RE::WEAPON_TYPE::kTwoHandSword:
+            return "Greatsword";
+        case RE::WEAPON_TYPE::kTwoHandAxe:
+            return "Battleaxe";
+        case RE::WEAPON_TYPE::kBow:
+            return "Bow";
+        case RE::WEAPON_TYPE::kStaff:
+            return "Staff";
+        case RE::WEAPON_TYPE::kCrossbow:
+            return "Crossbow";
+        default:
+            return "Weapon";
+        }
+    }
+
+    std::string GetWeaponClass(const RE::TESObjectWEAP* a_weapon)
+    {
+        if (!a_weapon) {
+            return "Weapon";
+        }
+
+        switch (a_weapon->GetWeaponType()) {
+        case RE::WEAPON_TYPE::kHandToHandMelee:
+            return "Unarmed";
+        case RE::WEAPON_TYPE::kOneHandSword:
+        case RE::WEAPON_TYPE::kOneHandDagger:
+        case RE::WEAPON_TYPE::kOneHandAxe:
+        case RE::WEAPON_TYPE::kOneHandMace:
+            return "One-Handed";
+        case RE::WEAPON_TYPE::kTwoHandSword:
+        case RE::WEAPON_TYPE::kTwoHandAxe:
+            return "Two-Handed";
+        case RE::WEAPON_TYPE::kBow:
+        case RE::WEAPON_TYPE::kCrossbow:
+            return "Ranged";
+        case RE::WEAPON_TYPE::kStaff:
+            return "Magic";
+        default:
+            return "Weapon";
+        }
+    }
+
+    template <class T>
+    std::vector<std::string> GetKeywords(const T* a_form)
+    {
+        std::vector<std::string> keywords;
+        if (!a_form) {
+            return keywords;
+        }
+
+        const auto* keywordForm = static_cast<const RE::BGSKeywordForm*>(a_form);
+        keywords.reserve(keywordForm->GetNumKeywords());
+        for (std::uint32_t index = 0; index < keywordForm->GetNumKeywords(); ++index) {
+            const auto keyword = keywordForm->GetKeywordAt(index);
+            if (!keyword || !keyword.value()) {
+                continue;
+            }
+
+            auto text = GetEditorID(keyword.value());
+            if (text.empty()) {
+                text = GetName(keyword.value());
+            }
+
+            if (!text.empty()) {
+                keywords.push_back(std::move(text));
+            }
+        }
+
+        SortUniqueStrings(keywords);
+        return keywords;
+    }
+
+    void AppendSearchToken(std::string& a_searchText, std::string_view a_token)
+    {
+        if (a_token.empty()) {
+            return;
+        }
+
+        if (!a_searchText.empty()) {
+            a_searchText.push_back(' ');
+        }
+        a_searchText.append(a_token);
+    }
+
+    std::string BuildGearSearchText(const sosng::GearEntry& a_entry)
+    {
+        std::string text;
+        text.reserve(256);
+
+        AppendSearchToken(text, a_entry.name);
+        AppendSearchToken(text, a_entry.editorID);
+        AppendSearchToken(text, a_entry.plugin);
+        AppendSearchToken(text, a_entry.category);
+        AppendSearchToken(text, a_entry.slot);
+        AppendSearchToken(text, a_entry.keywordsText);
+
+        return text;
+    }
+
+    std::string BuildOutfitSearchText(const sosng::OutfitEntry& a_entry)
+    {
+        std::string text;
+        text.reserve(256);
+
+        AppendSearchToken(text, a_entry.name);
+        AppendSearchToken(text, a_entry.editorID);
+        AppendSearchToken(text, a_entry.plugin);
+        AppendSearchToken(text, a_entry.summary);
+        AppendSearchToken(text, a_entry.tagsText);
+        AppendSearchToken(text, a_entry.piecesText);
+
+        return text;
+    }
+
+    struct OutfitDescription
+    {
+        std::vector<std::string> pieces;
+        std::vector<std::string> tags;
+        std::size_t armorCount{ 0 };
+        std::size_t weaponCount{ 0 };
+    };
+
+    OutfitDescription DescribeOutfit(const RE::BGSOutfit* a_outfit)
+    {
+        OutfitDescription description;
+        if (!a_outfit) {
+            return description;
+        }
+
+        a_outfit->ForEachItem([&](RE::TESForm* a_item) {
+            if (!a_item || a_item->IsDeleted() || a_item->IsIgnored()) {
+                return RE::BSContainer::ForEachResult::kContinue;
+            }
+
+            description.pieces.push_back(GetDisplayName(a_item));
+
+            if (const auto* armor = a_item->As<RE::TESObjectARMO>()) {
+                ++description.armorCount;
+                description.tags.emplace_back("Armor");
+                description.tags.push_back(GetArmorCategory(armor));
+
+                auto slots = GetArmorSlots(armor);
+                description.tags.insert(description.tags.end(), std::make_move_iterator(slots.begin()), std::make_move_iterator(slots.end()));
+            } else if (const auto* weapon = a_item->As<RE::TESObjectWEAP>()) {
+                ++description.weaponCount;
+                description.tags.emplace_back("Weapon");
+                description.tags.push_back(GetWeaponClass(weapon));
+                description.tags.push_back(GetWeaponCategory(weapon));
+            }
+
+            return RE::BSContainer::ForEachResult::kContinue;
+        });
+
+        SortUniqueStrings(description.pieces);
+        SortUniqueStrings(description.tags);
+        return description;
+    }
+
+    std::string BuildOutfitSummary(const OutfitDescription& a_description)
+    {
+        const auto totalPieces = a_description.pieces.size();
+        if (totalPieces == 0) {
+            return "Empty outfit.";
+        }
+
+        std::string summary = "Contains " + std::to_string(totalPieces) + " item";
+        if (totalPieces != 1) {
+            summary.push_back('s');
+        }
+
+        if (a_description.armorCount > 0 || a_description.weaponCount > 0) {
+            summary.append(": ");
+
+            bool needsSeparator = false;
+            if (a_description.armorCount > 0) {
+                summary.append(std::to_string(a_description.armorCount));
+                summary.append(" armor");
+                needsSeparator = true;
+            }
+
+            if (a_description.weaponCount > 0) {
+                if (needsSeparator) {
+                    summary.append(", ");
+                }
+                summary.append(std::to_string(a_description.weaponCount));
+                summary.append(" weapon");
+                if (a_description.weaponCount != 1) {
+                    summary.push_back('s');
+                }
+            }
+        } else {
+            summary.push_back('.');
+        }
+
+        return summary;
+    }
+
+    template <class Entries, class Projection>
+    std::vector<std::string> BuildSortedUniqueOptions(const Entries& a_entries, Projection a_projection)
+    {
+        std::vector<std::string> values;
         values.reserve(a_entries.size());
 
         for (const auto& entry : a_entries) {
-            values.push_back(a_projection(entry));
+            const auto& value = a_projection(entry);
+            if (!value.empty()) {
+                values.push_back(value);
+            }
         }
 
-        std::ranges::sort(values);
-        values.erase(std::unique(values.begin(), values.end()), values.end());
+        SortUniqueStrings(values);
         return values;
     }
 
-    std::vector<std::string_view> BuildSortedUniqueOutfitTags(const std::vector<sosng::OutfitEntry>& a_outfits)
+    std::vector<std::string> BuildSortedUniqueOutfitTags(const std::vector<sosng::OutfitEntry>& a_outfits)
     {
-        std::vector<std::string_view> values;
+        std::vector<std::string> values;
         for (const auto& outfit : a_outfits) {
             values.insert(values.end(), outfit.tags.begin(), outfit.tags.end());
         }
 
-        std::ranges::sort(values);
-        values.erase(std::unique(values.begin(), values.end()), values.end());
+        SortUniqueStrings(values);
         return values;
     }
 }
 
 namespace sosng
 {
-    const EquipmentCatalog& EquipmentCatalog::Get()
+    EquipmentCatalog& EquipmentCatalog::Get()
     {
-        static const EquipmentCatalog singleton;
+        static EquipmentCatalog singleton;
         return singleton;
     }
 
     EquipmentCatalog::EquipmentCatalog() :
-        source_("Bundled preview catalog"),
-        revision_("imgui-prototype")
+        source_("Catalog not loaded"),
+        revision_("cache-empty")
+    {}
+
+    void EquipmentCatalog::RefreshFromGame()
     {
-        gear_ = {
-            { "armor-ebonymail", "Ebony Mail", "DA01EbonyMail", "Skyrim.esm", GearKind::Armor, "Heavy Armor", "Body", 45, 28.0f, 3200, { "daedric artifact", "body", "heavy", "stealth" } },
-            { "armor-nightingale", "Nightingale Armor", "NightingaleArmorCuirass", "Skyrim.esm", GearKind::Armor, "Light Armor", "Body", 34, 12.0f, 2100, { "thieves guild", "body", "light", "stealth" } },
-            { "armor-travelcloak", "Traveler Fur Mantle", "SOSNGTravelerMantle01", "WarmFashion.esp", GearKind::Armor, "Clothing", "Cloak", 0, 2.0f, 240, { "cloak", "travel", "fur", "vanity" } },
-            { "armor-glassgauntlets", "Glass Gauntlets", "ArmorGlassGauntlets", "Skyrim.esm", GearKind::Armor, "Light Armor", "Hands", 11, 4.0f, 450, { "hands", "light", "glass" } },
-            { "armor-bosmerboots", "Bosmer Hunter Boots", "SOSNGBosmerHunterBoots", "BosmeriSwag.esp", GearKind::Armor, "Light Armor", "Feet", 9, 3.0f, 380, { "boots", "hunter", "bosmer", "feet" } },
-            { "armor-courtcirclet", "Silver Court Circlet", "SOSNGCourtCircletSilver", "RegalThreads.esp", GearKind::Armor, "Clothing", "Head", 0, 1.0f, 900, { "circlet", "head", "noble", "social" } },
-            { "weapon-dawnbreaker", "Dawnbreaker", "DA09Dawnbreaker", "Skyrim.esm", GearKind::Weapon, "Sword", "One-Handed", 12, 10.0f, 740, { "sword", "one-handed", "artifact", "fire" } },
-            { "weapon-dragonbonebow", "Dragonbone Bow", "DLC2DragonBoneBow", "Dawnguard.esm", GearKind::Weapon, "Bow", "Two-Handed", 20, 20.0f, 2725, { "bow", "dragonbone", "archery" } },
-            { "weapon-orsimerdagger", "Orsimer Skinning Knife", "SOSNGOrsimerKnife01", "OrcStrongholds.esp", GearKind::Weapon, "Dagger", "One-Handed", 8, 2.0f, 180, { "dagger", "knife", "orc", "utility" } },
-            { "weapon-ritualstaff", "Ritual Bone Staff", "SOSNGRitualBoneStaff", "Witchlight.esp", GearKind::Weapon, "Staff", "Two-Handed", 0, 8.0f, 1250, { "staff", "ritual", "bone", "magic" } },
-            { "weapon-steelwaraxe", "Steel War Axe", "WeaponSteelWarAxe", "Skyrim.esm", GearKind::Weapon, "War Axe", "One-Handed", 9, 11.0f, 55, { "axe", "one-handed", "steel" } },
-            { "weapon-nordicherosword", "Nordic Hero Greatsword", "DLC2NordicHeroGreatsword", "Dragonborn.esm", GearKind::Weapon, "Greatsword", "Two-Handed", 21, 16.0f, 985, { "greatsword", "nordic", "two-handed" } }
-        };
+        gear_.clear();
+        outfits_.clear();
+        gearPlugins_.clear();
+        gearSlots_.clear();
+        outfitPlugins_.clear();
+        outfitTags_.clear();
 
-        outfits_ = {
-            { "outfit-roadrunner", "Roadrunner Kit", "SOSNGOutfitRoadrunner", "SkyrimOutfitSystemNG.esp", "Lightweight travel set for cities, inns, and carriage routes.", { "Traveler Fur Mantle", "Bosmer Hunter Boots", "Silver Court Circlet" }, { "travel", "light", "city" } },
-            { "outfit-nightops", "Night Ops", "SOSNGOutfitNightOps", "SkyrimOutfitSystemNG.esp", "Stealth-forward vanity kit built around dark leather silhouettes.", { "Nightingale Armor", "Glass Gauntlets", "Orsimer Skinning Knife" }, { "stealth", "thief", "light armor" } },
-            { "outfit-courtly", "Courtly Presence", "SOSNGOutfitCourtlyPresence", "SkyrimOutfitSystemNG.esp", "Social outfit for dialogue scenes, guild meetings, and palace visits.", { "Silver Court Circlet", "Traveler Fur Mantle" }, { "social", "noble", "city" } },
-            { "outfit-dwemerbreaker", "Dwemer Breaker", "SOSNGOutfitDwemerBreaker", "SkyrimOutfitSystemNG.esp", "Heavy ruin-delving silhouette with practical gloves and a visible artifact chestpiece.", { "Ebony Mail", "Glass Gauntlets", "Steel War Axe" }, { "dungeon", "heavy", "dwemer" } },
-            { "outfit-dragonguard", "Dragonguard Hunter", "SOSNGOutfitDragonguardHunter", "SkyrimOutfitSystemNG.esp", "Ranged-focused look with a dragonbone bow and traveler-layered profile.", { "Dragonbone Bow", "Traveler Fur Mantle", "Bosmer Hunter Boots" }, { "archery", "hunter", "field" } }
-        };
+        auto* dataHandler = RE::TESDataHandler::GetSingleton();
+        if (!dataHandler) {
+            source_ = "TESDataHandler unavailable";
+            revision_ = "cache-error";
+            logger::error("Failed to refresh equipment catalog: TESDataHandler was null");
+            return;
+        }
 
-        gearPlugins_ = BuildSortedUniqueOptions(gear_, [](const GearEntry& a_entry) { return a_entry.plugin; });
-        gearSlots_ = BuildSortedUniqueOptions(gear_, [](const GearEntry& a_entry) { return a_entry.slot; });
-        outfitPlugins_ = BuildSortedUniqueOptions(outfits_, [](const OutfitEntry& a_entry) { return a_entry.plugin; });
+        for (auto* armor : dataHandler->GetFormArray<RE::TESObjectARMO>()) {
+            if (!armor || armor->IsDeleted() || armor->IsIgnored() || !armor->GetFile(0)) {
+                continue;
+            }
+
+            const auto editorID = GetEditorID(armor);
+            auto displayName = GetName(armor);
+            if (displayName.empty()) {
+                displayName = editorID;
+            }
+            if (displayName.empty()) {
+                continue;
+            }
+
+            GearEntry entry{};
+            entry.formID = armor->GetFormID();
+            entry.id = BuildEntryID(armor);
+            entry.name = std::move(displayName);
+            entry.editorID = editorID;
+            entry.plugin = GetPluginName(armor);
+            entry.kind = GearKind::Armor;
+            entry.category = GetArmorCategory(armor);
+            entry.slot = GetPrimaryArmorSlot(armor);
+            entry.statValue = static_cast<int>(armor->GetArmorRating());
+            entry.weight = armor->GetWeight();
+            entry.value = armor->GetGoldValue();
+            entry.keywords = GetKeywords(armor);
+
+            auto slots = GetArmorSlots(armor);
+            entry.keywords.insert(entry.keywords.end(), std::make_move_iterator(slots.begin()), std::make_move_iterator(slots.end()));
+            entry.keywords.push_back(entry.category);
+            SortUniqueStrings(entry.keywords);
+            entry.keywordsText = JoinStrings(entry.keywords);
+            entry.searchText = BuildGearSearchText(entry);
+
+            gear_.push_back(std::move(entry));
+        }
+
+        for (auto* weapon : dataHandler->GetFormArray<RE::TESObjectWEAP>()) {
+            if (!weapon || weapon->IsDeleted() || weapon->IsIgnored() || !weapon->GetFile(0)) {
+                continue;
+            }
+
+            const auto editorID = GetEditorID(weapon);
+            auto displayName = GetName(weapon);
+            if (displayName.empty()) {
+                displayName = editorID;
+            }
+            if (displayName.empty()) {
+                continue;
+            }
+
+            GearEntry entry{};
+            entry.formID = weapon->GetFormID();
+            entry.id = BuildEntryID(weapon);
+            entry.name = std::move(displayName);
+            entry.editorID = editorID;
+            entry.plugin = GetPluginName(weapon);
+            entry.kind = GearKind::Weapon;
+            entry.category = GetWeaponCategory(weapon);
+            entry.slot = GetWeaponClass(weapon);
+            entry.statValue = static_cast<int>(weapon->GetAttackDamage());
+            entry.weight = weapon->GetWeight();
+            entry.value = weapon->GetGoldValue();
+            entry.keywords = GetKeywords(weapon);
+
+            entry.keywords.push_back(entry.category);
+            entry.keywords.push_back(entry.slot);
+            SortUniqueStrings(entry.keywords);
+            entry.keywordsText = JoinStrings(entry.keywords);
+            entry.searchText = BuildGearSearchText(entry);
+
+            gear_.push_back(std::move(entry));
+        }
+
+        for (auto* outfit : dataHandler->GetFormArray<RE::BGSOutfit>()) {
+            if (!outfit || outfit->IsDeleted() || outfit->IsIgnored() || !outfit->GetFile(0)) {
+                continue;
+            }
+
+            auto description = DescribeOutfit(outfit);
+            if (description.pieces.empty()) {
+                continue;
+            }
+
+            auto editorID = GetEditorID(outfit);
+            auto displayName = GetName(outfit);
+            if (displayName.empty()) {
+                displayName = editorID;
+            }
+            if (displayName.empty()) {
+                displayName = "Form " + FormatFormID(outfit->GetFormID());
+            }
+
+            OutfitEntry entry{};
+            entry.formID = outfit->GetFormID();
+            entry.id = BuildEntryID(outfit);
+            entry.name = std::move(displayName);
+            entry.editorID = std::move(editorID);
+            entry.plugin = GetPluginName(outfit);
+            entry.summary = BuildOutfitSummary(description);
+            entry.pieces = std::move(description.pieces);
+            entry.tags = std::move(description.tags);
+
+            entry.piecesText = JoinStrings(entry.pieces);
+            entry.tagsText = JoinStrings(entry.tags);
+            entry.searchText = BuildOutfitSearchText(entry);
+
+            outfits_.push_back(std::move(entry));
+        }
+
+        RebuildDerivedData();
+
+        source_ = "Runtime cache from TESDataHandler";
+        revision_ = "gear=" + std::to_string(gear_.size()) + ", outfits=" + std::to_string(outfits_.size());
+
+        logger::info("Equipment catalog refreshed: {} gear entries, {} outfits", gear_.size(), outfits_.size());
+    }
+
+    void EquipmentCatalog::RebuildDerivedData()
+    {
+        gearPlugins_ = BuildSortedUniqueOptions(gear_, [](const GearEntry& a_entry) -> const std::string& {
+            return a_entry.plugin;
+        });
+        gearSlots_ = BuildSortedUniqueOptions(gear_, [](const GearEntry& a_entry) -> const std::string& {
+            return a_entry.slot;
+        });
+        outfitPlugins_ = BuildSortedUniqueOptions(outfits_, [](const OutfitEntry& a_entry) -> const std::string& {
+            return a_entry.plugin;
+        });
         outfitTags_ = BuildSortedUniqueOutfitTags(outfits_);
     }
 }

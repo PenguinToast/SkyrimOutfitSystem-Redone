@@ -50,60 +50,6 @@ namespace
         return 0;
     }
 
-    template <class Strings>
-    std::string JoinStrings(const Strings& a_strings)
-    {
-        std::string output;
-        for (const auto value : a_strings) {
-            if (!output.empty()) {
-                output.append(", ");
-            }
-            output.append(value.data(), value.size());
-        }
-        return output;
-    }
-
-    std::string BuildGearSearchText(const sosng::GearEntry& a_entry)
-    {
-        std::string text;
-        text.reserve(256);
-        text.append(a_entry.name);
-        text.push_back(' ');
-        text.append(a_entry.editorID);
-        text.push_back(' ');
-        text.append(a_entry.plugin);
-        text.push_back(' ');
-        text.append(a_entry.category);
-        text.push_back(' ');
-        text.append(a_entry.slot);
-        for (const auto keyword : a_entry.keywords) {
-            text.push_back(' ');
-            text.append(keyword);
-        }
-        return text;
-    }
-
-    std::string BuildOutfitSearchText(const sosng::OutfitEntry& a_entry)
-    {
-        std::string text;
-        text.reserve(256);
-        text.append(a_entry.name);
-        text.push_back(' ');
-        text.append(a_entry.editorID);
-        text.push_back(' ');
-        text.append(a_entry.plugin);
-        text.push_back(' ');
-        text.append(a_entry.summary);
-        for (const auto piece : a_entry.pieces) {
-            text.push_back(' ');
-            text.append(piece);
-        }
-        for (const auto tag : a_entry.tags) {
-            text.push_back(' ');
-            text.append(tag);
-        }
-        return text;
-    }
 }
 
 namespace sosng
@@ -294,8 +240,7 @@ namespace sosng
             return false;
         }
 
-        const auto searchText = BuildGearSearchText(a_entry);
-        return gearSearch_.PassFilter(searchText.c_str());
+        return gearSearch_.PassFilter(a_entry.searchText.c_str());
     }
 
     bool Menu::MatchesOutfitFilters(const OutfitEntry& a_entry) const
@@ -312,13 +257,13 @@ namespace sosng
             }
         }
 
-        const auto searchText = BuildOutfitSearchText(a_entry);
-        return outfitSearch_.PassFilter(searchText.c_str());
+        return outfitSearch_.PassFilter(a_entry.searchText.c_str());
     }
 
     std::vector<const GearEntry*> Menu::BuildFilteredGear() const
     {
         std::vector<const GearEntry*> rows;
+        rows.reserve(EquipmentCatalog::Get().GetGear().size());
         for (const auto& entry : EquipmentCatalog::Get().GetGear()) {
             if (MatchesGearFilters(entry)) {
                 rows.push_back(std::addressof(entry));
@@ -330,6 +275,7 @@ namespace sosng
     std::vector<const OutfitEntry*> Menu::BuildFilteredOutfits() const
     {
         std::vector<const OutfitEntry*> rows;
+        rows.reserve(EquipmentCatalog::Get().GetOutfits().size());
         for (const auto& entry : EquipmentCatalog::Get().GetOutfits()) {
             if (MatchesOutfitFilters(entry)) {
                 rows.push_back(std::addressof(entry));
@@ -406,7 +352,7 @@ namespace sosng
                 compare = CompareText(a_left->plugin, a_right->plugin);
                 break;
             case OutfitColumn::Tags:
-                compare = CompareText(JoinStrings(a_left->tags), JoinStrings(a_right->tags));
+                compare = CompareText(a_left->tagsText, a_right->tagsText);
                 break;
             case OutfitColumn::Pieces:
                 compare = static_cast<int>(a_left->pieces.size()) - static_cast<int>(a_right->pieces.size());
@@ -502,13 +448,12 @@ namespace sosng
             while (clipper.Step()) {
                 for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd; ++rowIndex) {
                     const auto& entry = *rows[static_cast<std::size_t>(rowIndex)];
-                    const auto keywords = JoinStrings(entry.keywords);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
                     ImGui::TextUnformatted(entry.name.data());
                     ImGui::TextDisabled("%s", entry.editorID.data());
-                    ImGui::TextDisabled("%s", keywords.c_str());
+                    ImGui::TextDisabled("%s", entry.keywordsText.c_str());
 
                     ImGui::TableSetColumnIndex(1);
                     ImGui::TextUnformatted(entry.plugin.data());
@@ -536,7 +481,7 @@ namespace sosng
         const auto& catalog = EquipmentCatalog::Get();
 
         ImGui::PushItemWidth(260.0f);
-        outfitSearch_.Draw("Search saved outfits", 260.0f);
+        outfitSearch_.Draw("Search installed outfits", 260.0f);
         ImGui::PopItemWidth();
         ImGui::SameLine();
 
@@ -595,8 +540,6 @@ namespace sosng
             while (clipper.Step()) {
                 for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd; ++rowIndex) {
                     const auto& outfit = *rows[static_cast<std::size_t>(rowIndex)];
-                    const auto tags = JoinStrings(outfit.tags);
-                    const auto pieces = JoinStrings(outfit.pieces);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
@@ -608,11 +551,11 @@ namespace sosng
                     ImGui::TextUnformatted(outfit.plugin.data());
 
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::TextWrapped("%s", tags.c_str());
+                    ImGui::TextWrapped("%s", outfit.tagsText.c_str());
 
                     ImGui::TableSetColumnIndex(3);
                     ImGui::Text("%zu", outfit.pieces.size());
-                    ImGui::TextDisabled("%s", pieces.c_str());
+                    ImGui::TextDisabled("%s", outfit.piecesText.c_str());
                 }
             }
 

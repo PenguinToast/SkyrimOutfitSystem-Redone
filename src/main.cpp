@@ -1,3 +1,4 @@
+#include "EquipmentCatalog.h"
 #include "Hooks.h"
 #include "InputManager.h"
 
@@ -5,6 +6,8 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* a_message)
 {
     switch (a_message->type) {
     case SKSE::MessagingInterface::kDataLoaded:
+        sosng::EquipmentCatalog::Get().RefreshFromGame();
+        logger::info("Equipment catalog initialized");
         sosng::InputManager::GetSingleton()->Init();
         logger::info("Input manager initialized");
         break;
