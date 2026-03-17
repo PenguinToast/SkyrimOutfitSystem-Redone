@@ -16,7 +16,7 @@ The current milestone is the equipment and outfit selector portion of the projec
 
 The browser design and data flow are being shaped with
 `https://github.com/Patchu1i/ModExplorerMenu` as a reference for armor/weapon/outfit enumeration,
-caching, and search behavior.
+caching, search behavior, and the native Dear ImGui integration path.
 
 ## Requirements
 * [XMake](https://xmake.io) [3.0.0+]
@@ -41,8 +41,8 @@ xmake build
 
 This generates output under `build/windows/` in the project root.
 
-The Prisma UI frontend now lives under `frontend/` and is built with Vite, Svelte, and TypeScript.
-Its production output is generated into `view/`.
+The current in-game browser is native Dear ImGui rendered directly through the Skyrim D3D11 swapchain.
+It no longer depends on Prisma UI or the Vite/Svelte frontend path.
 
 The current UI focus is a searchable browser for:
 
@@ -51,19 +51,7 @@ The current UI focus is a searchable browser for:
 * outfits
 
 Outfits are shown in a dedicated tab because they are collections of individual gear pieces.
-
-To work on the frontend directly:
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-To build only the frontend bundle:
-```bash
-cd frontend
-npm run build
-```
+The menu is toggled in game with `F3`.
 
 To build from WSL and deploy directly into the local test mod folder:
 ```bash
@@ -77,9 +65,6 @@ For a full clean rebuild:
 
 This deploys the plugin to:
 `/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng`
-
-and deploys the built Prisma view to:
-`/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng/PrismaUI/views/skyrim-outfit-system-ng`
 
 ## Optional Output Paths
 You can redirect install output with either of these environment variables:

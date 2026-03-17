@@ -21,10 +21,19 @@ target("SkyrimOutfitSystemNG")
     add_rules("commonlibsse-ng.plugin", {
         name = "Skyrim Outfit System NG",
         author = "PenguinToast",
-        description = "SKSE64 plugin using CommonLibSSE-NG and PrismaUI"
+        description = "SKSE64 plugin using CommonLibSSE-NG and Dear ImGui"
     })
 
     add_files("src/**.cpp")
+    add_files(
+        "lib/imgui/imgui.cpp",
+        "lib/imgui/imgui_draw.cpp",
+        "lib/imgui/imgui_tables.cpp",
+        "lib/imgui/imgui_widgets.cpp",
+        "lib/imgui/backends/imgui_impl_dx11.cpp",
+        "lib/imgui/backends/imgui_impl_win32.cpp"
+    )
     add_headerfiles("src/**.h")
-    add_includedirs("src")
+    add_includedirs("src", "lib/imgui", "lib/imgui/backends")
+    add_syslinks("d3d11", "dxgi")
     set_pcxxheader("src/pch.h")

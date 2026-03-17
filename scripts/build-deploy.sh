@@ -8,7 +8,6 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MODE="release"
 CLEAN=0
 PLUGIN_NAME="SkyrimOutfitSystemNG"
-VIEW_NAME="skyrim-outfit-system-ng"
 DEFAULT_MOD_DIR="/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng"
 MOD_DIR="${MOD_DIR:-$DEFAULT_MOD_DIR}"
 
@@ -38,11 +37,6 @@ if ! command -v wslpath >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! command -v npm >/dev/null 2>&1; then
-    echo "npm is required to build the Vite frontend." >&2
-    exit 1
-fi
-
 copy_file() {
     local src="$1"
     local dst="$2"
@@ -54,35 +48,15 @@ copy_file() {
     fi
 }
 
-copy_tree() {
-    local src_dir="$1"
-    local dst_dir="$2"
-
-    rm -rf "$dst_dir"
-    mkdir -p "$dst_dir"
-
-    if ! cp -r "${src_dir}/." "$dst_dir/"; then
-        echo "Failed to copy ${src_dir} to ${dst_dir}." >&2
-        exit 1
-    fi
-}
-
 WIN_REPO_ROOT="$(wslpath -w "$REPO_ROOT")"
 BUILD_DIR="${REPO_ROOT}/build/windows/x64/${MODE}"
 PLUGIN_SRC="${BUILD_DIR}/${PLUGIN_NAME}.dll"
 PDB_SRC="${BUILD_DIR}/${PLUGIN_NAME}.pdb"
 PLUGIN_DST_DIR="${MOD_DIR}/SKSE/Plugins"
-VIEW_DST_DIR="${MOD_DIR}/PrismaUI/views/${VIEW_NAME}"
 
 if ((CLEAN)); then
     rm -rf "${REPO_ROOT}/build" "${REPO_ROOT}/.xmake"
 fi
-
-if [[ ! -d "${REPO_ROOT}/frontend/node_modules" ]]; then
-    npm --prefix "${REPO_ROOT}/frontend" install
-fi
-
-npm --prefix "${REPO_ROOT}/frontend" run build
 
 POWERSHELL_CMD="
 \$ErrorActionPreference = 'Stop'
@@ -98,10 +72,9 @@ if [[ ! -f "$PLUGIN_SRC" ]]; then
     exit 1
 fi
 
-mkdir -p "$PLUGIN_DST_DIR" "$VIEW_DST_DIR"
+mkdir -p "$PLUGIN_DST_DIR"
 
 copy_file "$PLUGIN_SRC" "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"
-copy_tree "${REPO_ROOT}/view" "$VIEW_DST_DIR"
 
 if [[ -f "$PDB_SRC" ]]; then
     copy_file "$PDB_SRC" "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb"
@@ -111,4 +84,3 @@ fi
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
 echo "Deployed plugin to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"
-echo "Deployed Prisma view to ${VIEW_DST_DIR}"
