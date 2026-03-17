@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skyrim Outfit System NG</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", sans-serif;
+        }
+
+        .panel {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 24px;
+            padding: 16px 18px;
+            min-width: 320px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid rgba(30, 24, 18, 0.18);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(10, 8, 6, 0.18);
+        }
+
+        .eyebrow {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: #6b5d4d;
+        }
+
+        .title {
+            margin: 0;
+            font-size: 24px;
+            color: #1f1710;
+        }
+
+        .focus-row {
+            display: flex;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        #focus-label {
+            font-weight: 700;
+            color: #8a2f14;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .controls input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #c8b8a7;
+            border-radius: 8px;
+        }
+
+        .controls button {
+            padding: 10px 14px;
+            border: 0;
+            border-radius: 8px;
+            background: #2f5d50;
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .status {
+            display: none;
+            font-size: 13px;
+            color: #2f5d50;
+        }
+    </style>
+</head>
+<body>
+    <section class="panel">
+        <div class="eyebrow">PrismaUI Starter</div>
+        <h1 class="title">Skyrim Outfit System NG</h1>
+        <div class="focus-row">
+            <span>Focus status:</span>
+            <span id="focus-label"></span>
+        </div>
+        <div class="controls">
+            <input id="debug-input" type="text" placeholder="Send a debug message to SKSE" />
+            <button onclick="sendDebugMessage()">Send</button>
+        </div>
+        <div id="debug-status" class="status">Message sent. Check the SKSE log.</div>
+    </section>
+
+    <script>
+        window.updateFocusLabel = (value) => {
+            document.querySelector("#focus-label").textContent = value;
+        };
+
+        function sendDebugMessage() {
+            const inputValue = document.querySelector("#debug-input").value;
+
+            document.querySelector("#debug-status").style.display = "block";
+            window.sendDebugMessageToSKSE(inputValue);
+        }
+    </script>
+</body>
+</html>
