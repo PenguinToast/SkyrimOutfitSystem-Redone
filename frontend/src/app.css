@@ -9,16 +9,16 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --paper: rgba(255, 249, 240, 0.97);
-  --paper-strong: rgba(255, 252, 248, 0.99);
-  --paper-soft: rgba(250, 241, 227, 0.84);
+  --paper: #f8efe2;
+  --paper-strong: #fffaf3;
+  --paper-soft: #f3e7d6;
   --ink-soft: #655848;
   --ink: #191611;
   --accent: #8d4921;
   --accent-strong: #6f2d17;
   --accent-soft: rgba(141, 73, 33, 0.12);
   --line: rgba(82, 58, 36, 0.14);
-  --shadow: 0 28px 70px rgba(38, 24, 12, 0.24);
+  --shadow: 0 12px 28px rgba(38, 24, 12, 0.18);
 }
 
 html,
@@ -61,11 +61,13 @@ button {
   min-height: 680px;
   display: grid;
   grid-template-rows: auto 1fr;
-  background: linear-gradient(180deg, rgba(246, 236, 219, 0.88), rgba(232, 218, 194, 0.82));
+  background: linear-gradient(180deg, #f3e7d5, #eadcc8);
   border: 1px solid rgba(73, 54, 36, 0.1);
   border-radius: 28px;
   box-shadow: var(--shadow);
   overflow: hidden;
+  will-change: transform;
+  contain: layout paint style;
 }
 
 .window.dragging {
@@ -79,7 +81,7 @@ button {
   gap: 16px;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(73, 54, 36, 0.1);
-  background: linear-gradient(180deg, rgba(255, 248, 235, 0.98), rgba(240, 228, 208, 0.92));
+  background: linear-gradient(180deg, #fff7eb, #efe1ca);
   cursor: grab;
   user-select: none;
   touch-action: none;
@@ -147,10 +149,9 @@ h3 {
 .hero-card,
 .status-card,
 .browser-panel {
-  backdrop-filter: blur(10px);
   background: var(--paper);
   border: 1px solid var(--line);
-  box-shadow: 0 18px 45px rgba(38, 24, 12, 0.12);
+  box-shadow: 0 6px 18px rgba(38, 24, 12, 0.08);
 }
 
 .hero-card,

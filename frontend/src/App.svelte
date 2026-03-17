@@ -38,6 +38,9 @@
   let startOffsetX = 0
   let startOffsetY = 0
   let dragging = false
+  let dragFrame = 0
+  let queuedPointerX = 0
+  let queuedPointerY = 0
 
   $: gearPlugins = ['All plugins', ...new Set(catalog.gear.map((entry) => entry.plugin).sort())]
   $: gearSlots = [
@@ -74,7 +77,7 @@
 
   $: visibleGearCount = filteredGear.length
   $: visibleOutfitCount = filteredOutfits.length
-  $: windowStyle = `transform: translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px));`
+  $: windowStyle = `transform: translate3d(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px), 0);`
 
   function normalize(value: string) {
     return value.toLowerCase().trim()
@@ -208,8 +211,16 @@
     dragging = true
     dragOriginX = event.clientX
     dragOriginY = event.clientY
+    queuedPointerX = event.clientX
+    queuedPointerY = event.clientY
     startOffsetX = offsetX
     startOffsetY = offsetY
+  }
+
+  function flushDrag() {
+    dragFrame = 0
+    offsetX = startOffsetX + (queuedPointerX - dragOriginX)
+    offsetY = startOffsetY + (queuedPointerY - dragOriginY)
   }
 
   function handlePointerMove(event: PointerEvent) {
@@ -217,11 +228,22 @@
       return
     }
 
-    offsetX = startOffsetX + (event.clientX - dragOriginX)
-    offsetY = startOffsetY + (event.clientY - dragOriginY)
+    queuedPointerX = event.clientX
+    queuedPointerY = event.clientY
+
+    if (dragFrame !== 0) {
+      return
+    }
+
+    dragFrame = window.requestAnimationFrame(flushDrag)
   }
 
   function endDrag() {
+    if (dragFrame !== 0) {
+      window.cancelAnimationFrame(dragFrame)
+      flushDrag()
+    }
+
     dragging = false
   }
 
@@ -250,6 +272,10 @@
     window.addEventListener('pointercancel', endDrag)
 
     return () => {
+      if (dragFrame !== 0) {
+        window.cancelAnimationFrame(dragFrame)
+      }
+
       delete window.updateFocusLabel
       delete window.setEquipmentCatalog
       window.removeEventListener('pointermove', handlePointerMove)
