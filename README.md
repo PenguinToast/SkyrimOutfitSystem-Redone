@@ -42,7 +42,7 @@ xmake build
 This generates output under `build/windows/` in the project root.
 
 The current in-game browser is native Dear ImGui rendered directly through the Skyrim D3D11 swapchain.
-It no longer depends on Prisma UI or the Vite/Svelte frontend path.
+It no longer depends on Prisma UI or any web frontend bundle.
 
 The current UI focus is a searchable browser for:
 
