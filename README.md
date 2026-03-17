@@ -28,6 +28,19 @@ This generates output under `build/windows/` in the project root.
 Move `view/index.html` into your mod's PrismaUI view folder as:
 `<YourModFolder>/PrismaUI/views/skyrim-outfit-system-ng/index.html`
 
+To build from WSL and deploy directly into the local test mod folder:
+```bash
+./scripts/build-deploy.sh
+```
+
+For a full clean rebuild:
+```bash
+./scripts/build-deploy.sh --clean
+```
+
+This deploys the plugin to:
+`/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng`
+
 ## Optional Output Paths
 You can redirect install output with either of these environment variables:
 
