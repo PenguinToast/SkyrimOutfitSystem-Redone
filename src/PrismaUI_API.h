@@ -102,7 +102,7 @@ namespace PRISMA_UI_API
 
 	[[nodiscard]] inline void* RequestPluginAPI(const InterfaceVersion a_interfaceVersion = InterfaceVersion::V1)
 	{
-		auto pluginHandle = GetModuleHandle(L"PrismaUI.dll"); // if you're getting the wchar error then just replace it by `GetModuleHandle("PrismaUI.dll");`
+		auto pluginHandle = GetModuleHandle("PrismaUI.dll");
 		if (!pluginHandle) {
 			return nullptr;
 		}

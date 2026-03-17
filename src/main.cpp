@@ -40,7 +40,7 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message* a_message)
 
     KeyHandler::RegisterSink();
     auto* keyHandler = KeyHandler::GetSingleton();
-    keyHandler->Register(kToggleFocusKey, KeyEventType::KEY_DOWN, []() {
+    [[maybe_unused]] const auto toggleFocusHandler = keyHandler->Register(kToggleFocusKey, KeyEventType::KEY_DOWN, []() {
         if (!g_prismaUI || !g_prismaUI->IsValid(g_view)) {
             logger::warn("PrismaUI view is not available.");
             return;
