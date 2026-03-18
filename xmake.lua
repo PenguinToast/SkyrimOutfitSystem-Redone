@@ -15,8 +15,11 @@ set_policy("package.requires_lock", true)
 add_rules("mode.release", "mode.debug", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
 
+add_requires("nlohmann_json v3.12.0")
+
 target("SkyrimOutfitSystemNG")
     add_deps("commonlibsse-ng")
+    add_packages("nlohmann_json")
 
     add_rules("commonlibsse-ng.plugin", {
         name = "Skyrim Outfit System NG",

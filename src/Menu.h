@@ -26,7 +26,8 @@ namespace sosng
         enum class BrowserTab
         {
             Gear,
-            Outfits
+            Outfits,
+            Options
         };
 
         enum class GearKindFilter
@@ -41,9 +42,14 @@ namespace sosng
         Menu() = default;
 
         void ApplyStyle();
+        void LoadUserSettings();
+        void SaveUserSettings() const;
+        void RebuildFontAtlas();
         void DrawWindow();
         void DrawGearTab();
         void DrawOutfitTab();
+        void DrawOptionsTab();
+        bool DrawSearchableStringCombo(const char* a_label, const char* a_allLabel, const std::vector<std::string>& a_options, int& a_index, ImGuiTextFilter& a_filter);
 
         bool MatchesGearFilters(const GearEntry& a_entry) const;
         bool MatchesOutfitFilters(const OutfitEntry& a_entry) const;
@@ -63,7 +69,15 @@ namespace sosng
         int gearSlotIndex_{ 0 };
         int outfitPluginIndex_{ 0 };
         int outfitTagIndex_{ 0 };
+        int fontSizePixels_{ 13 };
+        int pendingFontSizePixels_{ 13 };
+        bool pendingFontAtlasRebuild_{ false };
+        std::string settingsDirectory_;
+        std::string imguiIniPath_;
+        std::string userSettingsPath_;
         ImGuiTextFilter gearSearch_;
         ImGuiTextFilter outfitSearch_;
+        ImGuiTextFilter gearPluginFilter_;
+        ImGuiTextFilter outfitPluginFilter_;
     };
 }

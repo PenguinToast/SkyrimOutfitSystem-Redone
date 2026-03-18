@@ -61,8 +61,8 @@ fi
 POWERSHELL_CMD="
 \$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath '$WIN_REPO_ROOT'
-xmake f -c
-xmake f -m '$MODE'
+xmake f -y -c
+xmake f -y -m '$MODE'
 xmake build -y
 "
 powershell.exe -NoProfile -Command "$POWERSHELL_CMD"

@@ -4,8 +4,19 @@
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 
+#include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
+
 namespace
 {
+    constexpr auto kSettingsDirectory = "Data/SKSE/Plugins/SkyrimOutfitSystemNG";
+    constexpr auto kImGuiIniFilename = "imgui.ini";
+    constexpr auto kUserSettingsFilename = "settings.json";
+    constexpr int kDefaultFontSizePixels = 13;
+    constexpr int kMinFontSizePixels = 8;
+    constexpr int kMaxFontSizePixels = 28;
+
     enum class GearColumn : ImGuiID
     {
         Name = 1,
@@ -66,13 +77,21 @@ namespace sosng
             return;
         }
 
+        settingsDirectory_ = kSettingsDirectory;
+        imguiIniPath_ = (std::filesystem::path(settingsDirectory_) / kImGuiIniFilename).string();
+        userSettingsPath_ = (std::filesystem::path(settingsDirectory_) / kUserSettingsFilename).string();
+        LoadUserSettings();
+
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
         auto& io = ImGui::GetIO();
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-        io.IniFilename = nullptr;
+        io.IniFilename = imguiIniPath_.c_str();
         io.LogFilename = nullptr;
+        ImGui::GetStyle().FontScaleMain = 1.0f;
+        pendingFontSizePixels_ = fontSizePixels_;
+        RebuildFontAtlas();
 
         DXGI_SWAP_CHAIN_DESC description{};
         a_swapChain->GetDesc(&description);
@@ -87,6 +106,71 @@ namespace sosng
         initialized_ = true;
 
         logger::info("Initialized Dear ImGui menu");
+    }
+
+    void Menu::LoadUserSettings()
+    {
+        try {
+            std::filesystem::create_directories(settingsDirectory_);
+        } catch (const std::exception& exception) {
+            logger::error("Failed to create settings directory {}: {}", settingsDirectory_, exception.what());
+            return;
+        }
+
+        std::ifstream input(userSettingsPath_);
+        if (!input.is_open()) {
+            SaveUserSettings();
+            return;
+        }
+
+        try {
+            const auto json = nlohmann::json::parse(input, nullptr, true, true);
+            fontSizePixels_ = std::clamp(json.value("fontSizePx", fontSizePixels_), kMinFontSizePixels, kMaxFontSizePixels);
+            pendingFontSizePixels_ = fontSizePixels_;
+        } catch (const std::exception& exception) {
+            logger::warn("Failed to parse user settings from {}: {}", userSettingsPath_, exception.what());
+        }
+    }
+
+    void Menu::SaveUserSettings() const
+    {
+        try {
+            std::filesystem::create_directories(settingsDirectory_);
+        } catch (const std::exception& exception) {
+            logger::error("Failed to create settings directory {}: {}", settingsDirectory_, exception.what());
+            return;
+        }
+
+        std::ofstream output(userSettingsPath_, std::ios::trunc);
+        if (!output.is_open()) {
+            logger::error("Failed to write user settings to {}", userSettingsPath_);
+            return;
+        }
+
+        const nlohmann::json json = {
+            { "fontSizePx", fontSizePixels_ }
+        };
+
+        output << json.dump(2) << '\n';
+    }
+
+    void Menu::RebuildFontAtlas()
+    {
+        auto& io = ImGui::GetIO();
+        auto& style = ImGui::GetStyle();
+        ImFontConfig fontConfig{};
+        fontConfig.SizePixels = static_cast<float>(fontSizePixels_);
+
+        io.Fonts->Clear();
+        io.FontDefault = io.Fonts->AddFontDefaultVector(&fontConfig);
+        io.Fonts->Build();
+        style.FontScaleMain = 1.0f;
+        style._NextFrameFontSizeBase = static_cast<float>(fontSizePixels_);
+        style.FontSizeBase = static_cast<float>(fontSizePixels_);
+
+        if (initialized_) {
+            ImGui_ImplDX11_InvalidateDeviceObjects();
+        }
     }
 
     void Menu::ApplyStyle()
@@ -144,6 +228,10 @@ namespace sosng
         auto& io = ImGui::GetIO();
         io.MouseDrawCursor = false;
         io.ClearInputKeys();
+        if (io.IniFilename) {
+            ImGui::SaveIniSettingsToDisk(io.IniFilename);
+        }
+        SaveUserSettings();
         enabled_ = false;
     }
 
@@ -161,6 +249,12 @@ namespace sosng
         InputManager::GetSingleton()->ProcessInputEvents();
 
         if (!initialized_ || !enabled_) {
+            return;
+        }
+
+        if (pendingFontAtlasRebuild_) {
+            RebuildFontAtlas();
+            pendingFontAtlasRebuild_ = false;
             return;
         }
 
@@ -209,6 +303,12 @@ namespace sosng
             if (ImGui::BeginTabItem("Outfits")) {
                 activeTab_ = BrowserTab::Outfits;
                 DrawOutfitTab();
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Options")) {
+                activeTab_ = BrowserTab::Options;
+                DrawOptionsTab();
                 ImGui::EndTabItem();
             }
 
@@ -373,6 +473,54 @@ namespace sosng
         a_sortSpecs->SpecsDirty = false;
     }
 
+    bool Menu::DrawSearchableStringCombo(const char* a_label, const char* a_allLabel, const std::vector<std::string>& a_options, int& a_index, ImGuiTextFilter& a_filter)
+    {
+        const char* preview = a_index == 0 ? a_allLabel : a_options[static_cast<std::size_t>(a_index - 1)].c_str();
+        bool changed = false;
+
+        ImGui::PushID(a_label);
+        if (ImGui::BeginCombo(a_label, preview)) {
+            if (ImGui::IsWindowAppearing()) {
+                a_filter.Clear();
+            }
+
+            a_filter.Draw("##search", -FLT_MIN);
+            ImGui::Separator();
+
+            if (a_filter.PassFilter(a_allLabel)) {
+                const bool selected = a_index == 0;
+                if (ImGui::Selectable(a_allLabel, selected)) {
+                    a_index = 0;
+                    changed = true;
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            for (std::size_t index = 0; index < a_options.size(); ++index) {
+                const auto& option = a_options[index];
+                if (!a_filter.PassFilter(option.c_str())) {
+                    continue;
+                }
+
+                const bool selected = a_index == static_cast<int>(index + 1);
+                if (ImGui::Selectable(option.c_str(), selected)) {
+                    a_index = static_cast<int>(index + 1);
+                    changed = true;
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+
+            ImGui::EndCombo();
+        }
+        ImGui::PopID();
+
+        return changed;
+    }
+
     void Menu::DrawGearTab()
     {
         const auto& catalog = EquipmentCatalog::Get();
@@ -382,23 +530,7 @@ namespace sosng
         ImGui::PopItemWidth();
         ImGui::SameLine();
 
-        if (ImGui::BeginCombo("Plugin", gearPluginIndex_ == 0 ? "All plugins" : catalog.GetGearPlugins()[gearPluginIndex_ - 1].data())) {
-            const bool allSelected = gearPluginIndex_ == 0;
-            if (ImGui::Selectable("All plugins", allSelected)) {
-                gearPluginIndex_ = 0;
-            }
-            if (allSelected) {
-                ImGui::SetItemDefaultFocus();
-            }
-
-            for (std::size_t index = 0; index < catalog.GetGearPlugins().size(); ++index) {
-                const bool selected = gearPluginIndex_ == static_cast<int>(index + 1);
-                if (ImGui::Selectable(catalog.GetGearPlugins()[index].data(), selected)) {
-                    gearPluginIndex_ = static_cast<int>(index + 1);
-                }
-            }
-            ImGui::EndCombo();
-        }
+        DrawSearchableStringCombo("Plugin", "All plugins", catalog.GetGearPlugins(), gearPluginIndex_, gearPluginFilter_);
 
         ImGui::SameLine();
         if (ImGui::BeginCombo("Slot / class", gearSlotIndex_ == 0 ? "Any slot" : catalog.GetGearSlots()[gearSlotIndex_ - 1].data())) {
@@ -486,23 +618,7 @@ namespace sosng
         ImGui::PopItemWidth();
         ImGui::SameLine();
 
-        if (ImGui::BeginCombo("Plugin", outfitPluginIndex_ == 0 ? "All plugins" : catalog.GetOutfitPlugins()[outfitPluginIndex_ - 1].data())) {
-            const bool allSelected = outfitPluginIndex_ == 0;
-            if (ImGui::Selectable("All plugins", allSelected)) {
-                outfitPluginIndex_ = 0;
-            }
-            if (allSelected) {
-                ImGui::SetItemDefaultFocus();
-            }
-
-            for (std::size_t index = 0; index < catalog.GetOutfitPlugins().size(); ++index) {
-                const bool selected = outfitPluginIndex_ == static_cast<int>(index + 1);
-                if (ImGui::Selectable(catalog.GetOutfitPlugins()[index].data(), selected)) {
-                    outfitPluginIndex_ = static_cast<int>(index + 1);
-                }
-            }
-            ImGui::EndCombo();
-        }
+        DrawSearchableStringCombo("Plugin", "All plugins", catalog.GetOutfitPlugins(), outfitPluginIndex_, outfitPluginFilter_);
 
         ImGui::SameLine();
         if (ImGui::BeginCombo("Tag", outfitTagIndex_ == 0 ? "Any tag" : catalog.GetOutfitTags()[outfitTagIndex_ - 1].data())) {
@@ -563,5 +679,28 @@ namespace sosng
 
             ImGui::EndTable();
         }
+    }
+
+    void Menu::DrawOptionsTab()
+    {
+        ImGui::TextUnformatted("Interface");
+        ImGui::Separator();
+        ImGui::TextWrapped("Adjust the UI font size for this session. The value is stored in integer pixels and the font atlas rebuild is applied after you finish editing.");
+
+        ImGui::SliderInt("Font size", &pendingFontSizePixels_, kMinFontSizePixels, kMaxFontSizePixels, "%d px");
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            fontSizePixels_ = pendingFontSizePixels_;
+            SaveUserSettings();
+            pendingFontAtlasRebuild_ = true;
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) {
+            fontSizePixels_ = kDefaultFontSizePixels;
+            pendingFontSizePixels_ = fontSizePixels_;
+            SaveUserSettings();
+            pendingFontAtlasRebuild_ = true;
+        }
+
     }
 }
