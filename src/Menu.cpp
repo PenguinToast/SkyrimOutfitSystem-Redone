@@ -439,6 +439,7 @@ namespace sosng
             ImGui::TableSetupColumn("Armor / damage", ImGuiTableColumnFlags_PreferSortDescending, 0.0f, static_cast<ImGuiID>(GearColumn::Stat));
             ImGui::TableSetupColumn("Weight", ImGuiTableColumnFlags_PreferSortDescending, 0.0f, static_cast<ImGuiID>(GearColumn::Weight));
             ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_PreferSortDescending, 0.0f, static_cast<ImGuiID>(GearColumn::Value));
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableHeadersRow();
 
             SortGearRows(rows, ImGui::TableGetSortSpecs());
@@ -531,6 +532,7 @@ namespace sosng
             ImGui::TableSetupColumn("Plugin", ImGuiTableColumnFlags_None, 0.0f, static_cast<ImGuiID>(OutfitColumn::Plugin));
             ImGui::TableSetupColumn("Tags", ImGuiTableColumnFlags_None, 0.0f, static_cast<ImGuiID>(OutfitColumn::Tags));
             ImGui::TableSetupColumn("Pieces", ImGuiTableColumnFlags_PreferSortDescending, 0.0f, static_cast<ImGuiID>(OutfitColumn::Pieces));
+            ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableHeadersRow();
 
             SortOutfitRows(rows, ImGui::TableGetSortSpecs());
