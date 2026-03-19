@@ -3,6 +3,8 @@
 #include "EquipmentCatalog.h"
 #include "imgui.h"
 
+#include <unordered_set>
+
 struct IDXGISwapChain;
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -81,6 +83,7 @@ namespace sosng
         void AcceptOverridePayload(int a_targetRowIndex);
         void ApplyRowReorder(const DraggedEquipmentPayload& a_dragPayload, int a_targetRowIndex, bool a_insertAfter);
         void AcceptOverrideDeletePayload();
+        void SyncDynamicArmorVariants();
 
         bool MatchesGearFilters(const GearEntry& a_entry) const;
         bool MatchesOutfitFilters(const OutfitEntry& a_entry) const;
@@ -111,5 +114,6 @@ namespace sosng
         ImGuiTextFilter outfitPluginFilter_;
         std::vector<VariantWorkbenchRow> variantRows_;
         std::vector<std::string> variantRowOrder_;
+        std::unordered_set<std::string> activeDavVariantNames_;
     };
 }

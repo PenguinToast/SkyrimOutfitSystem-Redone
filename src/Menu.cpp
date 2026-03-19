@@ -1,6 +1,7 @@
 #include "Menu.h"
 
 #include "InputManager.h"
+#include "integrations/DynamicArmorVariantsClient.h"
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
@@ -161,6 +162,117 @@ namespace
         }
 
         return labels;
+    }
+
+    std::string GetPluginName(const RE::TESForm* a_form)
+    {
+        if (!a_form) {
+            return {};
+        }
+
+        const auto* file = a_form->GetFile(0);
+        if (!file) {
+            return {};
+        }
+
+        return std::string(file->GetFilename());
+    }
+
+    std::string GetFormIdentifier(const RE::TESForm* a_form)
+    {
+        if (!a_form) {
+            return {};
+        }
+
+        const auto plugin = GetPluginName(a_form);
+        if (plugin.empty()) {
+            return {};
+        }
+
+        return plugin + "|" + FormatFormID(a_form->GetLocalFormID());
+    }
+
+    std::string BuildDavVariantName(const RE::TESObjectARMO* a_sourceArmor, const RE::TESObjectARMO* a_overrideArmor)
+    {
+        return "SOSNG|" + GetFormIdentifier(a_sourceArmor) + "->" + GetFormIdentifier(a_overrideArmor);
+    }
+
+    auto BuildDavConditionsJson() -> std::string
+    {
+        const nlohmann::json root{
+            { "conditions", nlohmann::json::array({ "GetIsReference Player == 1" }) }
+        };
+        return root.dump();
+    }
+
+    auto BuildDavVariantJson(const RE::TESObjectARMO* a_sourceArmor, const RE::TESObjectARMO* a_overrideArmor) -> std::string
+    {
+        nlohmann::json replaceByForm = nlohmann::json::object();
+        std::vector<std::pair<std::uint64_t, std::string>> overrideAddons;
+        overrideAddons.reserve(a_overrideArmor->armorAddons.size());
+
+        for (const auto* overrideAddon : a_overrideArmor->armorAddons) {
+            if (!overrideAddon) {
+                continue;
+            }
+
+            const auto identifier = GetFormIdentifier(overrideAddon);
+            if (identifier.empty()) {
+                continue;
+            }
+
+            overrideAddons.emplace_back(overrideAddon->bipedModelData.bipedObjectSlots.underlying(), identifier);
+        }
+
+        for (const auto* sourceAddon : a_sourceArmor->armorAddons) {
+            if (!sourceAddon) {
+                continue;
+            }
+
+            const auto sourceIdentifier = GetFormIdentifier(sourceAddon);
+            if (sourceIdentifier.empty()) {
+                continue;
+            }
+
+            const auto sourceSlotMask = sourceAddon->bipedModelData.bipedObjectSlots.underlying();
+            std::vector<std::string> replacements;
+
+            for (const auto& [overrideSlotMask, identifier] : overrideAddons) {
+                if (overrideSlotMask == sourceSlotMask) {
+                    replacements.push_back(identifier);
+                }
+            }
+
+            if (replacements.empty()) {
+                for (const auto& [overrideSlotMask, identifier] : overrideAddons) {
+                    if ((overrideSlotMask & sourceSlotMask) != 0) {
+                        replacements.push_back(identifier);
+                    }
+                }
+            }
+
+            if (replacements.empty()) {
+                for (const auto& [_, identifier] : overrideAddons) {
+                    replacements.push_back(identifier);
+                }
+            }
+
+            if (replacements.empty()) {
+                continue;
+            }
+
+            if (replacements.size() == 1) {
+                replaceByForm[sourceIdentifier] = replacements.front();
+            } else {
+                replaceByForm[sourceIdentifier] = replacements;
+            }
+        }
+
+        nlohmann::json root{
+            { "displayName", GetDisplayName(a_overrideArmor) },
+            { "replaceByForm", replaceByForm }
+        };
+        return root.dump();
     }
 
 }
@@ -673,6 +785,8 @@ namespace sosng
 
             ImGui::EndTable();
         }
+
+        SyncDynamicArmorVariants();
     }
 
     void Menu::DrawGearCatalogTable(const std::vector<const GearEntry*>& a_rows)
@@ -1019,6 +1133,92 @@ namespace sosng
         }
 
         overrides.erase(overrides.begin() + dragPayload.itemIndex);
+    }
+
+    void Menu::SyncDynamicArmorVariants()
+    {
+        using integrations::DynamicArmorVariantsClient;
+
+        auto* dav = DynamicArmorVariantsClient::Get();
+        if (!dav || !dav->IsReady()) {
+            return;
+        }
+
+        const auto conditionsJson = BuildDavConditionsJson();
+
+        struct DavVariantPayload
+        {
+            std::string variantJson;
+        };
+
+        std::unordered_map<std::string, DavVariantPayload> desiredVariants;
+        desiredVariants.reserve(variantRows_.size() * 2);
+
+        for (const auto& row : variantRows_) {
+            const auto* sourceArmor = RE::TESForm::LookupByID<RE::TESObjectARMO>(row.equipped.formID);
+            if (!sourceArmor) {
+                continue;
+            }
+
+            for (const auto& overrideItem : row.overrides) {
+                const auto* overrideArmor = RE::TESForm::LookupByID<RE::TESObjectARMO>(overrideItem.formID);
+                if (!overrideArmor) {
+                    continue;
+                }
+
+                const auto variantName = BuildDavVariantName(sourceArmor, overrideArmor);
+                if (variantName.empty()) {
+                    continue;
+                }
+
+                desiredVariants.try_emplace(variantName, DavVariantPayload{ BuildDavVariantJson(sourceArmor, overrideArmor) });
+            }
+        }
+
+        std::unordered_set<std::string> syncedNames;
+        syncedNames.reserve(desiredVariants.size());
+        bool variantsChanged = false;
+
+        for (const auto& [variantName, payload] : desiredVariants) {
+            if (activeDavVariantNames_.contains(variantName)) {
+                syncedNames.insert(variantName);
+                continue;
+            }
+
+            if (!dav->RegisterVariantJson(variantName.c_str(), payload.variantJson.c_str())) {
+                logger::warn("Failed to register DAV variant {}", variantName);
+                continue;
+            }
+
+            if (!dav->SetVariantConditionsJson(variantName.c_str(), conditionsJson.c_str())) {
+                logger::warn("Failed to set DAV conditions for {}", variantName);
+                dav->DeleteVariant(variantName.c_str());
+                continue;
+            }
+
+            syncedNames.insert(variantName);
+            variantsChanged = true;
+        }
+
+        for (const auto& variantName : activeDavVariantNames_) {
+            if (syncedNames.contains(variantName)) {
+                continue;
+            }
+
+            if (!dav->DeleteVariant(variantName.c_str())) {
+                logger::warn("Failed to delete DAV variant {}", variantName);
+            } else {
+                variantsChanged = true;
+            }
+        }
+
+        activeDavVariantNames_ = std::move(syncedNames);
+
+        if (variantsChanged) {
+            if (auto* player = RE::PlayerCharacter::GetSingleton()) {
+                dav->RefreshActor(player);
+            }
+        }
     }
 
     void Menu::DrawVariantWorkbenchPane()

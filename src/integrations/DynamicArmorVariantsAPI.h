@@ -26,6 +26,7 @@ namespace DynamicArmorVariantsAPI
         virtual bool RegisterVariantJson(const char* a_name, const char* a_variantJson) = 0;
         virtual bool DeleteVariant(const char* a_name) = 0;
         virtual bool SetVariantConditionsJson(const char* a_name, const char* a_conditionsJson) = 0;
+        virtual bool RefreshActor(RE::Actor* a_actor) = 0;
     };
 }
 
