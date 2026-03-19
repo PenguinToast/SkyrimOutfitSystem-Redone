@@ -4,24 +4,24 @@
 #include <RE/Skyrim.h>
 #include <REL/Relocation.h>
 #include <SKSE/SKSE.h>
-#	include <d3d11.h>
-#	include <dxgi.h>
+#include <d3d11.h>
+#include <dxgi.h>
 
-#	include <algorithm>
-#	include <array>
-#	include <cctype>
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <fstream>
-#	include <mutex>
-#	include <ranges>
-#	include <span>
-#	include <string>
-#	include <string_view>
-#	include <vector>
+#include <mutex>
+#include <ranges>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #ifdef NDEBUG
-#	include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #else
-#	include <spdlog/sinks/msvc_sink.h>
+#include <spdlog/sinks/msvc_sink.h>
 #endif
 #pragma warning(pop)
 
@@ -30,9 +30,8 @@ using namespace std;
 
 namespace logger = SKSE::log;
 
-namespace util
-{
-	using SKSE::stl::report_and_fail;
+namespace util {
+using SKSE::stl::report_and_fail;
 }
 
 #define DLLEXPORT __declspec(dllexport)

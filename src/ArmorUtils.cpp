@@ -2,135 +2,127 @@
 
 #include <cstdio>
 
-namespace
-{
-    using BipedSlot = RE::BGSBipedObjectForm::BipedObjectSlot;
+namespace {
+using BipedSlot = RE::BGSBipedObjectForm::BipedObjectSlot;
 
-    constexpr std::array<std::pair<BipedSlot, std::string_view>, 32> kArmorSlotNames{ {
-        { BipedSlot::kHead, "30 - Head" },
-        { BipedSlot::kHair, "31 - Hair" },
-        { BipedSlot::kBody, "32 - Body" },
-        { BipedSlot::kHands, "33 - Hands" },
-        { BipedSlot::kForearms, "34 - Forearms" },
-        { BipedSlot::kAmulet, "35 - Amulet" },
-        { BipedSlot::kRing, "36 - Ring" },
-        { BipedSlot::kFeet, "37 - Feet" },
-        { BipedSlot::kCalves, "38 - Calves" },
-        { BipedSlot::kShield, "39 - Shield" },
-        { BipedSlot::kTail, "40 - Tail" },
-        { BipedSlot::kLongHair, "41 - Long Hair" },
-        { BipedSlot::kCirclet, "42 - Circlet" },
-        { BipedSlot::kEars, "43 - Ears" },
-        { BipedSlot::kModMouth, "44 - Mod Mouth" },
-        { BipedSlot::kModNeck, "45 - Mod Neck" },
-        { BipedSlot::kModChestPrimary, "46 - Mod Chest Primary" },
-        { BipedSlot::kModBack, "47 - Mod Back" },
-        { BipedSlot::kModMisc1, "48 - Mod Misc1" },
-        { BipedSlot::kModPelvisPrimary, "49 - Mod Pelvis Primary" },
-        { BipedSlot::kDecapitateHead, "50 - Decapitate Head" },
-        { BipedSlot::kDecapitate, "51 - Decapitate" },
-        { BipedSlot::kModPelvisSecondary, "52 - Mod Pelvis Secondary" },
-        { BipedSlot::kModLegRight, "53 - Mod Leg Right" },
-        { BipedSlot::kModLegLeft, "54 - Mod Leg Left" },
-        { BipedSlot::kModFaceJewelry, "55 - Mod Face Jewelry" },
-        { BipedSlot::kModChestSecondary, "56 - Mod Chest Secondary" },
-        { BipedSlot::kModShoulder, "57 - Mod Shoulder" },
-        { BipedSlot::kModArmLeft, "58 - Mod Arm Left" },
-        { BipedSlot::kModArmRight, "59 - Mod Arm Right" },
-        { BipedSlot::kModMisc2, "60 - Mod Misc2" },
-        { BipedSlot::kFX01, "61 - FX01" }
-    } };
+constexpr std::array<std::pair<BipedSlot, std::string_view>, 32>
+    kArmorSlotNames{
+        {{BipedSlot::kHead, "30 - Head"},
+         {BipedSlot::kHair, "31 - Hair"},
+         {BipedSlot::kBody, "32 - Body"},
+         {BipedSlot::kHands, "33 - Hands"},
+         {BipedSlot::kForearms, "34 - Forearms"},
+         {BipedSlot::kAmulet, "35 - Amulet"},
+         {BipedSlot::kRing, "36 - Ring"},
+         {BipedSlot::kFeet, "37 - Feet"},
+         {BipedSlot::kCalves, "38 - Calves"},
+         {BipedSlot::kShield, "39 - Shield"},
+         {BipedSlot::kTail, "40 - Tail"},
+         {BipedSlot::kLongHair, "41 - Long Hair"},
+         {BipedSlot::kCirclet, "42 - Circlet"},
+         {BipedSlot::kEars, "43 - Ears"},
+         {BipedSlot::kModMouth, "44 - Mod Mouth"},
+         {BipedSlot::kModNeck, "45 - Mod Neck"},
+         {BipedSlot::kModChestPrimary, "46 - Mod Chest Primary"},
+         {BipedSlot::kModBack, "47 - Mod Back"},
+         {BipedSlot::kModMisc1, "48 - Mod Misc1"},
+         {BipedSlot::kModPelvisPrimary, "49 - Mod Pelvis Primary"},
+         {BipedSlot::kDecapitateHead, "50 - Decapitate Head"},
+         {BipedSlot::kDecapitate, "51 - Decapitate"},
+         {BipedSlot::kModPelvisSecondary, "52 - Mod Pelvis Secondary"},
+         {BipedSlot::kModLegRight, "53 - Mod Leg Right"},
+         {BipedSlot::kModLegLeft, "54 - Mod Leg Left"},
+         {BipedSlot::kModFaceJewelry, "55 - Mod Face Jewelry"},
+         {BipedSlot::kModChestSecondary, "56 - Mod Chest Secondary"},
+         {BipedSlot::kModShoulder, "57 - Mod Shoulder"},
+         {BipedSlot::kModArmLeft, "58 - Mod Arm Left"},
+         {BipedSlot::kModArmRight, "59 - Mod Arm Right"},
+         {BipedSlot::kModMisc2, "60 - Mod Misc2"},
+         {BipedSlot::kFX01, "61 - FX01"}}};
 
-    std::string CopyCString(const char* a_text)
-    {
-        if (!a_text || a_text[0] == '\0') {
-            return {};
-        }
-        return a_text;
-    }
+std::string CopyCString(const char *a_text) {
+  if (!a_text || a_text[0] == '\0') {
+    return {};
+  }
+  return a_text;
+}
+} // namespace
+
+namespace sosng::armor {
+std::string FormatFormID(RE::FormID a_formID) {
+  char buffer[16]{};
+  std::snprintf(buffer, sizeof(buffer), "%08X", a_formID);
+  return buffer;
 }
 
-namespace sosng::armor
-{
-    std::string FormatFormID(RE::FormID a_formID)
-    {
-        char buffer[16]{};
-        std::snprintf(buffer, sizeof(buffer), "%08X", a_formID);
-        return buffer;
-    }
+std::string GetDisplayName(const RE::TESForm *a_form) {
+  if (!a_form) {
+    return "Unknown";
+  }
 
-    std::string GetDisplayName(const RE::TESForm* a_form)
-    {
-        if (!a_form) {
-            return "Unknown";
-        }
+  auto name = CopyCString(a_form->GetName());
+  if (!name.empty()) {
+    return name;
+  }
 
-        auto name = CopyCString(a_form->GetName());
-        if (!name.empty()) {
-            return name;
-        }
+  auto editorID = CopyCString(a_form->GetFormEditorID());
+  if (!editorID.empty()) {
+    return editorID;
+  }
 
-        auto editorID = CopyCString(a_form->GetFormEditorID());
-        if (!editorID.empty()) {
-            return editorID;
-        }
-
-        return "Form " + FormatFormID(a_form->GetFormID());
-    }
-
-    std::string JoinStrings(const std::vector<std::string>& a_values)
-    {
-        std::string output;
-        for (const auto& value : a_values) {
-            if (!output.empty()) {
-                output.append(", ");
-            }
-            output.append(value);
-        }
-        return output;
-    }
-
-    std::vector<std::string> GetArmorSlotLabels(std::uint64_t a_slotMask)
-    {
-        std::vector<std::string> labels;
-        for (const auto& [slot, label] : kArmorSlotNames) {
-            if ((a_slotMask & static_cast<std::uint64_t>(std::to_underlying(slot))) != 0) {
-                labels.emplace_back(label);
-            }
-        }
-
-        if (labels.empty()) {
-            labels.emplace_back("None");
-        }
-
-        return labels;
-    }
-
-    std::string GetPluginName(const RE::TESForm* a_form)
-    {
-        if (!a_form) {
-            return {};
-        }
-
-        const auto* file = a_form->GetFile(0);
-        if (!file) {
-            return {};
-        }
-
-        return std::string(file->GetFilename());
-    }
-
-    std::string GetFormIdentifier(const RE::TESForm* a_form)
-    {
-        if (!a_form) {
-            return {};
-        }
-
-        const auto plugin = GetPluginName(a_form);
-        if (plugin.empty()) {
-            return {};
-        }
-
-        return plugin + "|" + FormatFormID(a_form->GetLocalFormID());
-    }
+  return "Form " + FormatFormID(a_form->GetFormID());
 }
+
+std::string JoinStrings(const std::vector<std::string> &a_values) {
+  std::string output;
+  for (const auto &value : a_values) {
+    if (!output.empty()) {
+      output.append(", ");
+    }
+    output.append(value);
+  }
+  return output;
+}
+
+std::vector<std::string> GetArmorSlotLabels(std::uint64_t a_slotMask) {
+  std::vector<std::string> labels;
+  for (const auto &[slot, label] : kArmorSlotNames) {
+    if ((a_slotMask & static_cast<std::uint64_t>(std::to_underlying(slot))) !=
+        0) {
+      labels.emplace_back(label);
+    }
+  }
+
+  if (labels.empty()) {
+    labels.emplace_back("None");
+  }
+
+  return labels;
+}
+
+std::string GetPluginName(const RE::TESForm *a_form) {
+  if (!a_form) {
+    return {};
+  }
+
+  const auto *file = a_form->GetFile(0);
+  if (!file) {
+    return {};
+  }
+
+  return std::string(file->GetFilename());
+}
+
+std::string GetFormIdentifier(const RE::TESForm *a_form) {
+  if (!a_form) {
+    return {};
+  }
+
+  const auto plugin = GetPluginName(a_form);
+  if (plugin.empty()) {
+    return {};
+  }
+
+  return plugin + "|" + FormatFormID(a_form->GetLocalFormID());
+}
+} // namespace sosng::armor

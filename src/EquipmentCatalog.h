@@ -1,68 +1,68 @@
 #pragma once
 
-namespace sosng
-{
-    struct GearEntry
-    {
-        RE::FormID formID;
-        std::string id;
-        std::string name;
-        std::string editorID;
-        std::string plugin;
-        std::string category;
-        std::string slot;
-        int statValue;
-        float weight;
-        int value;
-        std::vector<std::string> keywords;
-        std::string keywordsText;
-        std::string searchText;
-    };
+namespace sosng {
+struct GearEntry {
+  RE::FormID formID;
+  std::string id;
+  std::string name;
+  std::string editorID;
+  std::string plugin;
+  std::string category;
+  std::string slot;
+  int statValue;
+  float weight;
+  int value;
+  std::vector<std::string> keywords;
+  std::string keywordsText;
+  std::string searchText;
+};
 
-    struct OutfitEntry
-    {
-        RE::FormID formID;
-        std::string id;
-        std::string name;
-        std::string editorID;
-        std::string plugin;
-        std::string summary;
-        std::vector<std::string> pieces;
-        std::vector<std::string> tags;
-        std::string piecesText;
-        std::string tagsText;
-        std::string searchText;
-    };
+struct OutfitEntry {
+  RE::FormID formID;
+  std::string id;
+  std::string name;
+  std::string editorID;
+  std::string plugin;
+  std::string summary;
+  std::vector<std::string> pieces;
+  std::vector<std::string> tags;
+  std::string piecesText;
+  std::string tagsText;
+  std::string searchText;
+};
 
-    class EquipmentCatalog
-    {
-    public:
-        static EquipmentCatalog& Get();
+class EquipmentCatalog {
+public:
+  static EquipmentCatalog &Get();
 
-        void RefreshFromGame();
+  void RefreshFromGame();
 
-        const std::vector<GearEntry>& GetGear() const { return gear_; }
-        const std::vector<OutfitEntry>& GetOutfits() const { return outfits_; }
+  const std::vector<GearEntry> &GetGear() const { return gear_; }
+  const std::vector<OutfitEntry> &GetOutfits() const { return outfits_; }
 
-        const std::vector<std::string>& GetGearPlugins() const { return gearPlugins_; }
-        const std::vector<std::string>& GetGearSlots() const { return gearSlots_; }
-        const std::vector<std::string>& GetOutfitPlugins() const { return outfitPlugins_; }
-        const std::vector<std::string>& GetOutfitTags() const { return outfitTags_; }
+  const std::vector<std::string> &GetGearPlugins() const {
+    return gearPlugins_;
+  }
+  const std::vector<std::string> &GetGearSlots() const { return gearSlots_; }
+  const std::vector<std::string> &GetOutfitPlugins() const {
+    return outfitPlugins_;
+  }
+  const std::vector<std::string> &GetOutfitTags() const { return outfitTags_; }
 
-        std::string_view GetSource() const { return source_; }
-        std::string_view GetRevision() const { return revision_; }
+  std::string_view GetSource() const { return source_; }
+  std::string_view GetRevision() const { return revision_; }
 
-    private:
-        EquipmentCatalog();
-        void RebuildDerivedData();
+private:
+  EquipmentCatalog();
+  void RebuildDerivedData();
 
-        std::vector<GearEntry> gear_;
-        std::vector<OutfitEntry> outfits_;
-        std::vector<std::string> gearPlugins_;
-        std::vector<std::string> gearSlots_;
-        std::vector<std::string> outfitPlugins_;
-        std::vector<std::string> outfitTags_;
-        std::string source_;
-        std::string revision_;
-    };
-}
+  std::vector<GearEntry> gear_;
+  std::vector<OutfitEntry> outfits_;
+  std::vector<std::string> gearPlugins_;
+  std::vector<std::string> gearSlots_;
+  std::vector<std::string> outfitPlugins_;
+  std::vector<std::string> outfitTags_;
+  std::string source_;
+  std::string revision_;
+};
+} // namespace sosng

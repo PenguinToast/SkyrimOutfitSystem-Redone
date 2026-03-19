@@ -3,43 +3,42 @@
 #include "InputManager.h"
 #include "integrations/DynamicArmorVariantsClient.h"
 
-static void SKSEMessageHandler(SKSE::MessagingInterface::Message* a_message)
-{
-    switch (a_message->type) {
-    case SKSE::MessagingInterface::kPostLoad:
-        sosng::integrations::DynamicArmorVariantsClient::Refresh();
-        break;
-    case SKSE::MessagingInterface::kDataLoaded:
-        sosng::EquipmentCatalog::Get().RefreshFromGame();
-        logger::info("Equipment catalog initialized");
-        sosng::InputManager::GetSingleton()->Init();
-        logger::info("Input manager initialized");
-        break;
-    case SKSE::MessagingInterface::kPostPostLoad:
-        sosng::hooks::Install();
-        break;
-    default:
-        break;
-    }
+static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
+  switch (a_message->type) {
+  case SKSE::MessagingInterface::kPostLoad:
+    sosng::integrations::DynamicArmorVariantsClient::Refresh();
+    break;
+  case SKSE::MessagingInterface::kDataLoaded:
+    sosng::EquipmentCatalog::Get().RefreshFromGame();
+    logger::info("Equipment catalog initialized");
+    sosng::InputManager::GetSingleton()->Init();
+    logger::info("Input manager initialized");
+    break;
+  case SKSE::MessagingInterface::kPostPostLoad:
+    sosng::hooks::Install();
+    break;
+  default:
+    break;
+  }
 }
 
-extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
-{
-    REL::Module::reset();
+extern "C" DLLEXPORT bool SKSEAPI
+SKSEPlugin_Load(const SKSE::LoadInterface *a_skse) {
+  REL::Module::reset();
 
-    auto* messaging = reinterpret_cast<SKSE::MessagingInterface*>(
-        a_skse->QueryInterface(SKSE::LoadInterface::kMessaging));
+  auto *messaging = reinterpret_cast<SKSE::MessagingInterface *>(
+      a_skse->QueryInterface(SKSE::LoadInterface::kMessaging));
 
-    if (!messaging) {
-        logger::critical("Failed to load messaging interface. This is fatal.");
-        return false;
-    }
+  if (!messaging) {
+    logger::critical("Failed to load messaging interface. This is fatal.");
+    return false;
+  }
 
-    SKSE::Init(a_skse);
-    SKSE::AllocTrampoline(1 << 10);
+  SKSE::Init(a_skse);
+  SKSE::AllocTrampoline(1 << 10);
 
-    messaging->RegisterListener("SKSE", SKSEMessageHandler);
+  messaging->RegisterListener("SKSE", SKSEMessageHandler);
 
-    logger::info("Skyrim Outfit System NG loaded");
-    return true;
+  logger::info("Skyrim Outfit System NG loaded");
+  return true;
 }

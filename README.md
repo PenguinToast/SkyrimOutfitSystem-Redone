@@ -89,6 +89,17 @@ For `clangd` or other LSP tooling:
 xmake project -k compile_commands
 ```
 
+## Lint And Format
+```bash
+./scripts/format.sh
+./scripts/format.sh --check
+./scripts/lint.sh
+./scripts/lint.sh src/Menu.cpp
+```
+
+From WSL, the scripts prefer Linux `clang-format` / `clang-tidy` when available and otherwise
+fall back to the Visual Studio LLVM tools installed on Windows.
+
 ## Upgrading Dependencies
 ```bat
 xmake repo --update
