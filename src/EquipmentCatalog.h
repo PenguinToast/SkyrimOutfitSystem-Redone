@@ -2,12 +2,6 @@
 
 namespace sosng
 {
-    enum class GearKind
-    {
-        Armor,
-        Weapon
-    };
-
     struct GearEntry
     {
         RE::FormID formID;
@@ -15,7 +9,6 @@ namespace sosng
         std::string name;
         std::string editorID;
         std::string plugin;
-        GearKind kind;
         std::string category;
         std::string slot;
         int statValue;

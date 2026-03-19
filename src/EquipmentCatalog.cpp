@@ -178,65 +178,6 @@ namespace
         return slots.empty() ? std::string{ "None" } : std::move(slots.front());
     }
 
-    std::string GetWeaponCategory(const RE::TESObjectWEAP* a_weapon)
-    {
-        if (!a_weapon) {
-            return "Weapon";
-        }
-
-        switch (a_weapon->GetWeaponType()) {
-        case RE::WEAPON_TYPE::kHandToHandMelee:
-            return "Unarmed";
-        case RE::WEAPON_TYPE::kOneHandSword:
-            return "Sword";
-        case RE::WEAPON_TYPE::kOneHandDagger:
-            return "Dagger";
-        case RE::WEAPON_TYPE::kOneHandAxe:
-            return "War Axe";
-        case RE::WEAPON_TYPE::kOneHandMace:
-            return "Mace";
-        case RE::WEAPON_TYPE::kTwoHandSword:
-            return "Greatsword";
-        case RE::WEAPON_TYPE::kTwoHandAxe:
-            return "Battleaxe";
-        case RE::WEAPON_TYPE::kBow:
-            return "Bow";
-        case RE::WEAPON_TYPE::kStaff:
-            return "Staff";
-        case RE::WEAPON_TYPE::kCrossbow:
-            return "Crossbow";
-        default:
-            return "Weapon";
-        }
-    }
-
-    std::string GetWeaponClass(const RE::TESObjectWEAP* a_weapon)
-    {
-        if (!a_weapon) {
-            return "Weapon";
-        }
-
-        switch (a_weapon->GetWeaponType()) {
-        case RE::WEAPON_TYPE::kHandToHandMelee:
-            return "Unarmed";
-        case RE::WEAPON_TYPE::kOneHandSword:
-        case RE::WEAPON_TYPE::kOneHandDagger:
-        case RE::WEAPON_TYPE::kOneHandAxe:
-        case RE::WEAPON_TYPE::kOneHandMace:
-            return "One-Handed";
-        case RE::WEAPON_TYPE::kTwoHandSword:
-        case RE::WEAPON_TYPE::kTwoHandAxe:
-            return "Two-Handed";
-        case RE::WEAPON_TYPE::kBow:
-        case RE::WEAPON_TYPE::kCrossbow:
-            return "Ranged";
-        case RE::WEAPON_TYPE::kStaff:
-            return "Magic";
-        default:
-            return "Weapon";
-        }
-    }
-
     template <class T>
     std::vector<std::string> GetKeywords(const T* a_form)
     {
@@ -314,7 +255,6 @@ namespace
         std::vector<std::string> pieces;
         std::vector<std::string> tags;
         std::size_t armorCount{ 0 };
-        std::size_t weaponCount{ 0 };
     };
 
     OutfitDescription DescribeOutfit(const RE::BGSOutfit* a_outfit)
@@ -338,11 +278,6 @@ namespace
 
                 auto slots = GetArmorSlots(armor);
                 description.tags.insert(description.tags.end(), std::make_move_iterator(slots.begin()), std::make_move_iterator(slots.end()));
-            } else if (const auto* weapon = a_item->As<RE::TESObjectWEAP>()) {
-                ++description.weaponCount;
-                description.tags.emplace_back("Weapon");
-                description.tags.push_back(GetWeaponClass(weapon));
-                description.tags.push_back(GetWeaponCategory(weapon));
             }
 
             return RE::BSContainer::ForEachResult::kContinue;
@@ -365,26 +300,10 @@ namespace
             summary.push_back('s');
         }
 
-        if (a_description.armorCount > 0 || a_description.weaponCount > 0) {
+        if (a_description.armorCount > 0) {
             summary.append(": ");
-
-            bool needsSeparator = false;
-            if (a_description.armorCount > 0) {
-                summary.append(std::to_string(a_description.armorCount));
-                summary.append(" armor");
-                needsSeparator = true;
-            }
-
-            if (a_description.weaponCount > 0) {
-                if (needsSeparator) {
-                    summary.append(", ");
-                }
-                summary.append(std::to_string(a_description.weaponCount));
-                summary.append(" weapon");
-                if (a_description.weaponCount != 1) {
-                    summary.push_back('s');
-                }
-            }
+            summary.append(std::to_string(a_description.armorCount));
+            summary.append(" armor");
         } else {
             summary.push_back('.');
         }
@@ -471,7 +390,6 @@ namespace sosng
             entry.name = std::move(displayName);
             entry.editorID = editorID;
             entry.plugin = GetPluginName(armor);
-            entry.kind = GearKind::Armor;
             entry.category = GetArmorCategory(armor);
             entry.slot = GetPrimaryArmorSlot(armor);
             entry.statValue = static_cast<int>(armor->GetArmorRating());
@@ -488,44 +406,6 @@ namespace sosng
 
             gear_.push_back(std::move(entry));
         }
-
-        for (auto* weapon : dataHandler->GetFormArray<RE::TESObjectWEAP>()) {
-            if (!weapon || weapon->IsDeleted() || weapon->IsIgnored() || !weapon->GetFile(0)) {
-                continue;
-            }
-
-            const auto editorID = GetEditorID(weapon);
-            auto displayName = GetName(weapon);
-            if (displayName.empty()) {
-                displayName = editorID;
-            }
-            if (displayName.empty()) {
-                continue;
-            }
-
-            GearEntry entry{};
-            entry.formID = weapon->GetFormID();
-            entry.id = BuildEntryID(weapon);
-            entry.name = std::move(displayName);
-            entry.editorID = editorID;
-            entry.plugin = GetPluginName(weapon);
-            entry.kind = GearKind::Weapon;
-            entry.category = GetWeaponCategory(weapon);
-            entry.slot = GetWeaponClass(weapon);
-            entry.statValue = static_cast<int>(weapon->GetAttackDamage());
-            entry.weight = weapon->GetWeight();
-            entry.value = weapon->GetGoldValue();
-            entry.keywords = GetKeywords(weapon);
-
-            entry.keywords.push_back(entry.category);
-            entry.keywords.push_back(entry.slot);
-            SortUniqueStrings(entry.keywords);
-            entry.keywordsText = JoinStrings(entry.keywords);
-            entry.searchText = BuildGearSearchText(entry);
-
-            gear_.push_back(std::move(entry));
-        }
-
         for (auto* outfit : dataHandler->GetFormArray<RE::BGSOutfit>()) {
             if (!outfit || outfit->IsDeleted() || outfit->IsIgnored() || !outfit->GetFile(0)) {
                 continue;
@@ -565,7 +445,7 @@ namespace sosng
         RebuildDerivedData();
 
         source_ = "Runtime cache from TESDataHandler";
-        revision_ = "gear=" + std::to_string(gear_.size()) + ", outfits=" + std::to_string(outfits_.size());
+        revision_ = "armor=" + std::to_string(gear_.size()) + ", outfits=" + std::to_string(outfits_.size());
 
         logger::info("Equipment catalog refreshed: {} gear entries, {} outfits", gear_.size(), outfits_.size());
     }

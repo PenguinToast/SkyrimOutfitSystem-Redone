@@ -23,21 +23,43 @@ namespace sosng
         bool IsInitialized() const { return initialized_; }
 
     private:
+        struct EquipmentWidgetItem
+        {
+            RE::FormID formID{ 0 };
+            std::string key;
+            std::string name;
+            std::string slotText;
+            std::uint64_t slotMask{ 0 };
+        };
+
+        struct VariantWorkbenchRow
+        {
+            std::string key;
+            EquipmentWidgetItem equipped;
+            std::vector<EquipmentWidgetItem> overrides;
+        };
+
+        enum class DragSourceKind : std::uint32_t
+        {
+            Catalog = 1,
+            Override = 2,
+            Row = 3
+        };
+
+        struct DraggedEquipmentPayload
+        {
+            std::uint32_t sourceKind{ 0 };
+            std::int32_t rowIndex{ -1 };
+            std::int32_t itemIndex{ -1 };
+            RE::FormID formID{ 0 };
+        };
+
         enum class BrowserTab
         {
             Gear,
             Outfits,
             Options
         };
-
-        enum class GearKindFilter
-        {
-            All,
-            Armor,
-            Weapon
-        };
-
-        static constexpr std::array<std::string_view, 3> kGearKindLabels{ "All gear", "Armors", "Weapons" };
 
         Menu() = default;
 
@@ -47,9 +69,18 @@ namespace sosng
         void RebuildFontAtlas();
         void DrawWindow();
         void DrawGearTab();
+        void DrawGearCatalogTable(const std::vector<const GearEntry*>& a_rows);
+        void DrawVariantWorkbenchPane();
         void DrawOutfitTab();
         void DrawOptionsTab();
         bool DrawSearchableStringCombo(const char* a_label, const char* a_allLabel, const std::vector<std::string>& a_options, int& a_index, ImGuiTextFilter& a_filter);
+        bool DrawEquipmentInfoWidget(const char* a_id, const EquipmentWidgetItem& a_item, bool a_allowDrag, DragSourceKind a_sourceKind, bool a_showDeleteButton = false, int a_rowIndex = -1, int a_itemIndex = -1);
+        void SyncVariantRowsFromPlayer();
+        bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem& a_item) const;
+        bool CanAcceptOverride(int a_targetRowIndex, const EquipmentWidgetItem& a_item, int a_sourceRowIndex = -1, int a_sourceItemIndex = -1) const;
+        void AcceptOverridePayload(int a_targetRowIndex);
+        void AcceptRowReorderPayload(int a_targetRowIndex);
+        void AcceptOverrideDeletePayload();
 
         bool MatchesGearFilters(const GearEntry& a_entry) const;
         bool MatchesOutfitFilters(const OutfitEntry& a_entry) const;
@@ -64,7 +95,6 @@ namespace sosng
         ID3D11Device* device_{ nullptr };
         ID3D11DeviceContext* context_{ nullptr };
         BrowserTab activeTab_{ BrowserTab::Gear };
-        GearKindFilter gearKindFilter_{ GearKindFilter::All };
         int gearPluginIndex_{ 0 };
         int gearSlotIndex_{ 0 };
         int outfitPluginIndex_{ 0 };
@@ -79,5 +109,7 @@ namespace sosng
         ImGuiTextFilter outfitSearch_;
         ImGuiTextFilter gearPluginFilter_;
         ImGuiTextFilter outfitPluginFilter_;
+        std::vector<VariantWorkbenchRow> variantRows_;
+        std::vector<std::string> variantRowOrder_;
     };
 }

@@ -3,28 +3,67 @@
 #include "InputManager.h"
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
+#include "imgui_internal.h"
 
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace
 {
+    using BipedSlot = RE::BGSBipedObjectForm::BipedObjectSlot;
+
     constexpr auto kSettingsDirectory = "Data/SKSE/Plugins/SkyrimOutfitSystemNG";
     constexpr auto kImGuiIniFilename = "imgui.ini";
     constexpr auto kUserSettingsFilename = "settings.json";
     constexpr int kDefaultFontSizePixels = 13;
     constexpr int kMinFontSizePixels = 8;
     constexpr int kMaxFontSizePixels = 28;
+    constexpr char kVariantItemPayloadType[] = "SOSNG_VARIANT_ITEM";
+
+    constexpr std::array<std::pair<BipedSlot, std::string_view>, 32> kArmorSlotNames{ {
+        { BipedSlot::kHead, "30 - Head" },
+        { BipedSlot::kHair, "31 - Hair" },
+        { BipedSlot::kBody, "32 - Body" },
+        { BipedSlot::kHands, "33 - Hands" },
+        { BipedSlot::kForearms, "34 - Forearms" },
+        { BipedSlot::kAmulet, "35 - Amulet" },
+        { BipedSlot::kRing, "36 - Ring" },
+        { BipedSlot::kFeet, "37 - Feet" },
+        { BipedSlot::kCalves, "38 - Calves" },
+        { BipedSlot::kShield, "39 - Shield" },
+        { BipedSlot::kTail, "40 - Tail" },
+        { BipedSlot::kLongHair, "41 - Long Hair" },
+        { BipedSlot::kCirclet, "42 - Circlet" },
+        { BipedSlot::kEars, "43 - Ears" },
+        { BipedSlot::kModMouth, "44 - Mod Mouth" },
+        { BipedSlot::kModNeck, "45 - Mod Neck" },
+        { BipedSlot::kModChestPrimary, "46 - Mod Chest Primary" },
+        { BipedSlot::kModBack, "47 - Mod Back" },
+        { BipedSlot::kModMisc1, "48 - Mod Misc1" },
+        { BipedSlot::kModPelvisPrimary, "49 - Mod Pelvis Primary" },
+        { BipedSlot::kDecapitateHead, "50 - Decapitate Head" },
+        { BipedSlot::kDecapitate, "51 - Decapitate" },
+        { BipedSlot::kModPelvisSecondary, "52 - Mod Pelvis Secondary" },
+        { BipedSlot::kModLegRight, "53 - Mod Leg Right" },
+        { BipedSlot::kModLegLeft, "54 - Mod Leg Left" },
+        { BipedSlot::kModFaceJewelry, "55 - Mod Face Jewelry" },
+        { BipedSlot::kModChestSecondary, "56 - Mod Chest Secondary" },
+        { BipedSlot::kModShoulder, "57 - Mod Shoulder" },
+        { BipedSlot::kModArmLeft, "58 - Mod Arm Left" },
+        { BipedSlot::kModArmRight, "59 - Mod Arm Right" },
+        { BipedSlot::kModMisc2, "60 - Mod Misc2" },
+        { BipedSlot::kFX01, "61 - FX01" }
+    } };
 
     enum class GearColumn : ImGuiID
     {
         Name = 1,
         Plugin,
-        Slot,
-        Stat,
-        Weight,
-        Value
+        Slot
     };
 
     enum class OutfitColumn : ImGuiID
@@ -59,6 +98,68 @@ namespace
             return 1;
         }
         return 0;
+    }
+
+    std::string CopyCString(const char* a_text)
+    {
+        if (!a_text || a_text[0] == '\0') {
+            return {};
+        }
+        return a_text;
+    }
+
+    std::string FormatFormID(RE::FormID a_formID)
+    {
+        char buffer[16]{};
+        std::snprintf(buffer, sizeof(buffer), "%08X", a_formID);
+        return buffer;
+    }
+
+    std::string GetDisplayName(const RE::TESForm* a_form)
+    {
+        if (!a_form) {
+            return "Unknown";
+        }
+
+        auto name = CopyCString(a_form->GetName());
+        if (!name.empty()) {
+            return name;
+        }
+
+        auto editorID = CopyCString(a_form->GetFormEditorID());
+        if (!editorID.empty()) {
+            return editorID;
+        }
+
+        return "Form " + FormatFormID(a_form->GetFormID());
+    }
+
+    std::string JoinStrings(const std::vector<std::string>& a_values)
+    {
+        std::string output;
+        for (const auto& value : a_values) {
+            if (!output.empty()) {
+                output.append(", ");
+            }
+            output.append(value);
+        }
+        return output;
+    }
+
+    std::vector<std::string> GetArmorSlotLabels(std::uint64_t a_slotMask)
+    {
+        std::vector<std::string> labels;
+        for (const auto& [slot, label] : kArmorSlotNames) {
+            if ((a_slotMask & static_cast<std::uint64_t>(std::to_underlying(slot))) != 0) {
+                labels.emplace_back(label);
+            }
+        }
+
+        if (labels.empty()) {
+            labels.emplace_back("None");
+        }
+
+        return labels;
     }
 
 }
@@ -287,7 +388,7 @@ namespace sosng
         ImGui::SameLine();
         ImGui::TextDisabled("| F3 toggles visibility");
         ImGui::Separator();
-        ImGui::TextWrapped("Current goal: browse every installed armor, weapon, and outfit, then wire the visual-swapping layer through a custom Dynamic Armor Variants fork later.");
+        ImGui::TextWrapped("Current goal: browse every installed armor and outfit, then wire the visual-swapping layer through a custom Dynamic Armor Variants fork later.");
         ImGui::Spacing();
         ImGui::BulletText("Catalog source: %.*s", static_cast<int>(EquipmentCatalog::Get().GetSource().size()), EquipmentCatalog::Get().GetSource().data());
         ImGui::BulletText("Catalog revision: %.*s", static_cast<int>(EquipmentCatalog::Get().GetRevision().size()), EquipmentCatalog::Get().GetRevision().data());
@@ -325,13 +426,6 @@ namespace sosng
     bool Menu::MatchesGearFilters(const GearEntry& a_entry) const
     {
         const auto& catalog = EquipmentCatalog::Get();
-        if (gearKindFilter_ == GearKindFilter::Armor && a_entry.kind != GearKind::Armor) {
-            return false;
-        }
-        if (gearKindFilter_ == GearKindFilter::Weapon && a_entry.kind != GearKind::Weapon) {
-            return false;
-        }
-
         if (gearPluginIndex_ > 0 && a_entry.plugin != catalog.GetGearPlugins()[gearPluginIndex_ - 1]) {
             return false;
         }
@@ -407,15 +501,6 @@ namespace sosng
                 if (compare == 0) {
                     compare = CompareText(a_left->category, a_right->category);
                 }
-                break;
-            case GearColumn::Stat:
-                compare = a_left->statValue - a_right->statValue;
-                break;
-            case GearColumn::Weight:
-                compare = a_left->weight < a_right->weight ? -1 : (a_left->weight > a_right->weight ? 1 : 0);
-                break;
-            case GearColumn::Value:
-                compare = a_left->value - a_right->value;
                 break;
             case GearColumn::Name:
             default:
@@ -526,14 +611,14 @@ namespace sosng
         const auto& catalog = EquipmentCatalog::Get();
 
         ImGui::PushItemWidth(260.0f);
-        gearSearch_.Draw("Search installed gear", 260.0f);
+        gearSearch_.Draw("Search installed armor", 260.0f);
         ImGui::PopItemWidth();
         ImGui::SameLine();
 
         DrawSearchableStringCombo("Plugin", "All plugins", catalog.GetGearPlugins(), gearPluginIndex_, gearPluginFilter_);
 
         ImGui::SameLine();
-        if (ImGui::BeginCombo("Slot / class", gearSlotIndex_ == 0 ? "Any slot" : catalog.GetGearSlots()[gearSlotIndex_ - 1].data())) {
+        if (ImGui::BeginCombo("Slot", gearSlotIndex_ == 0 ? "Any slot" : catalog.GetGearSlots()[gearSlotIndex_ - 1].data())) {
             const bool anySelected = gearSlotIndex_ == 0;
             if (ImGui::Selectable("Any slot", anySelected)) {
                 gearSlotIndex_ = 0;
@@ -551,29 +636,45 @@ namespace sosng
             ImGui::EndCombo();
         }
 
-        int gearKindSelection = static_cast<int>(gearKindFilter_);
-        for (std::size_t index = 0; index < kGearKindLabels.size(); ++index) {
-            if (index > 0) {
-                ImGui::SameLine();
-            }
-            ImGui::RadioButton(kGearKindLabels[index].data(), &gearKindSelection, static_cast<int>(index));
-        }
-        gearKindFilter_ = static_cast<GearKindFilter>(gearKindSelection);
-
         auto rows = BuildFilteredGear();
+        SyncVariantRowsFromPlayer();
         ImGui::Text("Results: %zu", rows.size());
+        ImGui::SameLine();
+        ImGui::Text("| Equipped rows: %zu", variantRows_.size());
 
-        const auto tableHeight = ImGui::GetContentRegionAvail().y;
-        if (ImGui::BeginTable("##gear-table", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, tableHeight))) {
+        if (ImGui::BeginTable("##gear-layout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp, ImVec2(0.0f, ImGui::GetContentRegionAvail().y))) {
+            ImGui::TableSetupColumn("Catalog", ImGuiTableColumnFlags_WidthStretch, 1.20f);
+            ImGui::TableSetupColumn("Variants", ImGuiTableColumnFlags_WidthStretch, 0.95f);
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            if (ImGui::BeginChild("##catalog-pane", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
+                ImGui::TextUnformatted("Installed armor");
+                ImGui::Separator();
+                DrawGearCatalogTable(rows);
+            }
+            ImGui::EndChild();
+
+            ImGui::TableSetColumnIndex(1);
+            if (ImGui::BeginChild("##variant-pane", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
+                DrawVariantWorkbenchPane();
+            }
+            ImGui::EndChild();
+
+            ImGui::EndTable();
+        }
+    }
+
+    void Menu::DrawGearCatalogTable(const std::vector<const GearEntry*>& a_rows)
+    {
+        if (ImGui::BeginTable("##gear-table", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 0.0f))) {
             ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort, 0.0f, static_cast<ImGuiID>(GearColumn::Name));
             ImGui::TableSetupColumn("Plugin", ImGuiTableColumnFlags_None, 0.0f, static_cast<ImGuiID>(GearColumn::Plugin));
-            ImGui::TableSetupColumn("Slot / class", ImGuiTableColumnFlags_None, 0.0f, static_cast<ImGuiID>(GearColumn::Slot));
-            ImGui::TableSetupColumn("Armor / damage", ImGuiTableColumnFlags_PreferSortDescending, 0.0f, static_cast<ImGuiID>(GearColumn::Stat));
-            ImGui::TableSetupColumn("Weight", ImGuiTableColumnFlags_PreferSortDescending, 0.0f, static_cast<ImGuiID>(GearColumn::Weight));
-            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_PreferSortDescending, 0.0f, static_cast<ImGuiID>(GearColumn::Value));
+            ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_None, 0.0f, static_cast<ImGuiID>(GearColumn::Slot));
             ImGui::TableSetupScrollFreeze(0, 1);
             ImGui::TableHeadersRow();
 
+            auto rows = a_rows;
             SortGearRows(rows, ImGui::TableGetSortSpecs());
 
             ImGuiListClipper clipper;
@@ -581,32 +682,428 @@ namespace sosng
             while (clipper.Step()) {
                 for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd; ++rowIndex) {
                     const auto& entry = *rows[static_cast<std::size_t>(rowIndex)];
+                    EquipmentWidgetItem item{};
+                    if (!BuildCatalogItem(entry.formID, item)) {
+                        item.formID = entry.formID;
+                        item.key = "catalog:" + entry.id;
+                        item.name = entry.name;
+                        item.slotText = entry.slot;
+                    }
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    ImGui::TextUnformatted(entry.name.data());
-                    ImGui::TextDisabled("%s", entry.editorID.data());
-                    ImGui::TextDisabled("%s", entry.keywordsText.c_str());
+                    DrawEquipmentInfoWidget(item.key.c_str(), item, true, DragSourceKind::Catalog);
 
                     ImGui::TableSetColumnIndex(1);
                     ImGui::TextUnformatted(entry.plugin.data());
 
                     ImGui::TableSetColumnIndex(2);
-                    ImGui::Text("%s / %s", entry.slot.data(), entry.category.data());
-
-                    ImGui::TableSetColumnIndex(3);
-                    ImGui::Text("%d", entry.statValue);
-
-                    ImGui::TableSetColumnIndex(4);
-                    ImGui::Text("%.1f", entry.weight);
-
-                    ImGui::TableSetColumnIndex(5);
-                    ImGui::Text("%d", entry.value);
+                    ImGui::Text("%s", entry.slot.data());
                 }
             }
 
             ImGui::EndTable();
         }
+    }
+
+    bool Menu::DrawEquipmentInfoWidget(const char* a_id, const EquipmentWidgetItem& a_item, bool a_allowDrag, DragSourceKind a_sourceKind, bool a_showDeleteButton, int a_rowIndex, int a_itemIndex)
+    {
+        ImGui::PushID(a_id);
+
+        constexpr float paddingX = 10.0f;
+        constexpr float paddingY = 7.0f;
+        const auto lineHeight = ImGui::GetTextLineHeight();
+        const auto frameHeight = paddingY * 2.0f + lineHeight * 2.0f + 4.0f;
+        const auto width = ImGui::GetContentRegionAvail().x;
+        const auto size = ImVec2(width > 0.0f ? width : 1.0f, frameHeight);
+        bool deleteClicked = false;
+
+        ImGui::InvisibleButton("##equipment-widget", size);
+
+        const auto rectMin = ImGui::GetItemRectMin();
+        const auto rectMax = ImGui::GetItemRectMax();
+        const auto hovered = ImGui::IsItemHovered();
+        const auto active = ImGui::IsItemActive();
+        auto* drawList = ImGui::GetWindowDrawList();
+
+        ImU32 fillColor = IM_COL32(28, 33, 41, 242);
+        if (active) {
+            fillColor = IM_COL32(45, 63, 86, 255);
+        } else if (hovered) {
+            fillColor = IM_COL32(37, 47, 60, 250);
+        }
+
+        drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);
+        drawList->AddRect(rectMin, rectMax, IM_COL32(85, 103, 122, 255), 8.0f);
+
+        const auto namePos = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY);
+        const auto slotPos = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY + lineHeight + 4.0f);
+        const auto clipMin = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY);
+        const auto buttonWidth = a_showDeleteButton ? 24.0f : 0.0f;
+        const auto clipMax = ImVec2(rectMax.x - paddingX - buttonWidth, rectMax.y - paddingY);
+        const auto buttonSize = ImVec2(20.0f, 20.0f);
+        const auto buttonMin = ImVec2(rectMax.x - paddingX - buttonSize.x, rectMin.y + paddingY);
+        const auto buttonMax = ImVec2(buttonMin.x + buttonSize.x, buttonMin.y + buttonSize.y);
+        const bool deleteHovered = a_showDeleteButton && ImGui::IsMouseHoveringRect(buttonMin, buttonMax);
+
+        drawList->PushClipRect(clipMin, clipMax, true);
+        drawList->AddText(namePos, IM_COL32(235, 239, 244, 255), a_item.name.c_str());
+        drawList->AddText(slotPos, IM_COL32(161, 188, 214, 255), a_item.slotText.c_str());
+        drawList->PopClipRect();
+
+        if (a_showDeleteButton) {
+            const auto deleteFill = deleteHovered ? IM_COL32(122, 52, 52, 255) : IM_COL32(88, 43, 43, 235);
+            drawList->AddRectFilled(buttonMin, buttonMax, deleteFill, 4.0f);
+            drawList->AddRect(buttonMin, buttonMax, IM_COL32(160, 92, 92, 255), 4.0f);
+            drawList->AddText(ImVec2(buttonMin.x + 6.0f, buttonMin.y + 2.0f), IM_COL32(244, 232, 232, 255), "X");
+
+            if (deleteHovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                deleteClicked = true;
+            }
+        }
+
+        if (a_allowDrag && !deleteHovered && ImGui::BeginDragDropSource()) {
+            DraggedEquipmentPayload payload{};
+            payload.sourceKind = static_cast<std::uint32_t>(a_sourceKind);
+            payload.rowIndex = a_rowIndex;
+            payload.itemIndex = a_itemIndex;
+            payload.formID = a_item.formID;
+            ImGui::SetDragDropPayload(kVariantItemPayloadType, &payload, sizeof(payload));
+            ImGui::TextUnformatted(a_item.name.c_str());
+            ImGui::Text("%s", a_item.slotText.c_str());
+            ImGui::EndDragDropSource();
+        }
+
+        ImGui::PopID();
+        return deleteClicked;
+    }
+
+    void Menu::SyncVariantRowsFromPlayer()
+    {
+        auto* player = RE::PlayerCharacter::GetSingleton();
+        if (!player) {
+            variantRows_.clear();
+            variantRowOrder_.clear();
+            return;
+        }
+
+        std::unordered_map<std::string, std::vector<EquipmentWidgetItem>> existingOverrides;
+        existingOverrides.reserve(variantRows_.size());
+        for (auto& row : variantRows_) {
+            existingOverrides.emplace(row.key, std::move(row.overrides));
+        }
+
+        std::unordered_map<std::string, VariantWorkbenchRow> rowMap;
+        rowMap.reserve(variantRows_.size() + 8);
+        std::vector<std::string> discoveredKeys;
+        discoveredKeys.reserve(variantRows_.size() + 8);
+        std::unordered_set<RE::FormID> seenArmorForms;
+
+        for (const auto& [slot, label] : kArmorSlotNames) {
+            auto* armor = player->GetWornArmor(slot);
+            if (!armor) {
+                continue;
+            }
+
+            const auto formID = armor->GetFormID();
+            if (!seenArmorForms.insert(formID).second) {
+                continue;
+            }
+
+            EquipmentWidgetItem equipped{};
+            if (!BuildCatalogItem(formID, equipped)) {
+                continue;
+            }
+
+            VariantWorkbenchRow row{};
+            row.key = "armor:" + FormatFormID(formID);
+            row.equipped = std::move(equipped);
+            row.equipped.key = row.key;
+            if (const auto it = existingOverrides.find(row.key); it != existingOverrides.end()) {
+                row.overrides = std::move(it->second);
+            }
+            discoveredKeys.push_back(row.key);
+            rowMap.emplace(row.key, std::move(row));
+        }
+
+        std::vector<VariantWorkbenchRow> rows;
+        rows.reserve(rowMap.size());
+        std::unordered_set<std::string> placedKeys;
+        placedKeys.reserve(rowMap.size());
+
+        for (const auto& key : variantRowOrder_) {
+            const auto it = rowMap.find(key);
+            if (it == rowMap.end()) {
+                continue;
+            }
+
+            placedKeys.insert(key);
+            rows.push_back(std::move(it->second));
+        }
+
+        for (const auto& key : discoveredKeys) {
+            if (!placedKeys.insert(key).second) {
+                continue;
+            }
+
+            const auto it = rowMap.find(key);
+            if (it == rowMap.end()) {
+                continue;
+            }
+
+            rows.push_back(std::move(it->second));
+        }
+
+        variantRowOrder_.clear();
+        variantRowOrder_.reserve(rows.size());
+        for (const auto& row : rows) {
+            variantRowOrder_.push_back(row.key);
+        }
+
+        variantRows_ = std::move(rows);
+    }
+
+    bool Menu::BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem& a_item) const
+    {
+        const auto* form = RE::TESForm::LookupByID(a_formID);
+        if (!form) {
+            return false;
+        }
+
+        a_item = {};
+        a_item.formID = form->GetFormID();
+        a_item.key = "form:" + FormatFormID(form->GetFormID());
+        a_item.name = GetDisplayName(form);
+
+        if (const auto* armor = form->As<RE::TESObjectARMO>()) {
+            a_item.slotMask = armor->GetSlotMask().underlying();
+            a_item.slotText = JoinStrings(GetArmorSlotLabels(a_item.slotMask));
+            return true;
+        }
+
+        return false;
+    }
+
+    bool Menu::CanAcceptOverride(int a_targetRowIndex, const EquipmentWidgetItem& a_item, int a_sourceRowIndex, int a_sourceItemIndex) const
+    {
+        if (a_targetRowIndex < 0 || a_targetRowIndex >= static_cast<int>(variantRows_.size())) {
+            return false;
+        }
+
+        if (a_sourceRowIndex == a_targetRowIndex && a_sourceItemIndex >= 0) {
+            return false;
+        }
+
+        const auto& row = variantRows_[static_cast<std::size_t>(a_targetRowIndex)];
+        if (a_item.slotMask == 0) {
+            return false;
+        }
+
+        for (int itemIndex = 0; itemIndex < static_cast<int>(row.overrides.size()); ++itemIndex) {
+            if (a_targetRowIndex == a_sourceRowIndex && itemIndex == a_sourceItemIndex) {
+                continue;
+            }
+
+            const auto& existing = row.overrides[static_cast<std::size_t>(itemIndex)];
+            if ((existing.slotMask & a_item.slotMask) != 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    void Menu::AcceptOverridePayload(int a_targetRowIndex)
+    {
+        const auto* payload = ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
+        if (!payload || payload->DataSize != sizeof(DraggedEquipmentPayload)) {
+            return;
+        }
+
+        DraggedEquipmentPayload dragPayload{};
+        std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
+
+        EquipmentWidgetItem item{};
+        if (dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Override)) {
+            if (dragPayload.rowIndex < 0 || dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
+                return;
+            }
+
+            const auto& sourceOverrides = variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)].overrides;
+            if (dragPayload.itemIndex < 0 || dragPayload.itemIndex >= static_cast<int>(sourceOverrides.size())) {
+                return;
+            }
+
+            item = sourceOverrides[static_cast<std::size_t>(dragPayload.itemIndex)];
+        } else {
+            if (!BuildCatalogItem(dragPayload.formID, item)) {
+                return;
+            }
+        }
+
+        if (!CanAcceptOverride(a_targetRowIndex, item, dragPayload.rowIndex, dragPayload.itemIndex)) {
+            return;
+        }
+
+        if (dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Override)) {
+            auto& sourceOverrides = variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)].overrides;
+            sourceOverrides.erase(sourceOverrides.begin() + dragPayload.itemIndex);
+        }
+
+        variantRows_[static_cast<std::size_t>(a_targetRowIndex)].overrides.push_back(std::move(item));
+    }
+
+    void Menu::AcceptRowReorderPayload(int a_targetRowIndex)
+    {
+        const auto* payload = ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
+        if (!payload || payload->DataSize != sizeof(DraggedEquipmentPayload)) {
+            return;
+        }
+
+        DraggedEquipmentPayload dragPayload{};
+        std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
+        if (dragPayload.sourceKind != static_cast<std::uint32_t>(DragSourceKind::Row)) {
+            return;
+        }
+
+        if (dragPayload.rowIndex < 0 || dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
+            return;
+        }
+        if (a_targetRowIndex < 0 || a_targetRowIndex >= static_cast<int>(variantRows_.size())) {
+            return;
+        }
+        if (dragPayload.rowIndex == a_targetRowIndex) {
+            return;
+        }
+
+        auto movedRow = std::move(variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)]);
+        variantRows_.erase(variantRows_.begin() + dragPayload.rowIndex);
+
+        auto insertIndex = a_targetRowIndex;
+        if (dragPayload.rowIndex < a_targetRowIndex) {
+            --insertIndex;
+        }
+
+        variantRows_.insert(variantRows_.begin() + insertIndex, std::move(movedRow));
+
+        variantRowOrder_.clear();
+        variantRowOrder_.reserve(variantRows_.size());
+        for (const auto& row : variantRows_) {
+            variantRowOrder_.push_back(row.key);
+        }
+    }
+
+    void Menu::AcceptOverrideDeletePayload()
+    {
+        const auto* payload = ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
+        if (!payload || payload->DataSize != sizeof(DraggedEquipmentPayload)) {
+            return;
+        }
+
+        DraggedEquipmentPayload dragPayload{};
+        std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
+        if (dragPayload.sourceKind != static_cast<std::uint32_t>(DragSourceKind::Override)) {
+            return;
+        }
+
+        if (dragPayload.rowIndex < 0 || dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
+            return;
+        }
+
+        auto& overrides = variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)].overrides;
+        if (dragPayload.itemIndex < 0 || dragPayload.itemIndex >= static_cast<int>(overrides.size())) {
+            return;
+        }
+
+        overrides.erase(overrides.begin() + dragPayload.itemIndex);
+    }
+
+    void Menu::DrawVariantWorkbenchPane()
+    {
+        ImGui::TextUnformatted("Variant workbench");
+        ImGui::Separator();
+        ImGui::TextWrapped("Each row is a currently equipped armor piece. Drag the left column to reorder rows. Drop armor into the Overrides column. Only overlapping override slots on the same row are rejected.");
+        ImGui::Spacing();
+
+        if (variantRows_.empty()) {
+            ImGui::TextWrapped("No equipped armor pieces were found on the player.");
+            return;
+        }
+
+        constexpr float deletePaneHeight = 86.0f;
+        const auto tableHeight = (std::max)(0.0f, ImGui::GetContentRegionAvail().y - deletePaneHeight);
+        if (ImGui::BeginChild("##variant-workbench-scroll", ImVec2(0.0f, tableHeight), ImGuiChildFlags_None)) {
+            if (ImGui::BeginTable("##variant-workbench", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 0.0f))) {
+            ImGui::TableSetupColumn("Equipped", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+            ImGui::TableSetupColumn("Overrides", ImGuiTableColumnFlags_WidthStretch, 1.15f);
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::TableHeadersRow();
+
+            for (int rowIndex = 0; rowIndex < static_cast<int>(variantRows_.size()); ++rowIndex) {
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                DrawEquipmentInfoWidget(variantRows_[static_cast<std::size_t>(rowIndex)].key.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].equipped, true, DragSourceKind::Row, false, rowIndex);
+                if (ImGui::BeginDragDropTarget()) {
+                    AcceptRowReorderPayload(rowIndex);
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::TableSetColumnIndex(1);
+                const auto overrideCount = variantRows_[static_cast<std::size_t>(rowIndex)].overrides.size();
+                const auto dropZoneHeight = (std::max)(72.0f, 14.0f + static_cast<float>(overrideCount) * (ImGui::GetTextLineHeightWithSpacing() * 2.5f));
+                const auto dropId = "##override-drop-" + std::to_string(rowIndex);
+                ImGui::BeginChild(dropId.c_str(), ImVec2(0.0f, dropZoneHeight), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+                const auto childPos = ImGui::GetWindowPos();
+                const auto childSize = ImGui::GetWindowSize();
+
+                if (overrideCount == 0) {
+                    ImGui::TextWrapped("Drop equipment overrides here.");
+                } else {
+                    for (int overrideIndex = 0; overrideIndex < static_cast<int>(overrideCount); ++overrideIndex) {
+                        if (overrideIndex > 0) {
+                            ImGui::Spacing();
+                        }
+
+                        const auto widgetId = "override:" + std::to_string(rowIndex) + ":" + std::to_string(overrideIndex);
+                        if (DrawEquipmentInfoWidget(widgetId.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].overrides[static_cast<std::size_t>(overrideIndex)], true, DragSourceKind::Override, true, rowIndex, overrideIndex)) {
+                            variantRows_[static_cast<std::size_t>(rowIndex)].overrides.erase(
+                                variantRows_[static_cast<std::size_t>(rowIndex)].overrides.begin() + overrideIndex);
+                            break;
+                        }
+                    }
+                }
+
+                const ImRect dropRect(
+                    childPos,
+                    ImVec2(childPos.x + childSize.x, childPos.y + childSize.y));
+                if (ImGui::BeginDragDropTargetCustom(dropRect, ImGui::GetID("##override-cell-target"))) {
+                    AcceptOverridePayload(rowIndex);
+                    ImGui::EndDragDropTarget();
+                }
+
+                ImGui::EndChild();
+            }
+
+            ImGui::EndTable();
+        }
+            ImGui::EndChild();
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::BeginChild("##override-delete-target", ImVec2(0.0f, 56.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        const auto deletePos = ImGui::GetWindowPos();
+        const auto deleteSize = ImGui::GetWindowSize();
+        ImGui::TextWrapped("Drag an override here to delete it.");
+        const ImRect deleteRect(
+            deletePos,
+            ImVec2(deletePos.x + deleteSize.x, deletePos.y + deleteSize.y));
+        if (ImGui::BeginDragDropTargetCustom(deleteRect, ImGui::GetID("##override-delete-drop"))) {
+            AcceptOverrideDeletePayload();
+            ImGui::EndDragDropTarget();
+        }
+        ImGui::EndChild();
     }
 
     void Menu::DrawOutfitTab()
