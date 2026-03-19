@@ -1,10 +1,14 @@
 #include "EquipmentCatalog.h"
 #include "Hooks.h"
 #include "InputManager.h"
+#include "integrations/DynamicArmorVariantsClient.h"
 
 static void SKSEMessageHandler(SKSE::MessagingInterface::Message* a_message)
 {
     switch (a_message->type) {
+    case SKSE::MessagingInterface::kPostLoad:
+        sosng::integrations::DynamicArmorVariantsClient::Refresh();
+        break;
     case SKSE::MessagingInterface::kDataLoaded:
         sosng::EquipmentCatalog::Get().RefreshFromGame();
         logger::info("Equipment catalog initialized");
