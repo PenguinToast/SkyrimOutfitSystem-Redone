@@ -97,8 +97,13 @@ xmake project -k compile_commands
 ./scripts/lint.sh src/Menu.cpp
 ```
 
-From WSL, the scripts prefer Linux `clang-format` / `clang-tidy` when available and otherwise
-fall back to the Visual Studio LLVM tools installed on Windows.
+From WSL, `format.sh` prefers Linux `clang-format` when available. `lint.sh` prefers the
+Visual Studio LLVM `x64` `clang-tidy.exe` because the generic Visual Studio `Llvm/bin`
+binary is a 32-bit build that crashes in this environment.
+
+`lint.sh` also passes `/Y-` to disable MSVC PCH use during linting. xmake's generated
+`compile_commands.json` points `clang-tidy` at a PCH path that does not exist, so disabling
+PCH is the reliable way to lint these translation units.
 
 ## Upgrading Dependencies
 ```bat

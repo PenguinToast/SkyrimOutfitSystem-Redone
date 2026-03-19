@@ -31,12 +31,18 @@ if ! command -v wslpath >/dev/null 2>&1; then
 fi
 
 find_clang_tidy() {
+    local tool="/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/x64/bin/clang-tidy.exe"
+    if [[ -x "$tool" ]]; then
+        printf '%s\n' "$tool"
+        return
+    fi
+
     if command -v clang-tidy >/dev/null 2>&1; then
         command -v clang-tidy
         return
     fi
 
-    local tool="/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/bin/clang-tidy.exe"
+    tool="/mnt/c/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/Llvm/bin/clang-tidy.exe"
     if [[ -x "$tool" ]]; then
         printf '%s\n' "$tool"
         return
@@ -107,7 +113,11 @@ fi
 PROJECT_PATH="$(to_tool_path "$CLANG_TIDY" "$REPO_ROOT")"
 for file in "${FILES[@]}"; do
     tool_file="$(to_tool_path "$CLANG_TIDY" "$file")"
-    "$CLANG_TIDY" -p "$PROJECT_PATH" --header-filter='^(src|include)/' "$tool_file"
+    "$CLANG_TIDY" \
+        -p "$PROJECT_PATH" \
+        --header-filter='^(src|include)/' \
+        --extra-arg-before=/Y- \
+        "$tool_file"
 done
 
 echo "Processed ${#FILES[@]} translation unit(s) with clang-tidy"
