@@ -79,7 +79,7 @@ namespace sosng
         bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem& a_item) const;
         bool CanAcceptOverride(int a_targetRowIndex, const EquipmentWidgetItem& a_item, int a_sourceRowIndex = -1, int a_sourceItemIndex = -1) const;
         void AcceptOverridePayload(int a_targetRowIndex);
-        void AcceptRowReorderPayload(int a_targetRowIndex);
+        void ApplyRowReorder(const DraggedEquipmentPayload& a_dragPayload, int a_targetRowIndex, bool a_insertAfter);
         void AcceptOverrideDeletePayload();
 
         bool MatchesGearFilters(const GearEntry& a_entry) const;
