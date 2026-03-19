@@ -546,10 +546,10 @@ namespace sosng
         }
 
         auto rows = BuildFilteredGear();
-        SyncVariantRowsFromPlayer();
+        workbench_.SyncRowsFromPlayer();
         ImGui::Text("Results: %zu", rows.size());
         ImGui::SameLine();
-        ImGui::Text("| Equipped rows: %zu", variantRows_.size());
+        ImGui::Text("| Equipped rows: %zu", workbench_.GetRowCount());
 
         if (ImGui::BeginTable("##gear-layout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp, ImVec2(0.0f, ImGui::GetContentRegionAvail().y))) {
             ImGui::TableSetupColumn("Catalog", ImGuiTableColumnFlags_WidthStretch, 1.20f);
@@ -573,7 +573,7 @@ namespace sosng
             ImGui::EndTable();
         }
 
-        SyncDynamicArmorVariants();
+        workbench_.SyncDynamicArmorVariants();
     }
 
     void Menu::DrawGearCatalogTable(const std::vector<const GearEntry*>& a_rows)
@@ -593,8 +593,8 @@ namespace sosng
             while (clipper.Step()) {
                 for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd; ++rowIndex) {
                     const auto& entry = *rows[static_cast<std::size_t>(rowIndex)];
-                    EquipmentWidgetItem item{};
-                    if (!BuildCatalogItem(entry.formID, item)) {
+                    workbench::EquipmentWidgetItem item{};
+                    if (!workbench_.BuildCatalogItem(entry.formID, item)) {
                         item.formID = entry.formID;
                         item.key = "catalog:" + entry.id;
                         item.name = entry.name;
@@ -617,7 +617,7 @@ namespace sosng
         }
     }
 
-    bool Menu::DrawEquipmentInfoWidget(const char* a_id, const EquipmentWidgetItem& a_item, bool a_allowDrag, DragSourceKind a_sourceKind, bool a_showDeleteButton, int a_rowIndex, int a_itemIndex)
+    bool Menu::DrawEquipmentInfoWidget(const char* a_id, const workbench::EquipmentWidgetItem& a_item, bool a_allowDrag, DragSourceKind a_sourceKind, bool a_showDeleteButton, int a_rowIndex, int a_itemIndex)
     {
         ImGui::PushID(a_id);
 
@@ -689,141 +689,6 @@ namespace sosng
         return deleteClicked;
     }
 
-    void Menu::SyncVariantRowsFromPlayer()
-    {
-        auto* player = RE::PlayerCharacter::GetSingleton();
-        if (!player) {
-            variantRows_.clear();
-            variantRowOrder_.clear();
-            return;
-        }
-
-        std::unordered_map<std::string, std::vector<EquipmentWidgetItem>> existingOverrides;
-        existingOverrides.reserve(variantRows_.size());
-        for (auto& row : variantRows_) {
-            existingOverrides.emplace(row.key, std::move(row.overrides));
-        }
-
-        std::unordered_map<std::string, VariantWorkbenchRow> rowMap;
-        rowMap.reserve(variantRows_.size() + 8);
-        std::vector<std::string> discoveredKeys;
-        discoveredKeys.reserve(variantRows_.size() + 8);
-        std::unordered_set<RE::FormID> seenArmorForms;
-
-        for (const auto& [slot, label] : kArmorSlotNames) {
-            auto* armor = player->GetWornArmor(slot);
-            if (!armor) {
-                continue;
-            }
-
-            const auto formID = armor->GetFormID();
-            if (!seenArmorForms.insert(formID).second) {
-                continue;
-            }
-
-            EquipmentWidgetItem equipped{};
-            if (!BuildCatalogItem(formID, equipped)) {
-                continue;
-            }
-
-            VariantWorkbenchRow row{};
-            row.key = "armor:" + FormatFormID(formID);
-            row.equipped = std::move(equipped);
-            row.equipped.key = row.key;
-            if (const auto it = existingOverrides.find(row.key); it != existingOverrides.end()) {
-                row.overrides = std::move(it->second);
-            }
-            discoveredKeys.push_back(row.key);
-            rowMap.emplace(row.key, std::move(row));
-        }
-
-        std::vector<VariantWorkbenchRow> rows;
-        rows.reserve(rowMap.size());
-        std::unordered_set<std::string> placedKeys;
-        placedKeys.reserve(rowMap.size());
-
-        for (const auto& key : variantRowOrder_) {
-            const auto it = rowMap.find(key);
-            if (it == rowMap.end()) {
-                continue;
-            }
-
-            placedKeys.insert(key);
-            rows.push_back(std::move(it->second));
-        }
-
-        for (const auto& key : discoveredKeys) {
-            if (!placedKeys.insert(key).second) {
-                continue;
-            }
-
-            const auto it = rowMap.find(key);
-            if (it == rowMap.end()) {
-                continue;
-            }
-
-            rows.push_back(std::move(it->second));
-        }
-
-        variantRowOrder_.clear();
-        variantRowOrder_.reserve(rows.size());
-        for (const auto& row : rows) {
-            variantRowOrder_.push_back(row.key);
-        }
-
-        variantRows_ = std::move(rows);
-    }
-
-    bool Menu::BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem& a_item) const
-    {
-        const auto* form = RE::TESForm::LookupByID(a_formID);
-        if (!form) {
-            return false;
-        }
-
-        a_item = {};
-        a_item.formID = form->GetFormID();
-        a_item.key = "form:" + FormatFormID(form->GetFormID());
-        a_item.name = GetDisplayName(form);
-
-        if (const auto* armor = form->As<RE::TESObjectARMO>()) {
-            a_item.slotMask = armor->GetSlotMask().underlying();
-            a_item.slotText = JoinStrings(GetArmorSlotLabels(a_item.slotMask));
-            return true;
-        }
-
-        return false;
-    }
-
-    bool Menu::CanAcceptOverride(int a_targetRowIndex, const EquipmentWidgetItem& a_item, int a_sourceRowIndex, int a_sourceItemIndex) const
-    {
-        if (a_targetRowIndex < 0 || a_targetRowIndex >= static_cast<int>(variantRows_.size())) {
-            return false;
-        }
-
-        if (a_sourceRowIndex == a_targetRowIndex && a_sourceItemIndex >= 0) {
-            return false;
-        }
-
-        const auto& row = variantRows_[static_cast<std::size_t>(a_targetRowIndex)];
-        if (a_item.slotMask == 0) {
-            return false;
-        }
-
-        for (int itemIndex = 0; itemIndex < static_cast<int>(row.overrides.size()); ++itemIndex) {
-            if (a_targetRowIndex == a_sourceRowIndex && itemIndex == a_sourceItemIndex) {
-                continue;
-            }
-
-            const auto& existing = row.overrides[static_cast<std::size_t>(itemIndex)];
-            if ((existing.slotMask & a_item.slotMask) != 0) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     void Menu::AcceptOverridePayload(int a_targetRowIndex)
     {
         const auto* payload = ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
@@ -834,66 +699,17 @@ namespace sosng
         DraggedEquipmentPayload dragPayload{};
         std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
 
-        EquipmentWidgetItem item{};
         if (dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Override)) {
-            if (dragPayload.rowIndex < 0 || dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
-                return;
-            }
-
-            const auto& sourceOverrides = variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)].overrides;
-            if (dragPayload.itemIndex < 0 || dragPayload.itemIndex >= static_cast<int>(sourceOverrides.size())) {
-                return;
-            }
-
-            item = sourceOverrides[static_cast<std::size_t>(dragPayload.itemIndex)];
-        } else {
-            if (!BuildCatalogItem(dragPayload.formID, item)) {
-                return;
-            }
+            workbench_.MoveOverride(dragPayload.rowIndex, dragPayload.itemIndex, a_targetRowIndex);
+        } else if (dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
+            workbench_.AddCatalogOverride(a_targetRowIndex, dragPayload.formID);
         }
-
-        if (!CanAcceptOverride(a_targetRowIndex, item, dragPayload.rowIndex, dragPayload.itemIndex)) {
-            return;
-        }
-
-        if (dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Override)) {
-            auto& sourceOverrides = variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)].overrides;
-            sourceOverrides.erase(sourceOverrides.begin() + dragPayload.itemIndex);
-        }
-
-        variantRows_[static_cast<std::size_t>(a_targetRowIndex)].overrides.push_back(std::move(item));
     }
 
     void Menu::ApplyRowReorder(const DraggedEquipmentPayload& a_dragPayload, int a_targetRowIndex, bool a_insertAfter)
     {
-        if (a_dragPayload.sourceKind != static_cast<std::uint32_t>(DragSourceKind::Row)) {
-            return;
-        }
-
-        if (a_dragPayload.rowIndex < 0 || a_dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
-            return;
-        }
-        if (a_targetRowIndex < 0 || a_targetRowIndex >= static_cast<int>(variantRows_.size())) {
-            return;
-        }
-        if (a_dragPayload.rowIndex == a_targetRowIndex) {
-            return;
-        }
-
-        auto movedRow = std::move(variantRows_[static_cast<std::size_t>(a_dragPayload.rowIndex)]);
-        variantRows_.erase(variantRows_.begin() + a_dragPayload.rowIndex);
-
-        auto insertIndex = a_targetRowIndex + (a_insertAfter ? 1 : 0);
-        if (a_dragPayload.rowIndex < insertIndex) {
-            --insertIndex;
-        }
-
-        variantRows_.insert(variantRows_.begin() + insertIndex, std::move(movedRow));
-
-        variantRowOrder_.clear();
-        variantRowOrder_.reserve(variantRows_.size());
-        for (const auto& row : variantRows_) {
-            variantRowOrder_.push_back(row.key);
+        if (a_dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Row)) {
+            workbench_.ApplyRowReorder(a_dragPayload.rowIndex, a_targetRowIndex, a_insertAfter);
         }
     }
 
@@ -906,116 +722,8 @@ namespace sosng
 
         DraggedEquipmentPayload dragPayload{};
         std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
-        if (dragPayload.sourceKind != static_cast<std::uint32_t>(DragSourceKind::Override)) {
-            return;
-        }
-
-        if (dragPayload.rowIndex < 0 || dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
-            return;
-        }
-
-        auto& overrides = variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)].overrides;
-        if (dragPayload.itemIndex < 0 || dragPayload.itemIndex >= static_cast<int>(overrides.size())) {
-            return;
-        }
-
-        overrides.erase(overrides.begin() + dragPayload.itemIndex);
-    }
-
-    void Menu::SyncDynamicArmorVariants()
-    {
-        using integrations::DynamicArmorVariantsClient;
-
-        auto* dav = DynamicArmorVariantsClient::Get();
-        if (!dav || !dav->IsReady()) {
-            return;
-        }
-
-        const auto conditionsJson = BuildDavConditionsJson();
-
-        struct DavVariantPayload
-        {
-            std::string variantJson;
-        };
-
-        std::unordered_map<std::string, DavVariantPayload> desiredVariants;
-        desiredVariants.reserve(variantRows_.size());
-
-        for (const auto& row : variantRows_) {
-            const auto* sourceArmor = RE::TESForm::LookupByID<RE::TESObjectARMO>(row.equipped.formID);
-            if (!sourceArmor) {
-                continue;
-            }
-
-            std::vector<const RE::TESObjectARMO*> overrideArmors;
-            overrideArmors.reserve(row.overrides.size());
-            for (const auto& overrideItem : row.overrides) {
-                if (const auto* overrideArmor = RE::TESForm::LookupByID<RE::TESObjectARMO>(overrideItem.formID)) {
-                    overrideArmors.push_back(overrideArmor);
-                }
-            }
-
-            if (overrideArmors.empty()) {
-                continue;
-            }
-
-            const auto variantName = BuildDavVariantName(sourceArmor);
-            if (variantName.empty()) {
-                continue;
-            }
-
-            const auto variantJson = BuildDavVariantJson(sourceArmor, overrideArmors);
-            if (variantJson.empty()) {
-                continue;
-            }
-
-            desiredVariants.insert_or_assign(variantName, DavVariantPayload{ std::move(variantJson) });
-        }
-
-        std::unordered_map<std::string, std::string> syncedVariants;
-        syncedVariants.reserve(desiredVariants.size());
-        bool variantsChanged = false;
-
-        for (const auto& [variantName, payload] : desiredVariants) {
-            if (const auto activeIt = activeDavVariants_.find(variantName);
-                activeIt != activeDavVariants_.end() && activeIt->second == payload.variantJson) {
-                syncedVariants.emplace(variantName, payload.variantJson);
-                continue;
-            }
-
-            if (!dav->RegisterVariantJson(variantName.c_str(), payload.variantJson.c_str())) {
-                logger::warn("Failed to register DAV variant {}", variantName);
-                continue;
-            }
-
-            if (!dav->SetVariantConditionsJson(variantName.c_str(), conditionsJson.c_str())) {
-                logger::warn("Failed to set DAV conditions for {}", variantName);
-                dav->DeleteVariant(variantName.c_str());
-                continue;
-            }
-
-            syncedVariants.emplace(variantName, payload.variantJson);
-            variantsChanged = true;
-        }
-
-        for (const auto& [variantName, _] : activeDavVariants_) {
-            if (syncedVariants.contains(variantName)) {
-                continue;
-            }
-
-            if (!dav->DeleteVariant(variantName.c_str())) {
-                logger::warn("Failed to delete DAV variant {}", variantName);
-            } else {
-                variantsChanged = true;
-            }
-        }
-
-        activeDavVariants_ = std::move(syncedVariants);
-
-        if (variantsChanged) {
-            if (auto* player = RE::PlayerCharacter::GetSingleton()) {
-                dav->RefreshActor(player);
-            }
+        if (dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Override)) {
+            workbench_.DeleteOverride(dragPayload.rowIndex, dragPayload.itemIndex);
         }
     }
 
@@ -1026,7 +734,8 @@ namespace sosng
         ImGui::TextWrapped("Each row is a currently equipped armor piece. Drag the left column to reorder rows. Drop armor into the Overrides column. Only overlapping override slots on the same row are rejected.");
         ImGui::Spacing();
 
-        if (variantRows_.empty()) {
+        const auto& rows = workbench_.GetRows();
+        if (rows.empty()) {
             ImGui::TextWrapped("No equipped armor pieces were found on the player.");
             return;
         }
@@ -1057,18 +766,18 @@ namespace sosng
                 bool hoveredRowInsertAfter = false;
                 std::vector<float> rowTopY;
                 std::vector<float> rowBottomY;
-                rowTopY.reserve(variantRows_.size());
-                rowBottomY.reserve(variantRows_.size());
+                rowTopY.reserve(rows.size());
+                rowBottomY.reserve(rows.size());
 
-                for (int rowIndex = 0; rowIndex < static_cast<int>(variantRows_.size()); ++rowIndex) {
-                    const auto overrideCount = variantRows_[static_cast<std::size_t>(rowIndex)].overrides.size();
+                for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
+                    const auto overrideCount = rows[static_cast<std::size_t>(rowIndex)].overrides.size();
                     const auto dropZoneHeight = (std::max)(72.0f, 14.0f + static_cast<float>(overrideCount) * (ImGui::GetTextLineHeightWithSpacing() * 2.5f));
                     const auto widgetHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
                     const auto rowHeight = (std::max)(widgetHeight, dropZoneHeight);
                     ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
 
                     ImGui::TableSetColumnIndex(0);
-                    DrawEquipmentInfoWidget(variantRows_[static_cast<std::size_t>(rowIndex)].key.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].equipped, true, DragSourceKind::Row, false, rowIndex);
+                    DrawEquipmentInfoWidget(rows[static_cast<std::size_t>(rowIndex)].key.c_str(), rows[static_cast<std::size_t>(rowIndex)].equipped, true, DragSourceKind::Row, false, rowIndex);
                     const auto* table = ImGui::GetCurrentTable();
                     if (table) {
                         const ImRect leftCellRect = ImGui::TableGetCellBgRect(table, 0);
@@ -1112,9 +821,8 @@ namespace sosng
                             }
 
                             const auto widgetId = "override:" + std::to_string(rowIndex) + ":" + std::to_string(overrideIndex);
-                            if (DrawEquipmentInfoWidget(widgetId.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].overrides[static_cast<std::size_t>(overrideIndex)], true, DragSourceKind::Override, true, rowIndex, overrideIndex)) {
-                                variantRows_[static_cast<std::size_t>(rowIndex)].overrides.erase(
-                                    variantRows_[static_cast<std::size_t>(rowIndex)].overrides.begin() + overrideIndex);
+                            if (DrawEquipmentInfoWidget(widgetId.c_str(), rows[static_cast<std::size_t>(rowIndex)].overrides[static_cast<std::size_t>(overrideIndex)], true, DragSourceKind::Override, true, rowIndex, overrideIndex)) {
+                                workbench_.DeleteOverride(rowIndex, overrideIndex);
                                 break;
                             }
                         }

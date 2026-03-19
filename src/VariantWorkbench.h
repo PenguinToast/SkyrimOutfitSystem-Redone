@@ -2,6 +2,10 @@
 
 #include <RE/Skyrim.h>
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 namespace sosng::workbench
 {
     struct EquipmentWidgetItem

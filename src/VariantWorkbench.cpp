@@ -4,6 +4,7 @@
 #include "integrations/DynamicArmorVariantsClient.h"
 
 #include <nlohmann/json.hpp>
+#include <unordered_set>
 
 namespace
 {
