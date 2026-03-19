@@ -19,7 +19,8 @@ namespace
     constexpr auto kSettingsDirectory = "Data/SKSE/Plugins/SkyrimOutfitSystemNG";
     constexpr auto kImGuiIniFilename = "imgui.ini";
     constexpr auto kUserSettingsFilename = "settings.json";
-    constexpr int kDefaultFontSizePixels = 13;
+    constexpr auto kDefaultFontPath = "Data/Interface/SkyrimOutfitSystemNG/fonts/Ubuntu-R.ttf";
+    constexpr int kDefaultFontSizePixels = 16;
     constexpr int kMinFontSizePixels = 8;
     constexpr int kMaxFontSizePixels = 28;
     constexpr char kVariantItemPayloadType[] = "SOSNG_VARIANT_ITEM";
@@ -261,9 +262,18 @@ namespace sosng
         auto& style = ImGui::GetStyle();
         ImFontConfig fontConfig{};
         fontConfig.SizePixels = static_cast<float>(fontSizePixels_);
+        fontConfig.OversampleH = 1;
+        fontConfig.OversampleV = 1;
+        fontConfig.PixelSnapH = true;
 
         io.Fonts->Clear();
-        io.FontDefault = io.Fonts->AddFontDefaultVector(&fontConfig);
+        io.FontDefault = nullptr;
+        if (std::filesystem::exists(kDefaultFontPath)) {
+            io.FontDefault = io.Fonts->AddFontFromFileTTF(kDefaultFontPath, static_cast<float>(fontSizePixels_), &fontConfig);
+        }
+        if (!io.FontDefault) {
+            io.FontDefault = io.Fonts->AddFontDefaultVector(&fontConfig);
+        }
         io.Fonts->Build();
         style.FontScaleMain = 1.0f;
         style._NextFrameFontSizeBase = static_cast<float>(fontSizePixels_);

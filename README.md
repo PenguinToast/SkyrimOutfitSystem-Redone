@@ -10,9 +10,10 @@ visual-swapping layer of the mod.
 
 The current milestone is the equipment and outfit selector portion of the project:
 
-* enumerate and cache all installed armors, weapons, and outfits
+* enumerate and cache all installed armors and outfits
 * provide search, sort, and filter controls for that catalog
-* let the player browse outfits separately from individual gear pieces
+* let the player browse outfits separately from individual armor pieces
+* prototype an armor-variant workbench UI for currently equipped armor
 
 The browser design and data flow are being shaped with
 `https://github.com/Patchu1i/ModExplorerMenu` as a reference for armor/weapon/outfit enumeration,
@@ -47,11 +48,14 @@ It no longer depends on Prisma UI or any web frontend bundle.
 The current UI focus is a searchable browser for:
 
 * armors
-* weapons
 * outfits
 
-Outfits are shown in a dedicated tab because they are collections of individual gear pieces.
+Outfits are shown in a dedicated tab because they are collections of individual armor pieces.
 The menu is toggled in game with `F3`.
+
+The packaged UI font is Ubuntu Regular, bundled with this mod under
+`Data/Interface/SkyrimOutfitSystemNG/fonts/` together with the Ubuntu font license text.
+The bundled files come from Canonical's Ubuntu Font Family download archive.
 
 To build from WSL and deploy directly into the local test mod folder:
 ```bash

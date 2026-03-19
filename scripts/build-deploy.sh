@@ -53,6 +53,7 @@ BUILD_DIR="${REPO_ROOT}/build/windows/x64/${MODE}"
 PLUGIN_SRC="${BUILD_DIR}/${PLUGIN_NAME}.dll"
 PDB_SRC="${BUILD_DIR}/${PLUGIN_NAME}.pdb"
 PLUGIN_DST_DIR="${MOD_DIR}/SKSE/Plugins"
+DATA_SRC_DIR="${REPO_ROOT}/data"
 
 if ((CLEAN)); then
     rm -rf "${REPO_ROOT}/build" "${REPO_ROOT}/.xmake"
@@ -80,6 +81,10 @@ if [[ -f "$PDB_SRC" ]]; then
     copy_file "$PDB_SRC" "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb"
 else
     rm -f "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb"
+fi
+
+if [[ -d "$DATA_SRC_DIR" ]]; then
+    cp -R "${DATA_SRC_DIR}/." "${MOD_DIR}/"
 fi
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
