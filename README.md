@@ -62,6 +62,8 @@ To build from WSL and deploy directly into the local test mod folder:
 ./scripts/build-deploy.sh
 ```
 
+By default this uses `releasedbg` so the deploy includes a `.pdb` alongside the DLL for better crash logs.
+
 For a full clean rebuild:
 ```bash
 ./scripts/build-deploy.sh --clean

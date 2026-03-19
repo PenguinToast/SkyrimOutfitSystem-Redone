@@ -963,34 +963,27 @@ namespace sosng
         variantRows_[static_cast<std::size_t>(a_targetRowIndex)].overrides.push_back(std::move(item));
     }
 
-    void Menu::AcceptRowReorderPayload(int a_targetRowIndex)
+    void Menu::ApplyRowReorder(const DraggedEquipmentPayload& a_dragPayload, int a_targetRowIndex, bool a_insertAfter)
     {
-        const auto* payload = ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
-        if (!payload || payload->DataSize != sizeof(DraggedEquipmentPayload)) {
+        if (a_dragPayload.sourceKind != static_cast<std::uint32_t>(DragSourceKind::Row)) {
             return;
         }
 
-        DraggedEquipmentPayload dragPayload{};
-        std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
-        if (dragPayload.sourceKind != static_cast<std::uint32_t>(DragSourceKind::Row)) {
-            return;
-        }
-
-        if (dragPayload.rowIndex < 0 || dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
+        if (a_dragPayload.rowIndex < 0 || a_dragPayload.rowIndex >= static_cast<int>(variantRows_.size())) {
             return;
         }
         if (a_targetRowIndex < 0 || a_targetRowIndex >= static_cast<int>(variantRows_.size())) {
             return;
         }
-        if (dragPayload.rowIndex == a_targetRowIndex) {
+        if (a_dragPayload.rowIndex == a_targetRowIndex) {
             return;
         }
 
-        auto movedRow = std::move(variantRows_[static_cast<std::size_t>(dragPayload.rowIndex)]);
-        variantRows_.erase(variantRows_.begin() + dragPayload.rowIndex);
+        auto movedRow = std::move(variantRows_[static_cast<std::size_t>(a_dragPayload.rowIndex)]);
+        variantRows_.erase(variantRows_.begin() + a_dragPayload.rowIndex);
 
-        auto insertIndex = a_targetRowIndex;
-        if (dragPayload.rowIndex < a_targetRowIndex) {
+        auto insertIndex = a_targetRowIndex + (a_insertAfter ? 1 : 0);
+        if (a_dragPayload.rowIndex < insertIndex) {
             --insertIndex;
         }
 
@@ -1044,59 +1037,130 @@ namespace sosng
         const auto tableHeight = (std::max)(0.0f, ImGui::GetContentRegionAvail().y - deletePaneHeight);
         if (ImGui::BeginChild("##variant-workbench-scroll", ImVec2(0.0f, tableHeight), ImGuiChildFlags_None)) {
             if (ImGui::BeginTable("##variant-workbench", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 0.0f))) {
-            ImGui::TableSetupColumn("Equipped", ImGuiTableColumnFlags_WidthStretch, 0.85f);
-            ImGui::TableSetupColumn("Overrides", ImGuiTableColumnFlags_WidthStretch, 1.15f);
-            ImGui::TableSetupScrollFreeze(0, 1);
-            ImGui::TableHeadersRow();
+                ImGui::TableSetupColumn("Equipped", ImGuiTableColumnFlags_WidthStretch, 0.85f);
+                ImGui::TableSetupColumn("Overrides", ImGuiTableColumnFlags_WidthStretch, 1.15f);
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableHeadersRow();
 
-            for (int rowIndex = 0; rowIndex < static_cast<int>(variantRows_.size()); ++rowIndex) {
-                ImGui::TableNextRow();
+                const auto* activePayload = ImGui::GetDragDropPayload();
+                const bool rowDragActive =
+                    activePayload &&
+                    activePayload->Data != nullptr &&
+                    activePayload->IsDataType(kVariantItemPayloadType) &&
+                    activePayload->DataSize == sizeof(DraggedEquipmentPayload) &&
+                    static_cast<const DraggedEquipmentPayload*>(activePayload->Data)->sourceKind == static_cast<std::uint32_t>(DragSourceKind::Row);
+                float insertionLineY = -1.0f;
+                float insertionLineX1 = -1.0f;
+                float insertionLineX2 = -1.0f;
+                std::optional<DraggedEquipmentPayload> acceptedRowReorderPayload;
+                int acceptedRowReorderIndex = -1;
+                bool acceptedRowInsertAfter = false;
+                int hoveredRowReorderIndex = -1;
+                bool hoveredRowInsertAfter = false;
+                std::vector<float> rowTopY;
+                std::vector<float> rowBottomY;
+                rowTopY.reserve(variantRows_.size());
+                rowBottomY.reserve(variantRows_.size());
 
-                ImGui::TableSetColumnIndex(0);
-                DrawEquipmentInfoWidget(variantRows_[static_cast<std::size_t>(rowIndex)].key.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].equipped, true, DragSourceKind::Row, false, rowIndex);
-                if (ImGui::BeginDragDropTarget()) {
-                    AcceptRowReorderPayload(rowIndex);
-                    ImGui::EndDragDropTarget();
-                }
+                for (int rowIndex = 0; rowIndex < static_cast<int>(variantRows_.size()); ++rowIndex) {
+                    const auto overrideCount = variantRows_[static_cast<std::size_t>(rowIndex)].overrides.size();
+                    const auto dropZoneHeight = (std::max)(72.0f, 14.0f + static_cast<float>(overrideCount) * (ImGui::GetTextLineHeightWithSpacing() * 2.5f));
+                    const auto widgetHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
+                    const auto rowHeight = (std::max)(widgetHeight, dropZoneHeight);
+                    ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
 
-                ImGui::TableSetColumnIndex(1);
-                const auto overrideCount = variantRows_[static_cast<std::size_t>(rowIndex)].overrides.size();
-                const auto dropZoneHeight = (std::max)(72.0f, 14.0f + static_cast<float>(overrideCount) * (ImGui::GetTextLineHeightWithSpacing() * 2.5f));
-                const auto dropId = "##override-drop-" + std::to_string(rowIndex);
-                ImGui::BeginChild(dropId.c_str(), ImVec2(0.0f, dropZoneHeight), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-                const auto childPos = ImGui::GetWindowPos();
-                const auto childSize = ImGui::GetWindowSize();
+                    ImGui::TableSetColumnIndex(0);
+                    DrawEquipmentInfoWidget(variantRows_[static_cast<std::size_t>(rowIndex)].key.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].equipped, true, DragSourceKind::Row, false, rowIndex);
+                    const auto* table = ImGui::GetCurrentTable();
+                    if (table) {
+                        const ImRect leftCellRect = ImGui::TableGetCellBgRect(table, 0);
+                        rowTopY.push_back(leftCellRect.Min.y);
+                        const bool insertAfter = ImGui::GetIO().MousePos.y > ((leftCellRect.Min.y + leftCellRect.Max.y) * 0.5f);
 
-                if (overrideCount == 0) {
-                    ImGui::TextWrapped("Drop equipment overrides here.");
-                } else {
-                    for (int overrideIndex = 0; overrideIndex < static_cast<int>(overrideCount); ++overrideIndex) {
-                        if (overrideIndex > 0) {
-                            ImGui::Spacing();
+                        if (rowDragActive && ImGui::IsMouseHoveringRect(leftCellRect.Min, leftCellRect.Max)) {
+                            hoveredRowReorderIndex = rowIndex;
+                            hoveredRowInsertAfter = insertAfter;
+                            insertionLineX1 = table->OuterRect.Min.x + 2.0f;
+                            insertionLineX2 = table->OuterRect.Max.x - 2.0f;
                         }
 
-                        const auto widgetId = "override:" + std::to_string(rowIndex) + ":" + std::to_string(overrideIndex);
-                        if (DrawEquipmentInfoWidget(widgetId.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].overrides[static_cast<std::size_t>(overrideIndex)], true, DragSourceKind::Override, true, rowIndex, overrideIndex)) {
-                            variantRows_[static_cast<std::size_t>(rowIndex)].overrides.erase(
-                                variantRows_[static_cast<std::size_t>(rowIndex)].overrides.begin() + overrideIndex);
-                            break;
+                        if (ImGui::BeginDragDropTargetCustom(leftCellRect, ImGui::GetID(("##row-reorder-" + std::to_string(rowIndex)).c_str()))) {
+                            if (const auto* payload = ImGui::AcceptDragDropPayload(kVariantItemPayloadType, ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+                                payload && payload->Data != nullptr && payload->DataSize == sizeof(DraggedEquipmentPayload)) {
+                                DraggedEquipmentPayload dragPayload{};
+                                std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
+                                if (dragPayload.sourceKind == static_cast<std::uint32_t>(DragSourceKind::Row)) {
+                                    acceptedRowReorderPayload = dragPayload;
+                                    acceptedRowReorderIndex = rowIndex;
+                                    acceptedRowInsertAfter = insertAfter;
+                                }
+                            }
+                            ImGui::EndDragDropTarget();
                         }
+                    }
+
+                    ImGui::TableSetColumnIndex(1);
+                    const auto dropId = "##override-drop-" + std::to_string(rowIndex);
+                    ImGui::BeginChild(dropId.c_str(), ImVec2(0.0f, dropZoneHeight), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+                    const auto childPos = ImGui::GetWindowPos();
+                    const auto childSize = ImGui::GetWindowSize();
+
+                    if (overrideCount == 0) {
+                        ImGui::TextWrapped("Drop equipment overrides here.");
+                    } else {
+                        for (int overrideIndex = 0; overrideIndex < static_cast<int>(overrideCount); ++overrideIndex) {
+                            if (overrideIndex > 0) {
+                                ImGui::Spacing();
+                            }
+
+                            const auto widgetId = "override:" + std::to_string(rowIndex) + ":" + std::to_string(overrideIndex);
+                            if (DrawEquipmentInfoWidget(widgetId.c_str(), variantRows_[static_cast<std::size_t>(rowIndex)].overrides[static_cast<std::size_t>(overrideIndex)], true, DragSourceKind::Override, true, rowIndex, overrideIndex)) {
+                                variantRows_[static_cast<std::size_t>(rowIndex)].overrides.erase(
+                                    variantRows_[static_cast<std::size_t>(rowIndex)].overrides.begin() + overrideIndex);
+                                break;
+                            }
+                        }
+                    }
+
+                    const ImRect dropRect(
+                        childPos,
+                        ImVec2(childPos.x + childSize.x, childPos.y + childSize.y));
+                    if (ImGui::BeginDragDropTargetCustom(dropRect, ImGui::GetID("##override-cell-target"))) {
+                        AcceptOverridePayload(rowIndex);
+                        ImGui::EndDragDropTarget();
+                    }
+
+                    ImGui::EndChild();
+
+                    if (const auto* rowTable = ImGui::GetCurrentTable()) {
+                        rowBottomY.push_back(dropRect.Max.y + rowTable->RowCellPaddingY);
+                    } else {
+                        rowBottomY.push_back(dropRect.Max.y);
                     }
                 }
 
-                const ImRect dropRect(
-                    childPos,
-                    ImVec2(childPos.x + childSize.x, childPos.y + childSize.y));
-                if (ImGui::BeginDragDropTargetCustom(dropRect, ImGui::GetID("##override-cell-target"))) {
-                    AcceptOverridePayload(rowIndex);
-                    ImGui::EndDragDropTarget();
+                if (hoveredRowReorderIndex >= 0 && hoveredRowReorderIndex < static_cast<int>(rowTopY.size()) &&
+                    hoveredRowReorderIndex < static_cast<int>(rowBottomY.size())) {
+                    insertionLineY = hoveredRowInsertAfter ?
+                                         rowBottomY[static_cast<std::size_t>(hoveredRowReorderIndex)] :
+                                         rowTopY[static_cast<std::size_t>(hoveredRowReorderIndex)];
                 }
 
-                ImGui::EndChild();
-            }
+                if (rowDragActive && insertionLineY >= 0.0f && insertionLineX2 > insertionLineX1) {
+                    auto* drawList = ImGui::GetWindowDrawList();
+                    drawList->AddLine(
+                        ImVec2(insertionLineX1, insertionLineY),
+                        ImVec2(insertionLineX2, insertionLineY),
+                        IM_COL32(116, 189, 255, 255),
+                        2.0f);
+                }
 
-            ImGui::EndTable();
-        }
+                ImGui::EndTable();
+
+                if (acceptedRowReorderPayload && acceptedRowReorderIndex >= 0) {
+                    ApplyRowReorder(*acceptedRowReorderPayload, acceptedRowReorderIndex, acceptedRowInsertAfter);
+                }
+            }
             ImGui::EndChild();
         }
 

@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-MODE="release"
+MODE="releasedbg"
 CLEAN=0
 PLUGIN_NAME="SkyrimOutfitSystemNG"
 DEFAULT_MOD_DIR="/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng"
@@ -89,3 +89,6 @@ fi
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
 echo "Deployed plugin to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"
+if [[ -f "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb" ]]; then
+    echo "Deployed symbols to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb"
+fi
