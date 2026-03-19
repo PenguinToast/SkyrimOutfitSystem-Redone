@@ -235,50 +235,33 @@ namespace
             }
         }
 
-        for (const auto* sourceAddon : a_sourceArmor->armorAddons) {
-            if (!sourceAddon) {
-                continue;
+        const RE::TESObjectARMA* sourceAddon = nullptr;
+        for (const auto* candidate : a_sourceArmor->armorAddons) {
+            if (candidate) {
+                sourceAddon = candidate;
+                break;
             }
+        }
 
+        if (sourceAddon) {
             const auto sourceIdentifier = GetFormIdentifier(sourceAddon);
-            if (sourceIdentifier.empty()) {
-                continue;
-            }
+            if (!sourceIdentifier.empty()) {
+                std::vector<std::string> replacements;
+                std::unordered_set<std::string> replacementSet;
 
-            const auto sourceSlotMask = sourceAddon->bipedModelData.bipedObjectSlots.underlying();
-            std::vector<std::string> replacements;
-            std::unordered_set<std::string> replacementSet;
-
-            for (const auto& [overrideSlotMask, identifier] : overrideAddons) {
-                if (overrideSlotMask == sourceSlotMask && replacementSet.insert(identifier).second) {
-                    replacements.push_back(identifier);
-                }
-            }
-
-            if (replacements.empty()) {
-                for (const auto& [overrideSlotMask, identifier] : overrideAddons) {
-                    if ((overrideSlotMask & sourceSlotMask) != 0 && replacementSet.insert(identifier).second) {
-                        replacements.push_back(identifier);
-                    }
-                }
-            }
-
-            if (replacements.empty()) {
                 for (const auto& [_, identifier] : overrideAddons) {
                     if (replacementSet.insert(identifier).second) {
                         replacements.push_back(identifier);
                     }
                 }
-            }
 
-            if (replacements.empty()) {
-                continue;
-            }
-
-            if (replacements.size() == 1) {
-                replaceByForm[sourceIdentifier] = replacements.front();
-            } else {
-                replaceByForm[sourceIdentifier] = replacements;
+                if (!replacements.empty()) {
+                    if (replacements.size() == 1) {
+                        replaceByForm[sourceIdentifier] = replacements.front();
+                    } else {
+                        replaceByForm[sourceIdentifier] = replacements;
+                    }
+                }
             }
         }
 
