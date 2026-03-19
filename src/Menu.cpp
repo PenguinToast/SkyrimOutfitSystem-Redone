@@ -192,9 +192,9 @@ namespace
         return plugin + "|" + FormatFormID(a_form->GetLocalFormID());
     }
 
-    std::string BuildDavVariantName(const RE::TESObjectARMO* a_sourceArmor, const RE::TESObjectARMO* a_overrideArmor)
+    std::string BuildDavVariantName(const RE::TESObjectARMO* a_sourceArmor)
     {
-        return "SOSNG|" + GetFormIdentifier(a_sourceArmor) + "->" + GetFormIdentifier(a_overrideArmor);
+        return "SOSNG|" + GetFormIdentifier(a_sourceArmor);
     }
 
     auto BuildDavConditionsJson() -> std::string
@@ -205,23 +205,34 @@ namespace
         return root.dump();
     }
 
-    auto BuildDavVariantJson(const RE::TESObjectARMO* a_sourceArmor, const RE::TESObjectARMO* a_overrideArmor) -> std::string
+    auto BuildDavVariantJson(const RE::TESObjectARMO* a_sourceArmor, const std::vector<const RE::TESObjectARMO*>& a_overrideArmors) -> std::string
     {
         nlohmann::json replaceByForm = nlohmann::json::object();
         std::vector<std::pair<std::uint64_t, std::string>> overrideAddons;
-        overrideAddons.reserve(a_overrideArmor->armorAddons.size());
+        std::string displayName;
 
-        for (const auto* overrideAddon : a_overrideArmor->armorAddons) {
-            if (!overrideAddon) {
+        for (const auto* overrideArmor : a_overrideArmors) {
+            if (!overrideArmor) {
                 continue;
             }
 
-            const auto identifier = GetFormIdentifier(overrideAddon);
-            if (identifier.empty()) {
-                continue;
+            if (!displayName.empty()) {
+                displayName.append(" + ");
             }
+            displayName.append(GetDisplayName(overrideArmor));
 
-            overrideAddons.emplace_back(overrideAddon->bipedModelData.bipedObjectSlots.underlying(), identifier);
+            for (const auto* overrideAddon : overrideArmor->armorAddons) {
+                if (!overrideAddon) {
+                    continue;
+                }
+
+                const auto identifier = GetFormIdentifier(overrideAddon);
+                if (identifier.empty()) {
+                    continue;
+                }
+
+                overrideAddons.emplace_back(overrideAddon->bipedModelData.bipedObjectSlots.underlying(), identifier);
+            }
         }
 
         for (const auto* sourceAddon : a_sourceArmor->armorAddons) {
@@ -236,16 +247,17 @@ namespace
 
             const auto sourceSlotMask = sourceAddon->bipedModelData.bipedObjectSlots.underlying();
             std::vector<std::string> replacements;
+            std::unordered_set<std::string> replacementSet;
 
             for (const auto& [overrideSlotMask, identifier] : overrideAddons) {
-                if (overrideSlotMask == sourceSlotMask) {
+                if (overrideSlotMask == sourceSlotMask && replacementSet.insert(identifier).second) {
                     replacements.push_back(identifier);
                 }
             }
 
             if (replacements.empty()) {
                 for (const auto& [overrideSlotMask, identifier] : overrideAddons) {
-                    if ((overrideSlotMask & sourceSlotMask) != 0) {
+                    if ((overrideSlotMask & sourceSlotMask) != 0 && replacementSet.insert(identifier).second) {
                         replacements.push_back(identifier);
                     }
                 }
@@ -253,7 +265,9 @@ namespace
 
             if (replacements.empty()) {
                 for (const auto& [_, identifier] : overrideAddons) {
-                    replacements.push_back(identifier);
+                    if (replacementSet.insert(identifier).second) {
+                        replacements.push_back(identifier);
+                    }
                 }
             }
 
@@ -268,8 +282,12 @@ namespace
             }
         }
 
+        if (replaceByForm.empty()) {
+            return {};
+        }
+
         nlohmann::json root{
-            { "displayName", GetDisplayName(a_overrideArmor) },
+            { "displayName", displayName.empty() ? GetDisplayName(a_sourceArmor) : displayName },
             { "replaceByForm", replaceByForm }
         };
         return root.dump();
@@ -1152,7 +1170,7 @@ namespace sosng
         };
 
         std::unordered_map<std::string, DavVariantPayload> desiredVariants;
-        desiredVariants.reserve(variantRows_.size() * 2);
+        desiredVariants.reserve(variantRows_.size());
 
         for (const auto& row : variantRows_) {
             const auto* sourceArmor = RE::TESForm::LookupByID<RE::TESObjectARMO>(row.equipped.formID);
@@ -1160,28 +1178,39 @@ namespace sosng
                 continue;
             }
 
+            std::vector<const RE::TESObjectARMO*> overrideArmors;
+            overrideArmors.reserve(row.overrides.size());
             for (const auto& overrideItem : row.overrides) {
-                const auto* overrideArmor = RE::TESForm::LookupByID<RE::TESObjectARMO>(overrideItem.formID);
-                if (!overrideArmor) {
-                    continue;
+                if (const auto* overrideArmor = RE::TESForm::LookupByID<RE::TESObjectARMO>(overrideItem.formID)) {
+                    overrideArmors.push_back(overrideArmor);
                 }
-
-                const auto variantName = BuildDavVariantName(sourceArmor, overrideArmor);
-                if (variantName.empty()) {
-                    continue;
-                }
-
-                desiredVariants.try_emplace(variantName, DavVariantPayload{ BuildDavVariantJson(sourceArmor, overrideArmor) });
             }
+
+            if (overrideArmors.empty()) {
+                continue;
+            }
+
+            const auto variantName = BuildDavVariantName(sourceArmor);
+            if (variantName.empty()) {
+                continue;
+            }
+
+            const auto variantJson = BuildDavVariantJson(sourceArmor, overrideArmors);
+            if (variantJson.empty()) {
+                continue;
+            }
+
+            desiredVariants.insert_or_assign(variantName, DavVariantPayload{ std::move(variantJson) });
         }
 
-        std::unordered_set<std::string> syncedNames;
-        syncedNames.reserve(desiredVariants.size());
+        std::unordered_map<std::string, std::string> syncedVariants;
+        syncedVariants.reserve(desiredVariants.size());
         bool variantsChanged = false;
 
         for (const auto& [variantName, payload] : desiredVariants) {
-            if (activeDavVariantNames_.contains(variantName)) {
-                syncedNames.insert(variantName);
+            if (const auto activeIt = activeDavVariants_.find(variantName);
+                activeIt != activeDavVariants_.end() && activeIt->second == payload.variantJson) {
+                syncedVariants.emplace(variantName, payload.variantJson);
                 continue;
             }
 
@@ -1196,12 +1225,12 @@ namespace sosng
                 continue;
             }
 
-            syncedNames.insert(variantName);
+            syncedVariants.emplace(variantName, payload.variantJson);
             variantsChanged = true;
         }
 
-        for (const auto& variantName : activeDavVariantNames_) {
-            if (syncedNames.contains(variantName)) {
+        for (const auto& [variantName, _] : activeDavVariants_) {
+            if (syncedVariants.contains(variantName)) {
                 continue;
             }
 
@@ -1212,7 +1241,7 @@ namespace sosng
             }
         }
 
-        activeDavVariantNames_ = std::move(syncedNames);
+        activeDavVariants_ = std::move(syncedVariants);
 
         if (variantsChanged) {
             if (auto* player = RE::PlayerCharacter::GetSingleton()) {

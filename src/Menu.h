@@ -3,6 +3,7 @@
 #include "EquipmentCatalog.h"
 #include "imgui.h"
 
+#include <unordered_map>
 #include <unordered_set>
 
 struct IDXGISwapChain;
@@ -114,6 +115,6 @@ namespace sosng
         ImGuiTextFilter outfitPluginFilter_;
         std::vector<VariantWorkbenchRow> variantRows_;
         std::vector<std::string> variantRowOrder_;
-        std::unordered_set<std::string> activeDavVariantNames_;
+        std::unordered_map<std::string, std::string> activeDavVariants_;
     };
 }
