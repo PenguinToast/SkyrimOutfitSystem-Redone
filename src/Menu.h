@@ -1,10 +1,8 @@
 #pragma once
 
 #include "EquipmentCatalog.h"
+#include "VariantWorkbench.h"
 #include "imgui.h"
-
-#include <unordered_map>
-#include <unordered_set>
 
 struct IDXGISwapChain;
 struct ID3D11Device;
@@ -26,22 +24,6 @@ namespace sosng
         bool IsInitialized() const { return initialized_; }
 
     private:
-        struct EquipmentWidgetItem
-        {
-            RE::FormID formID{ 0 };
-            std::string key;
-            std::string name;
-            std::string slotText;
-            std::uint64_t slotMask{ 0 };
-        };
-
-        struct VariantWorkbenchRow
-        {
-            std::string key;
-            EquipmentWidgetItem equipped;
-            std::vector<EquipmentWidgetItem> overrides;
-        };
-
         enum class DragSourceKind : std::uint32_t
         {
             Catalog = 1,
@@ -77,14 +59,10 @@ namespace sosng
         void DrawOutfitTab();
         void DrawOptionsTab();
         bool DrawSearchableStringCombo(const char* a_label, const char* a_allLabel, const std::vector<std::string>& a_options, int& a_index, ImGuiTextFilter& a_filter);
-        bool DrawEquipmentInfoWidget(const char* a_id, const EquipmentWidgetItem& a_item, bool a_allowDrag, DragSourceKind a_sourceKind, bool a_showDeleteButton = false, int a_rowIndex = -1, int a_itemIndex = -1);
-        void SyncVariantRowsFromPlayer();
-        bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem& a_item) const;
-        bool CanAcceptOverride(int a_targetRowIndex, const EquipmentWidgetItem& a_item, int a_sourceRowIndex = -1, int a_sourceItemIndex = -1) const;
+        bool DrawEquipmentInfoWidget(const char* a_id, const workbench::EquipmentWidgetItem& a_item, bool a_allowDrag, DragSourceKind a_sourceKind, bool a_showDeleteButton = false, int a_rowIndex = -1, int a_itemIndex = -1);
         void AcceptOverridePayload(int a_targetRowIndex);
         void ApplyRowReorder(const DraggedEquipmentPayload& a_dragPayload, int a_targetRowIndex, bool a_insertAfter);
         void AcceptOverrideDeletePayload();
-        void SyncDynamicArmorVariants();
 
         bool MatchesGearFilters(const GearEntry& a_entry) const;
         bool MatchesOutfitFilters(const OutfitEntry& a_entry) const;
@@ -113,8 +91,6 @@ namespace sosng
         ImGuiTextFilter outfitSearch_;
         ImGuiTextFilter gearPluginFilter_;
         ImGuiTextFilter outfitPluginFilter_;
-        std::vector<VariantWorkbenchRow> variantRows_;
-        std::vector<std::string> variantRowOrder_;
-        std::unordered_map<std::string, std::string> activeDavVariants_;
+        workbench::VariantWorkbench workbench_;
     };
 }
