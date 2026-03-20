@@ -118,6 +118,23 @@ std::string NormalizeKitCollection(std::string_view a_collection) {
   return normalized;
 }
 
+void DrawTextInputOutline(const ImVec2 &a_min, const ImVec2 &a_max,
+                          const bool a_hovered, const bool a_active,
+                          const float a_rounding = -1.0f) {
+  if (!a_hovered && !a_active) {
+    return;
+  }
+
+  auto *theme = sosr::ThemeConfig::GetSingleton();
+  auto *drawList = ImGui::GetWindowDrawList();
+  const auto rounding =
+      a_rounding >= 0.0f ? a_rounding : ImGui::GetStyle().FrameRounding;
+  const auto color = a_active ? theme->GetColorU32("PRIMARY")
+                              : theme->GetColorU32("TABLE_HOVER", 0.75f);
+  const auto thickness = a_active ? 2.0f : 1.5f;
+  drawList->AddRect(a_min, a_max, color, rounding, 0, thickness);
+}
+
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
   const auto rightSize = a_right.size();
@@ -1382,51 +1399,34 @@ bool Menu::DrawSearchableStringCombo(const char *a_label,
   const char *preview =
       a_index == 0 ? a_allLabel
                    : a_options[static_cast<std::size_t>(a_index - 1)].c_str();
-  bool changed = false;
+  const float width = ImGui::CalcItemWidth();
 
-  ImGui::PushID(a_label);
-  if (ImGui::BeginCombo(a_label, preview)) {
-    if (ImGui::IsWindowAppearing()) {
-      a_filter.Clear();
-    }
+  std::vector<std::string> options;
+  options.reserve(a_options.size() + 1);
+  options.emplace_back(a_allLabel);
+  options.insert(options.end(), a_options.begin(), a_options.end());
 
-    a_filter.Draw("##search", -FLT_MIN);
-    if (ImGui::IsItemActivated()) {
-      InputManager::GetSingleton()->Flush();
-    }
-    ImGui::Separator();
+  const bool changed =
+      DrawEditableDropdown(a_label, preview, a_filter.InputBuf,
+                           IM_ARRAYSIZE(a_filter.InputBuf), options, width);
 
-    if (a_filter.PassFilter(a_allLabel)) {
-      const bool selected = a_index == 0;
-      if (ImGui::Selectable(a_allLabel, selected)) {
-        a_index = 0;
-        changed = true;
-      }
-      if (selected) {
-        ImGui::SetItemDefaultFocus();
-      }
-    }
-
-    for (std::size_t index = 0; index < a_options.size(); ++index) {
-      const auto &option = a_options[index];
-      if (!a_filter.PassFilter(option.c_str())) {
-        continue;
-      }
-
-      const bool selected = a_index == static_cast<int>(index + 1);
-      if (ImGui::Selectable(option.c_str(), selected)) {
-        a_index = static_cast<int>(index + 1);
-        changed = true;
-      }
-      if (selected) {
-        ImGui::SetItemDefaultFocus();
-      }
-    }
-
-    ImGui::EndCombo();
+  if (a_filter.InputBuf[0] == '\0') {
+    a_index = 0;
+    a_filter.Build();
+    return changed;
   }
-  ImGui::PopID();
 
+  for (std::size_t index = 0; index < options.size(); ++index) {
+    if (CompareText(options[index], a_filter.InputBuf) != 0) {
+      continue;
+    }
+
+    a_index = static_cast<int>(index);
+    a_filter.Build();
+    return true;
+  }
+
+  a_filter.Build();
   return changed;
 }
 
@@ -1434,24 +1434,31 @@ bool Menu::DrawEditableDropdown(const char *a_label, const char *a_hint,
                                 char *a_buffer, const std::size_t a_bufferSize,
                                 const std::vector<std::string> &a_options,
                                 const float a_width,
-                                std::string *a_selectedOption) {
+                                std::string *a_selectedOption,
+                                const bool a_acceptAutocompleteOnEnter) {
   bool changed = false;
   const auto popupId = std::string(a_label) + "##popup";
   ImGuiID popupImGuiId = 0;
   const auto openId = std::string(a_label) + "##open";
   const auto buttonWidth = ImGui::GetFrameHeight();
-  const auto inputWidth =
-      (std::max)(1.0f, a_width - buttonWidth - ImGui::GetStyle().ItemSpacing.x);
+  const auto inputWidth = (std::max)(1.0f, a_width - buttonWidth);
 
   ImGui::PushID(a_label);
   auto *storage = ImGui::GetStateStorage();
   const auto openStorageId = ImGui::GetID(openId.c_str());
   popupImGuiId = ImGui::GetID(popupId.c_str());
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
   ImGui::SetNextItemWidth(inputWidth);
-  if (ImGui::InputTextWithHint("##input", a_hint, a_buffer, a_bufferSize)) {
+  if (ImGui::InputTextWithHint("##input", a_hint, a_buffer, a_bufferSize,
+                               ImGuiInputTextFlags_AutoSelectAll)) {
     changed = true;
   }
   const bool inputTextActive = ImGui::IsItemActive();
+  const bool autocompleteRequested =
+      inputTextActive && (ImGui::IsKeyPressed(ImGuiKey_Tab, false) ||
+                          (a_acceptAutocompleteOnEnter &&
+                           (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+                            ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))));
   if (ImGui::IsItemActivated()) {
     InputManager::GetSingleton()->Flush();
     storage->SetBool(openStorageId, true);
@@ -1460,13 +1467,18 @@ bool Menu::DrawEditableDropdown(const char *a_label, const char *a_hint,
 
   const auto inputMin = ImGui::GetItemRectMin();
   const auto inputMax = ImGui::GetItemRectMax();
-  ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x);
+  const auto inputFrameHeight = inputMax.y - inputMin.y;
+  const bool inputHovered = ImGui::IsItemHovered();
+  ImGui::SameLine(0.0f, 0.0f);
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
   if (ImGui::ArrowButton("##open", ImGuiDir_Down)) {
     storage->SetBool(openStorageId, true);
     ImGui::OpenPopup(popupId.c_str());
   }
+  ImGui::PopStyleVar();
   const bool arrowHovered = ImGui::IsItemHovered();
   const bool arrowPressed = ImGui::IsItemActivated();
+  ImGui::PopStyleVar();
   bool dropdownOpen = storage->GetBool(openStorageId, false);
   if (arrowPressed) {
     dropdownOpen = true;
@@ -1474,7 +1486,7 @@ bool Menu::DrawEditableDropdown(const char *a_label, const char *a_hint,
 
   if (dropdownOpen) {
     ImGui::SetNextWindowPos(
-        ImVec2(inputMin.x, inputMax.y + ImGui::GetStyle().ItemSpacing.y));
+        ImVec2(inputMin.x, inputMax.y + ImGui::GetStyle().FramePadding.y));
     ImGui::SetNextWindowSizeConstraints(
         ImVec2(a_width, 0.0f),
         ImVec2(a_width, ImGui::GetTextLineHeightWithSpacing() * 12.0f));
@@ -1492,22 +1504,38 @@ bool Menu::DrawEditableDropdown(const char *a_label, const char *a_hint,
 
       const auto needle = TrimText(a_buffer);
       bool anyVisible = false;
+      const std::string *topOption = nullptr;
+      const auto commitOption = [&](const std::string &a_option) {
+        std::snprintf(a_buffer, a_bufferSize, "%s", a_option.c_str());
+        if (a_selectedOption) {
+          *a_selectedOption = a_option;
+        }
+        changed = true;
+        dropdownOpen = false;
+        ImGui::CloseCurrentPopup();
+      };
       for (const auto &option : a_options) {
         if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
           continue;
         }
 
         anyVisible = true;
-        if (ImGui::Selectable(option.c_str())) {
-          std::snprintf(a_buffer, a_bufferSize, "%s", option.c_str());
-          if (a_selectedOption) {
-            *a_selectedOption = option;
-          }
-          changed = true;
-          dropdownOpen = false;
-          ImGui::CloseCurrentPopup();
+        if (!topOption) {
+          topOption = std::addressof(option);
+        }
+        const bool selected = topOption == std::addressof(option);
+        if (ImGui::Selectable(option.c_str(), selected)) {
+          commitOption(option);
           ImGui::SetKeyboardFocusHere(-1);
         }
+        if (selected) {
+          ImGui::SetItemDefaultFocus();
+        }
+      }
+
+      if (autocompleteRequested && topOption) {
+        commitOption(*topOption);
+        ImGui::SetKeyboardFocusHere(-1);
       }
 
       if (!anyVisible) {
@@ -1520,6 +1548,15 @@ bool Menu::DrawEditableDropdown(const char *a_label, const char *a_hint,
       dropdownOpen = false;
     }
   }
+
+  auto *drawList = ImGui::GetWindowDrawList();
+  const auto arrowMin = ImGui::GetItemRectMin();
+  const auto arrowMax = ImGui::GetItemRectMax();
+  DrawTextInputOutline(inputMin, arrowMax, inputHovered || arrowHovered,
+                       inputTextActive, ImGui::GetStyle().FrameRounding);
+  drawList->AddLine(ImVec2(arrowMin.x, inputMin.y + 1.0f),
+                    ImVec2(arrowMin.x, inputMin.y + inputFrameHeight - 1.0f),
+                    ThemeConfig::GetSingleton()->GetColorU32("BORDER"));
 
   storage->SetBool(openStorageId, dropdownOpen);
   ImGui::PopID();
@@ -1564,7 +1601,7 @@ void Menu::DrawCreateKitDialog() {
     }
     if (DrawEditableDropdown("kit-name", "New or existing kit name",
                              pendingKitName_.data(), pendingKitName_.size(),
-                             existingNames, fieldWidth, &selectedName) &&
+                             existingNames, fieldWidth, &selectedName, false) &&
         !selectedName.empty()) {
       if (const auto it = std::ranges::find_if(catalog.GetKits(),
                                                [&](const KitEntry &a_entry) {
@@ -1582,7 +1619,8 @@ void Menu::DrawCreateKitDialog() {
     ImGui::TextUnformatted("Collection");
     DrawEditableDropdown(
         "kit-collection", "Collection (optional)", pendingKitCollection_.data(),
-        pendingKitCollection_.size(), catalog.GetKitCollections(), fieldWidth);
+        pendingKitCollection_.size(), catalog.GetKitCollections(), fieldWidth,
+        nullptr, false);
 
     if (!createKitError_.empty()) {
       ImGui::Spacing();
@@ -1627,13 +1665,20 @@ void Menu::DrawCatalogFilters() {
                                    const char *a_id,
                                    const char *a_placeholder) {
     ImGui::PushItemWidth(a_width);
-    a_filter.Draw(a_id, a_width);
+    if (ImGui::InputText(a_id, a_filter.InputBuf,
+                         IM_ARRAYSIZE(a_filter.InputBuf),
+                         ImGuiInputTextFlags_AutoSelectAll)) {
+      a_filter.Build();
+    }
     ImGui::PopItemWidth();
+    const auto rectMin = ImGui::GetItemRectMin();
+    const auto rectMax = ImGui::GetItemRectMax();
+    DrawTextInputOutline(rectMin, rectMax, ImGui::IsItemHovered(),
+                         ImGui::IsItemActive());
     if (ImGui::IsItemActivated()) {
       InputManager::GetSingleton()->Flush();
     }
     if (a_filter.InputBuf[0] == '\0') {
-      const auto rectMin = ImGui::GetItemRectMin();
       const auto padding = ImGui::GetStyle().FramePadding;
       ImGui::GetWindowDrawList()->AddText(
           ImVec2(rectMin.x + padding.x, rectMin.y + padding.y),
