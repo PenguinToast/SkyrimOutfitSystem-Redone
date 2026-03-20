@@ -23,8 +23,10 @@ public:
   void Open();
   void Close();
   void Toggle();
+  void SetGameDataLoaded(bool a_loaded) { gameDataLoaded_ = a_loaded; }
   [[nodiscard]] bool IsEnabled() const { return enabled_; }
   [[nodiscard]] bool IsInitialized() const { return initialized_; }
+  [[nodiscard]] bool IsGameDataLoaded() const { return gameDataLoaded_; }
   [[nodiscard]] bool PauseGameWhenOpen() const { return pauseGameWhenOpen_; }
   [[nodiscard]] bool QueueSmoothScroll(float a_deltaY);
   [[nodiscard]] std::string GetToggleKeyLabel() const;
@@ -119,6 +121,7 @@ private:
 
   bool initialized_{false};
   bool enabled_{false};
+  bool gameDataLoaded_{false};
   ID3D11Device *device_{nullptr};
   ID3D11DeviceContext *context_{nullptr};
   BrowserTab activeTab_{BrowserTab::Gear};

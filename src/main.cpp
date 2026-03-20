@@ -1,6 +1,7 @@
 #include "EquipmentCatalog.h"
 #include "Hooks.h"
 #include "InputManager.h"
+#include "Menu.h"
 #include "Serialization.h"
 #include "integrations/DynamicArmorVariantsExtendedClient.h"
 
@@ -10,6 +11,7 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
     sosr::integrations::DynamicArmorVariantsExtendedClient::Refresh();
     break;
   case SKSE::MessagingInterface::kDataLoaded:
+    sosr::Menu::GetSingleton()->SetGameDataLoaded(true);
     sosr::EquipmentCatalog::Get().RefreshFromGame();
     logger::info("Equipment catalog initialized");
     sosr::InputManager::GetSingleton()->Init();

@@ -275,7 +275,7 @@ void Menu::ApplyStyle() {
 }
 
 void Menu::Open() {
-  if (!initialized_ || enabled_) {
+  if (!initialized_ || enabled_ || !gameDataLoaded_) {
     return;
   }
 
