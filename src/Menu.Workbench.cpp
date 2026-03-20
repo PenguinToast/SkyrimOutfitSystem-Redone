@@ -438,10 +438,20 @@ void Menu::DrawVariantWorkbenchPane() {
         ImGui::TableSetColumnIndex(2);
         bool hideEquipped =
             rows[static_cast<std::size_t>(rowIndex)].hideEquipped;
-        ImGui::SetCursorPosX(
-            ImGui::GetCursorPosX() +
-            (ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight()) *
-                0.5f);
+        if (const auto *currentTable = ImGui::GetCurrentTable();
+            currentTable != nullptr) {
+          const auto hideCellRect = ImGui::TableGetCellBgRect(currentTable, 2);
+          const auto checkboxSize =
+              ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight());
+          const auto checkboxPos = ImVec2(
+              hideCellRect.Min.x +
+                  ((hideCellRect.Max.x - hideCellRect.Min.x) - checkboxSize.x) *
+                      0.5f,
+              hideCellRect.Min.y +
+                  ((hideCellRect.Max.y - hideCellRect.Min.y) - checkboxSize.y) *
+                      0.5f);
+          ImGui::SetCursorScreenPos(checkboxPos);
+        }
         if (ImGui::Checkbox(
                 ("##hide-equipped-" + std::to_string(rowIndex)).c_str(),
                 &hideEquipped)) {
