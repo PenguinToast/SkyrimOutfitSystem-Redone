@@ -20,6 +20,7 @@ struct VariantWorkbenchRow {
   EquipmentWidgetItem equipped;
   std::vector<EquipmentWidgetItem> overrides;
   bool hideEquipped{false};
+  bool isEquipped{false};
 };
 
 class VariantWorkbench {

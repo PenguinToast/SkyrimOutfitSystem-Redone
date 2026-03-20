@@ -3,6 +3,7 @@
 #include "ArmorUtils.h"
 #include "integrations/DynamicArmorVariantsClient.h"
 
+#include <algorithm>
 #include <nlohmann/json.hpp>
 #include <unordered_set>
 
@@ -95,25 +96,16 @@ namespace sosng::workbench {
 void VariantWorkbench::SyncRowsFromPlayer() {
   auto *player = RE::PlayerCharacter::GetSingleton();
   if (!player) {
-    rows_.clear();
-    rowOrder_.clear();
+    for (auto &row : rows_) {
+      row.isEquipped = false;
+    }
     return;
   }
 
-  std::unordered_map<std::string, std::vector<EquipmentWidgetItem>>
-      existingOverrides;
-  std::unordered_map<std::string, bool> existingHiddenFlags;
-  existingOverrides.reserve(rows_.size());
-  existingHiddenFlags.reserve(rows_.size());
   for (auto &row : rows_) {
-    existingOverrides.emplace(row.key, std::move(row.overrides));
-    existingHiddenFlags.emplace(row.key, row.hideEquipped);
+    row.isEquipped = false;
   }
 
-  std::unordered_map<std::string, VariantWorkbenchRow> rowMap;
-  rowMap.reserve(rows_.size() + 8);
-  std::vector<std::string> discoveredKeys;
-  discoveredKeys.reserve(rows_.size() + 8);
   std::unordered_set<RE::FormID> seenArmorForms;
 
   for (const auto slot :
@@ -164,55 +156,25 @@ void VariantWorkbench::SyncRowsFromPlayer() {
       continue;
     }
 
+    const auto rowKey = "armor:" + armor::FormatFormID(formID);
+    const auto existingIt =
+        std::ranges::find(rows_, rowKey, [](const VariantWorkbenchRow &a_row) {
+          return a_row.key;
+        });
+    if (existingIt != rows_.end()) {
+      existingIt->equipped = std::move(equipped);
+      existingIt->equipped.key = rowKey;
+      existingIt->isEquipped = true;
+      continue;
+    }
+
     VariantWorkbenchRow row{};
-    row.key = "armor:" + armor::FormatFormID(formID);
+    row.key = rowKey;
     row.equipped = std::move(equipped);
-    row.equipped.key = row.key;
-    if (const auto it = existingOverrides.find(row.key);
-        it != existingOverrides.end()) {
-      row.overrides = std::move(it->second);
-    }
-    if (const auto it = existingHiddenFlags.find(row.key);
-        it != existingHiddenFlags.end()) {
-      row.hideEquipped = it->second;
-    }
-    discoveredKeys.push_back(row.key);
-    rowMap.emplace(row.key, std::move(row));
-  }
-
-  std::vector<VariantWorkbenchRow> rows;
-  rows.reserve(rowMap.size());
-  std::unordered_set<std::string> placedKeys;
-  placedKeys.reserve(rowMap.size());
-
-  for (const auto &key : rowOrder_) {
-    const auto it = rowMap.find(key);
-    if (it == rowMap.end()) {
-      continue;
-    }
-
-    placedKeys.insert(key);
-    rows.push_back(std::move(it->second));
-  }
-
-  for (const auto &key : discoveredKeys) {
-    if (!placedKeys.insert(key).second) {
-      continue;
-    }
-
-    const auto it = rowMap.find(key);
-    if (it == rowMap.end()) {
-      continue;
-    }
-
-    rows.push_back(std::move(it->second));
-  }
-
-  rows_ = std::move(rows);
-  rowOrder_.clear();
-  rowOrder_.reserve(rows_.size());
-  for (const auto &row : rows_) {
-    rowOrder_.push_back(row.key);
+    row.equipped.key = rowKey;
+    row.isEquipped = true;
+    rows_.push_back(std::move(row));
+    rowOrder_.push_back(rowKey);
   }
 }
 

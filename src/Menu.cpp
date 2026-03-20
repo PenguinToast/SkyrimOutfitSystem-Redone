@@ -770,12 +770,6 @@ void Menu::AcceptOverrideDeletePayload() {
 void Menu::DrawVariantWorkbenchPane() {
   ImGui::TextUnformatted("Variant workbench");
   ImGui::Separator();
-  ImGui::TextWrapped(
-      "Each row is a currently equipped armor piece. Drag the left column to "
-      "reorder rows. Drop armor into the Overrides column. Use Hide to "
-      "suppress the equipped item's visuals entirely. Only overlapping "
-      "override slots on the same row are rejected.");
-  ImGui::Spacing();
 
   const auto &rows = workbench_.GetRows();
   if (rows.empty()) {
@@ -835,6 +829,10 @@ void Menu::DrawVariantWorkbenchPane() {
         const auto widgetHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
         const auto rowHeight = (std::max)(widgetHeight, dropZoneHeight);
         ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
+        if (rows[static_cast<std::size_t>(rowIndex)].isEquipped) {
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                 IM_COL32(36, 58, 41, 112));
+        }
 
         ImGui::TableSetColumnIndex(0);
         DrawEquipmentInfoWidget(
