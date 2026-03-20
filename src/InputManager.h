@@ -10,10 +10,10 @@ public:
   void AddEventToQueue(RE::InputEvent **a_events);
   void ProcessInputEvents();
   void UpdateMousePosition() const;
+  [[nodiscard]] bool IsBoundModifierDown() const;
+  [[nodiscard]] std::uint32_t GetActiveModifierScanCode() const;
 
 private:
-  static constexpr std::uint32_t kToggleKey = 0x3D; // F3
-
   std::mutex inputLock_;
   std::vector<RE::InputEvent *> inputQueue_;
   bool shiftDown_{false};

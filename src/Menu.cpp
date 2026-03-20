@@ -178,6 +178,8 @@ void Menu::LoadUserSettings() {
                                  kMinFontSizePixels, kMaxFontSizePixels);
     pendingFontSizePixels_ = fontSizePixels_;
     pauseGameWhenOpen_ = json.value("pauseGameWhileOpen", pauseGameWhenOpen_);
+    toggleKey_ = json.value("toggleKey", toggleKey_);
+    toggleModifier_ = json.value("toggleModifier", toggleModifier_);
     themeName_ = json.value("theme", themeName_);
   } catch (const std::exception &exception) {
     logger::warn("Failed to parse user settings from {}: {}", userSettingsPath_,
@@ -202,6 +204,8 @@ void Menu::SaveUserSettings() const {
 
   const nlohmann::json json = {{"fontSizePx", fontSizePixels_},
                                {"pauseGameWhileOpen", pauseGameWhenOpen_},
+                               {"toggleKey", toggleKey_},
+                               {"toggleModifier", toggleModifier_},
                                {"theme", themeName_}};
 
   output << json.dump(2) << '\n';
@@ -302,6 +306,7 @@ void Menu::OnMenuHide() {
   }
 
   ClearCatalogSelection();
+  CloseToggleKeyCapture();
 
   if (auto *controlMap = RE::ControlMap::GetSingleton();
       controlMap != nullptr) {
@@ -330,6 +335,55 @@ void Menu::Toggle() {
 void Menu::ClearCatalogSelection() {
   selectedCatalogFormID_ = 0;
   workbench_.ClearPreview();
+}
+
+void Menu::OpenToggleKeyCapture() {
+  awaitingToggleKeyCapture_ = true;
+  openToggleKeyPopup_ = true;
+  toggleKeyCaptureError_.clear();
+}
+
+void Menu::CloseToggleKeyCapture() {
+  awaitingToggleKeyCapture_ = false;
+  openToggleKeyPopup_ = false;
+  toggleKeyCaptureError_.clear();
+}
+
+void Menu::HandleToggleKeyCapture(const std::uint32_t a_scanCode,
+                                  const std::uint32_t a_modifierScanCode) {
+  if (a_scanCode == 0x01) {
+    CloseToggleKeyCapture();
+    return;
+  }
+
+  if (a_scanCode == 0x14) {
+    toggleKey_ = 0x40;
+    toggleModifier_ = 0;
+    SaveUserSettings();
+    CloseToggleKeyCapture();
+    return;
+  }
+
+  if (!keycode::IsValidHotkey(a_scanCode) ||
+      keycode::IsKeyModifier(a_scanCode)) {
+    toggleKeyCaptureError_ =
+        "Choose a non-modifier key. Hold Shift, Ctrl, or Alt for a modifier.";
+    return;
+  }
+
+  toggleKey_ = a_scanCode;
+  toggleModifier_ = a_modifierScanCode;
+  SaveUserSettings();
+  CloseToggleKeyCapture();
+}
+
+std::string Menu::GetToggleKeyLabel() const {
+  if (toggleModifier_ != 0) {
+    return keycode::GetKeyName(toggleModifier_) + " + " +
+           keycode::GetKeyName(toggleKey_);
+  }
+
+  return keycode::GetKeyName(toggleKey_);
 }
 
 void Menu::Draw() {
@@ -375,7 +429,7 @@ void Menu::DrawWindow() {
 
   ImGui::TextUnformatted("Vanity outfit browser");
   ImGui::SameLine();
-  ImGui::TextDisabled("| F3 toggles visibility");
+  ImGui::TextDisabled("| %s toggles visibility", GetToggleKeyLabel().c_str());
   const auto optionsButtonWidth = ImGui::CalcTextSize("Options").x +
                                   (ImGui::GetStyle().FramePadding.x * 2.0f);
   const auto browserButtonWidth = ImGui::CalcTextSize("Browser").x +
@@ -1072,6 +1126,16 @@ void Menu::DrawOptionsTab() {
 
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
+      ImGui::TextUnformatted("Toggle UI Button");
+
+      ImGui::TableSetColumnIndex(1);
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      if (ImGui::Button(GetToggleKeyLabel().c_str(), ImVec2(-FLT_MIN, 0.0f))) {
+        OpenToggleKeyCapture();
+      }
+
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
       ImGui::TextUnformatted("Pause Game While Open");
 
       ImGui::TableSetColumnIndex(1);
@@ -1084,6 +1148,38 @@ void Menu::DrawOptionsTab() {
       ImGui::EndTable();
     }
     ImGui::EndChild();
+  }
+
+  if (openToggleKeyPopup_) {
+    ImGui::OpenPopup("##toggle-key-capture");
+    openToggleKeyPopup_ = false;
+  }
+
+  ImGui::SetNextWindowSize(ImVec2(420.0f, 0.0f), ImGuiCond_Appearing);
+  if (ImGui::BeginPopupModal("##toggle-key-capture", nullptr,
+                             ImGuiWindowFlags_NoResize |
+                                 ImGuiWindowFlags_NoMove)) {
+    ImGui::TextUnformatted("Change Toggle UI Button");
+    ImGui::Separator();
+    ImGui::TextWrapped(
+        "Press the key combination you want to use. Hold Shift, Ctrl, or Alt "
+        "while pressing the key to include a modifier.");
+    ImGui::TextWrapped(
+        "Press T to reset to default (F6). Press Escape to cancel.");
+    if (!toggleKeyCaptureError_.empty()) {
+      ImGui::Spacing();
+      ImGui::TextColored(ThemeConfig::GetSingleton()->GetColor("ERROR"), "%s",
+                         toggleKeyCaptureError_.c_str());
+    }
+    ImGui::Spacing();
+    if (ImGui::Button("Cancel", ImVec2(-FLT_MIN, 0.0f))) {
+      CloseToggleKeyCapture();
+      ImGui::CloseCurrentPopup();
+    }
+    if (!awaitingToggleKeyCapture_) {
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
   }
 }
 } // namespace sosng

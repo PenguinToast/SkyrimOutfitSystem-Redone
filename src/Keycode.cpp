@@ -1,0 +1,36 @@
+#include "Keycode.h"
+
+#include <Windows.h>
+
+#include <format>
+
+namespace sosng::keycode {
+bool IsKeyModifier(const std::uint32_t a_key) {
+  return a_key == 0x2A || a_key == 0x36 || a_key == 0x1D || a_key == 0x9D ||
+         a_key == 0x38 || a_key == 0xB8;
+}
+
+bool IsValidHotkey(const std::uint32_t a_key) {
+  return a_key != 0x01 && a_key != 0x0F && a_key != 0x00 && a_key != 0x1C &&
+         a_key != 0x39 && a_key != 0x14;
+}
+
+std::string GetKeyName(const std::uint32_t a_scanCode) {
+  if (a_scanCode == 0) {
+    return "None";
+  }
+
+  LONG lParam = static_cast<LONG>((a_scanCode & 0xFFU) << 16U);
+  if ((a_scanCode & 0x100U) != 0U) {
+    lParam |= 1 << 24;
+  }
+
+  char keyName[128]{};
+  const auto length = GetKeyNameTextA(lParam, keyName, sizeof(keyName));
+  if (length > 0) {
+    return {keyName, static_cast<std::size_t>(length)};
+  }
+
+  return std::format("Scan {:X}", a_scanCode);
+}
+} // namespace sosng::keycode

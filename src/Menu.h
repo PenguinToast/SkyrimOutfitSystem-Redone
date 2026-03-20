@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EquipmentCatalog.h"
+#include "Keycode.h"
 #include "ThemeConfig.h"
 #include "VariantWorkbench.h"
 #include "imgui.h"
@@ -25,6 +26,18 @@ public:
   [[nodiscard]] bool IsEnabled() const { return enabled_; }
   [[nodiscard]] bool IsInitialized() const { return initialized_; }
   [[nodiscard]] bool PauseGameWhenOpen() const { return pauseGameWhenOpen_; }
+  [[nodiscard]] std::string GetToggleKeyLabel() const;
+  [[nodiscard]] std::uint32_t GetToggleKey() const { return toggleKey_; }
+  [[nodiscard]] std::uint32_t GetToggleModifier() const {
+    return toggleModifier_;
+  }
+  [[nodiscard]] bool IsCapturingToggleKey() const {
+    return awaitingToggleKeyCapture_;
+  }
+  void OpenToggleKeyCapture();
+  void CloseToggleKeyCapture();
+  void HandleToggleKeyCapture(std::uint32_t a_scanCode,
+                              std::uint32_t a_modifierScanCode);
   [[nodiscard]] workbench::VariantWorkbench &GetWorkbench() {
     return workbench_;
   }
@@ -86,7 +99,6 @@ private:
 
   [[nodiscard]] bool MatchesGearFilters(const GearEntry &a_entry) const;
   [[nodiscard]] bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
-
   [[nodiscard]] std::vector<const GearEntry *> BuildFilteredGear() const;
   [[nodiscard]] std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
   void SortGearRows(std::vector<const GearEntry *> &a_rows,
@@ -107,8 +119,13 @@ private:
   bool pendingFontAtlasRebuild_{false};
   bool pauseGameWhenOpen_{false};
   bool previewSelected_{true};
+  std::uint32_t toggleKey_{0x40};
+  std::uint32_t toggleModifier_{0};
   RE::FormID selectedCatalogFormID_{0};
   std::string themeName_{"default"};
+  std::string toggleKeyCaptureError_;
+  bool awaitingToggleKeyCapture_{false};
+  bool openToggleKeyPopup_{false};
   std::string settingsDirectory_;
   std::string imguiIniPath_;
   std::string userSettingsPath_;

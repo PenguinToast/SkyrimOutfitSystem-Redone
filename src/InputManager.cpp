@@ -176,7 +176,18 @@ void InputManager::ProcessInputEvents() {
         }
         break;
       case RE::INPUT_DEVICE::kKeyboard:
-        if (scanCode == kToggleKey && buttonEvent->IsDown()) {
+        if (menu->IsCapturingToggleKey() && buttonEvent->IsDown()) {
+          if (keycode::IsKeyModifier(scanCode)) {
+            break;
+          }
+
+          menu->HandleToggleKeyCapture(scanCode, GetActiveModifierScanCode());
+          io.ClearInputKeys();
+          break;
+        }
+
+        if (scanCode == menu->GetToggleKey() && IsBoundModifierDown() &&
+            buttonEvent->IsDown()) {
           menu->Toggle();
           io.ClearInputKeys();
           break;
@@ -205,6 +216,37 @@ void InputManager::ProcessInputEvents() {
       break;
     }
   }
+}
+
+bool InputManager::IsBoundModifierDown() const {
+  switch (Menu::GetSingleton()->GetToggleModifier()) {
+  case 0x00:
+    return true;
+  case 0x2A:
+  case 0x36:
+    return shiftDown_;
+  case 0x1D:
+  case 0x9D:
+    return ctrlDown_;
+  case 0x38:
+  case 0xB8:
+    return altDown_;
+  default:
+    return false;
+  }
+}
+
+std::uint32_t InputManager::GetActiveModifierScanCode() const {
+  if (shiftDown_) {
+    return 0x2A;
+  }
+  if (ctrlDown_) {
+    return 0x1D;
+  }
+  if (altDown_) {
+    return 0x38;
+  }
+  return 0;
 }
 
 void InputManager::UpdateMousePosition() const {
