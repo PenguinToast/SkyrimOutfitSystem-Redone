@@ -283,14 +283,13 @@ void Menu::Close() {
 }
 
 void Menu::OnMenuShow() {
-  if (!initialized_) {
+  if (!initialized_ || enabled_) {
     return;
   }
 
   if (auto *controlMap = RE::ControlMap::GetSingleton();
       controlMap != nullptr) {
-    controlMap->StoreControls();
-    controlMap->ToggleControls(kBlockedGameplayControls, false, true);
+    controlMap->ToggleControls(kBlockedGameplayControls, false, false);
   }
 
   auto &io = ImGui::GetIO();
@@ -301,7 +300,7 @@ void Menu::OnMenuShow() {
 }
 
 void Menu::OnMenuHide() {
-  if (!initialized_) {
+  if (!initialized_ || !enabled_) {
     return;
   }
 
@@ -310,7 +309,7 @@ void Menu::OnMenuHide() {
 
   if (auto *controlMap = RE::ControlMap::GetSingleton();
       controlMap != nullptr) {
-    controlMap->LoadStoredControls();
+    controlMap->ToggleControls(kBlockedGameplayControls, true, false);
   }
 
   auto &io = ImGui::GetIO();
@@ -962,11 +961,15 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
 
         if (clicked) {
           rowClicked = true;
-          selectedCatalogFormID_ = item.formID;
-          if (previewSelected_) {
-            workbench_.ApplyCatalogPreview(item.formID);
+          if (selectedCatalogFormID_ == item.formID) {
+            ClearCatalogSelection();
           } else {
-            workbench_.ClearPreview();
+            selectedCatalogFormID_ = item.formID;
+            if (previewSelected_) {
+              workbench_.ApplyCatalogPreview(item.formID);
+            } else {
+              workbench_.ClearPreview();
+            }
           }
         }
 
@@ -1045,11 +1048,15 @@ bool Menu::DrawOutfitTab() {
 
         if (clicked) {
           rowClicked = true;
-          selectedCatalogFormID_ = outfit.formID;
-          if (previewSelected_) {
-            workbench_.ApplyCatalogPreview(outfit.formID);
+          if (selectedCatalogFormID_ == outfit.formID) {
+            ClearCatalogSelection();
           } else {
-            workbench_.ClearPreview();
+            selectedCatalogFormID_ = outfit.formID;
+            if (previewSelected_) {
+              workbench_.ApplyCatalogPreview(outfit.formID);
+            } else {
+              workbench_.ClearPreview();
+            }
           }
         }
 

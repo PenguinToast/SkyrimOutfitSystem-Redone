@@ -24,13 +24,15 @@ RE::UI_MESSAGE_RESULTS MenuHost::ProcessMessage(RE::UIMessage &a_message) {
   switch (a_message.type.get()) {
   case RE::UI_MESSAGE_TYPE::kShow:
     Menu::GetSingleton()->OnMenuShow();
-    return RE::UI_MESSAGE_RESULTS::kHandled;
+    break;
   case RE::UI_MESSAGE_TYPE::kHide:
     Menu::GetSingleton()->OnMenuHide();
-    return RE::UI_MESSAGE_RESULTS::kHandled;
+    break;
   default:
-    return IMenu::ProcessMessage(a_message);
+    break;
   }
+
+  return IMenu::ProcessMessage(a_message);
 }
 
 RE::IMenu *MenuHost::Creator() {
