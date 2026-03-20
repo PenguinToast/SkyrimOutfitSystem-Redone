@@ -48,6 +48,7 @@ private:
   void SaveUserSettings() const;
   void RebuildFontAtlas();
   void DrawWindow();
+  void DrawCatalogFilters();
   void DrawGearTab();
   [[nodiscard]] bool
   DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);
@@ -68,6 +69,13 @@ private:
                        int a_targetRowIndex, bool a_insertAfter);
   void AcceptOverrideDeletePayload();
   void ClearCatalogSelection();
+  void SyncSelectedSlotFilters();
+  [[nodiscard]] bool HasAnySelectedSlotFilter() const;
+  [[nodiscard]] bool
+  MatchesSelectedSlotsOr(const std::vector<std::string> &a_slots) const;
+  [[nodiscard]] bool
+  MatchesSelectedSlotsAnd(const std::vector<std::string> &a_slots) const;
+  [[nodiscard]] std::string BuildSelectedSlotPreview() const;
 
   [[nodiscard]] bool MatchesGearFilters(const GearEntry &a_entry) const;
   [[nodiscard]] bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
@@ -85,9 +93,8 @@ private:
   ID3D11DeviceContext *context_{nullptr};
   BrowserTab activeTab_{BrowserTab::Gear};
   int gearPluginIndex_{0};
-  int gearSlotIndex_{0};
   int outfitPluginIndex_{0};
-  int outfitTagIndex_{0};
+  std::vector<bool> selectedSlotFilters_;
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
   bool pendingFontAtlasRebuild_{false};

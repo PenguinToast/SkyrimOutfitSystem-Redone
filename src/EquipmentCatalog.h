@@ -9,6 +9,7 @@ struct GearEntry {
   std::string plugin;
   std::string category;
   std::string slot;
+  std::vector<std::string> slots;
   int statValue;
   float weight;
   int value;
@@ -25,8 +26,10 @@ struct OutfitEntry {
   std::string plugin;
   std::string summary;
   std::vector<std::string> pieces;
+  std::vector<std::string> slots;
   std::vector<std::string> tags;
   std::string piecesText;
+  std::string slotsText;
   std::string tagsText;
   std::string searchText;
 };
@@ -51,9 +54,6 @@ public:
   [[nodiscard]] const std::vector<std::string> &GetOutfitPlugins() const {
     return outfitPlugins_;
   }
-  [[nodiscard]] const std::vector<std::string> &GetOutfitTags() const {
-    return outfitTags_;
-  }
 
   [[nodiscard]] std::string_view GetSource() const { return source_; }
   [[nodiscard]] std::string_view GetRevision() const { return revision_; }
@@ -67,7 +67,6 @@ private:
   std::vector<std::string> gearPlugins_;
   std::vector<std::string> gearSlots_;
   std::vector<std::string> outfitPlugins_;
-  std::vector<std::string> outfitTags_;
   std::string source_;
   std::string revision_;
 };

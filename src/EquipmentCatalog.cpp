@@ -235,6 +235,7 @@ std::string BuildOutfitSearchText(const sosng::OutfitEntry &a_entry) {
 
 struct OutfitDescription {
   std::vector<std::string> pieces;
+  std::vector<std::string> slots;
   std::vector<std::string> tags;
   std::size_t armorCount{0};
 };
@@ -258,6 +259,8 @@ OutfitDescription DescribeOutfit(const RE::BGSOutfit *a_outfit) {
       description.tags.push_back(GetArmorCategory(armor));
 
       auto slots = GetArmorSlots(armor);
+      description.slots.insert(description.slots.end(), slots.begin(),
+                               slots.end());
       description.tags.insert(description.tags.end(),
                               std::make_move_iterator(slots.begin()),
                               std::make_move_iterator(slots.end()));
@@ -267,6 +270,7 @@ OutfitDescription DescribeOutfit(const RE::BGSOutfit *a_outfit) {
   });
 
   SortUniqueStrings(description.pieces);
+  SortUniqueStrings(description.slots);
   SortUniqueStrings(description.tags);
   return description;
 }
@@ -310,16 +314,6 @@ std::vector<std::string> BuildSortedUniqueOptions(const Entries &a_entries,
   return values;
 }
 
-std::vector<std::string>
-BuildSortedUniqueOutfitTags(const std::vector<sosng::OutfitEntry> &a_outfits) {
-  std::vector<std::string> values;
-  for (const auto &outfit : a_outfits) {
-    values.insert(values.end(), outfit.tags.begin(), outfit.tags.end());
-  }
-
-  SortUniqueStrings(values);
-  return values;
-}
 } // namespace
 
 namespace sosng {
@@ -337,7 +331,6 @@ void EquipmentCatalog::RefreshFromGame() {
   gearPlugins_.clear();
   gearSlots_.clear();
   outfitPlugins_.clear();
-  outfitTags_.clear();
 
   auto *dataHandler = RE::TESDataHandler::GetSingleton();
   if (!dataHandler) {
@@ -370,16 +363,15 @@ void EquipmentCatalog::RefreshFromGame() {
     entry.editorID = editorID;
     entry.plugin = GetPluginName(armor);
     entry.category = GetArmorCategory(armor);
-    entry.slot = GetPrimaryArmorSlot(armor);
+    entry.slots = GetArmorSlots(armor);
+    entry.slot = entry.slots.empty() ? std::string{} : entry.slots.front();
     entry.statValue = static_cast<int>(armor->GetArmorRating());
     entry.weight = armor->GetWeight();
     entry.value = armor->GetGoldValue();
     entry.keywords = GetKeywords(armor);
 
-    auto slots = GetArmorSlots(armor);
-    entry.keywords.insert(entry.keywords.end(),
-                          std::make_move_iterator(slots.begin()),
-                          std::make_move_iterator(slots.end()));
+    entry.keywords.insert(entry.keywords.end(), entry.slots.begin(),
+                          entry.slots.end());
     entry.keywords.push_back(entry.category);
     SortUniqueStrings(entry.keywords);
     entry.keywordsText = JoinStrings(entry.keywords);
@@ -415,9 +407,11 @@ void EquipmentCatalog::RefreshFromGame() {
     entry.plugin = GetPluginName(outfit);
     entry.summary = BuildOutfitSummary(description);
     entry.pieces = std::move(description.pieces);
+    entry.slots = std::move(description.slots);
     entry.tags = std::move(description.tags);
 
     entry.piecesText = JoinStrings(entry.pieces);
+    entry.slotsText = JoinStrings(entry.slots);
     entry.tagsText = JoinStrings(entry.tags);
     entry.searchText = BuildOutfitSearchText(entry);
 
@@ -447,6 +441,5 @@ void EquipmentCatalog::RebuildDerivedData() {
       outfits_, [](const OutfitEntry &a_entry) -> const std::string & {
         return a_entry.plugin;
       });
-  outfitTags_ = BuildSortedUniqueOutfitTags(outfits_);
 }
 } // namespace sosng
