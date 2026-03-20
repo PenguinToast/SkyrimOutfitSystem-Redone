@@ -246,6 +246,8 @@ void Menu::Close() {
     return;
   }
 
+  ClearCatalogSelection();
+
   auto &io = ImGui::GetIO();
   io.MouseDrawCursor = false;
   io.ClearInputKeys();
@@ -262,6 +264,11 @@ void Menu::Toggle() {
   } else {
     Open();
   }
+}
+
+void Menu::ClearCatalogSelection() {
+  selectedCatalogFormID_ = 0;
+  workbench_.ClearPreview();
 }
 
 void Menu::Draw() {
@@ -576,6 +583,14 @@ void Menu::DrawGearTab() {
 
   auto rows = BuildFilteredGear();
   workbench_.SyncRowsFromPlayer();
+  if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
+    if (!previewSelected_) {
+      workbench_.ClearPreview();
+    } else if (selectedCatalogFormID_ != 0) {
+      workbench_.ApplyCatalogPreview(selectedCatalogFormID_);
+    }
+  }
+  ImGui::SameLine();
   ImGui::Text("Results: %zu", rows.size());
   ImGui::SameLine();
   ImGui::Text("| Equipped rows: %zu", workbench_.GetRowCount());
@@ -595,7 +610,11 @@ void Menu::DrawGearTab() {
                           ImGuiChildFlags_Borders)) {
       ImGui::TextUnformatted("Installed armor");
       ImGui::Separator();
-      DrawGearCatalogTable(rows);
+      const bool catalogRowClicked = DrawGearCatalogTable(rows);
+      if (selectedCatalogFormID_ != 0 &&
+          ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !catalogRowClicked) {
+        ClearCatalogSelection();
+      }
     }
     ImGui::EndChild();
 
@@ -612,7 +631,8 @@ void Menu::DrawGearTab() {
   workbench_.SyncDynamicArmorVariants();
 }
 
-void Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
+bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
+  bool rowClicked = false;
   if (ImGui::BeginTable("##gear-table", 3,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable |
@@ -652,8 +672,9 @@ void Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
-        ImGui::Selectable(
-            ("##catalog-row-hit-" + std::to_string(rowIndex)).c_str(), false,
+        const bool selected = selectedCatalogFormID_ == item.formID;
+        const bool clicked = ImGui::Selectable(
+            ("##catalog-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
             ImGuiSelectableFlags_SpanAllColumns |
                 ImGuiSelectableFlags_AllowOverlap |
                 ImGuiSelectableFlags_AllowDoubleClick,
@@ -670,18 +691,35 @@ void Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::TableSetColumnIndex(2);
         ImGui::Text("%s", entry.slot.data());
 
-        if (rowHovered) {
+        if (selected) {
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                 IM_COL32(54, 84, 118, 132));
+        } else if (rowHovered) {
           ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
                                  IM_COL32(44, 58, 73, 112));
-          if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            workbench_.AddCatalogOverrideToBestRow(item.formID);
+        }
+
+        if (clicked) {
+          rowClicked = true;
+          selectedCatalogFormID_ = item.formID;
+          if (previewSelected_) {
+            workbench_.ApplyCatalogPreview(item.formID);
+          } else {
+            workbench_.ClearPreview();
           }
+        }
+
+        if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+          rowClicked = true;
+          workbench_.AddCatalogOverrideToBestRow(item.formID);
         }
       }
     }
 
     ImGui::EndTable();
   }
+
+  return rowClicked;
 }
 
 bool Menu::DrawEquipmentInfoWidget(const char *a_id,
@@ -1150,6 +1188,7 @@ void Menu::DrawVariantWorkbenchPane() {
 }
 
 void Menu::DrawOutfitTab() {
+  ClearCatalogSelection();
   const auto &catalog = EquipmentCatalog::Get();
 
   ImGui::PushItemWidth(260.0f);
@@ -1236,6 +1275,7 @@ void Menu::DrawOutfitTab() {
 }
 
 void Menu::DrawOptionsTab() {
+  ClearCatalogSelection();
   ImGui::TextUnformatted("Interface");
   ImGui::Separator();
   ImGui::TextWrapped("Adjust the UI font size for this session. The value is "

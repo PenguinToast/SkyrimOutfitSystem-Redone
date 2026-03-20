@@ -10,6 +10,7 @@
 namespace {
 constexpr std::uint32_t kSerializationType = 'ROWS';
 constexpr std::uint32_t kSerializationVersion = 2;
+constexpr auto kPreviewVariantName = "SOSNG|PreviewSelected";
 
 std::string BuildDavVariantName(const RE::TESObjectARMO *a_sourceArmor) {
   return "SOSNG|" + sosng::armor::GetFormIdentifier(a_sourceArmor);
@@ -97,6 +98,32 @@ auto BuildDavVariantJson(
 } // namespace
 
 namespace sosng::workbench {
+int VariantWorkbench::FindBestCatalogTargetRowIndex(
+    const EquipmentWidgetItem &a_item, bool a_requireAcceptable) const {
+  int fallbackRowIndex = -1;
+  for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size());
+       ++rowIndex) {
+    const auto &row = rows_[static_cast<std::size_t>(rowIndex)];
+    if (!row.isEquipped) {
+      continue;
+    }
+
+    if (a_requireAcceptable && !CanAcceptOverride(rowIndex, a_item)) {
+      continue;
+    }
+
+    if ((row.equipped.slotMask & a_item.slotMask) != 0) {
+      return rowIndex;
+    }
+
+    if (fallbackRowIndex < 0) {
+      fallbackRowIndex = rowIndex;
+    }
+  }
+
+  return fallbackRowIndex;
+}
+
 void VariantWorkbench::SyncRowsFromPlayer() {
   auto *player = RE::PlayerCharacter::GetSingleton();
   if (!player) {
@@ -255,25 +282,108 @@ bool VariantWorkbench::AddCatalogOverrideToBestRow(RE::FormID a_formID) {
     return false;
   }
 
-  int fallbackRowIndex = -1;
-  for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size());
-       ++rowIndex) {
-    const auto &row = rows_[static_cast<std::size_t>(rowIndex)];
-    if (!row.isEquipped || !CanAcceptOverride(rowIndex, item)) {
-      continue;
-    }
+  const auto targetRowIndex = FindBestCatalogTargetRowIndex(item, true);
+  return targetRowIndex >= 0 ? AddCatalogOverride(targetRowIndex, a_formID)
+                             : false;
+}
 
-    if ((row.equipped.slotMask & item.slotMask) != 0) {
-      return AddCatalogOverride(rowIndex, a_formID);
-    }
+bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
+  using integrations::DynamicArmorVariantsClient;
 
-    if (fallbackRowIndex < 0) {
-      fallbackRowIndex = rowIndex;
+  EquipmentWidgetItem item{};
+  if (!BuildCatalogItem(a_formID, item)) {
+    ClearPreview();
+    return false;
+  }
+
+  const auto targetRowIndex = FindBestCatalogTargetRowIndex(item, false);
+  if (targetRowIndex < 0) {
+    ClearPreview();
+    return false;
+  }
+
+  const auto &targetRow = rows_[static_cast<std::size_t>(targetRowIndex)];
+  const auto *sourceArmor =
+      RE::TESForm::LookupByID<RE::TESObjectARMO>(targetRow.equipped.formID);
+  const auto *overrideArmor =
+      RE::TESForm::LookupByID<RE::TESObjectARMO>(a_formID);
+  if (!sourceArmor || !overrideArmor) {
+    ClearPreview();
+    return false;
+  }
+
+  std::vector<const RE::TESObjectARMO *> previewOverrides{overrideArmor};
+  const auto variantJson =
+      BuildDavVariantJson(sourceArmor, previewOverrides, false);
+  if (variantJson.empty()) {
+    ClearPreview();
+    return false;
+  }
+
+  if (previewFormID_ == a_formID && previewTargetRowKey_ == targetRow.key &&
+      previewVariantJson_ == variantJson) {
+    return true;
+  }
+
+  auto *dav = DynamicArmorVariantsClient::Get();
+  if (!dav || !dav->IsReady()) {
+    ClearPreview();
+    return false;
+  }
+
+  auto *player = RE::PlayerCharacter::GetSingleton();
+  if (!player) {
+    ClearPreview();
+    return false;
+  }
+
+  ClearPreview();
+
+  if (!dav->RegisterVariantJson(kPreviewVariantName, variantJson.c_str())) {
+    logger::warn("Failed to register SOSNG preview variant");
+    return false;
+  }
+
+  if (!dav->ApplyVariantOverride(player, kPreviewVariantName)) {
+    logger::warn("Failed to apply SOSNG preview variant override");
+    dav->DeleteVariant(kPreviewVariantName);
+    return false;
+  }
+
+  previewFormID_ = a_formID;
+  previewTargetRowKey_ = targetRow.key;
+  previewVariantJson_ = variantJson;
+  return true;
+}
+
+void VariantWorkbench::ClearPreview() {
+  using integrations::DynamicArmorVariantsClient;
+
+  if (previewFormID_ == 0 && previewTargetRowKey_.empty() &&
+      previewVariantJson_.empty()) {
+    return;
+  }
+
+  auto *dav = DynamicArmorVariantsClient::Get();
+  if (!dav) {
+    DynamicArmorVariantsClient::Refresh();
+    dav = DynamicArmorVariantsClient::Get();
+  }
+
+  if (dav) {
+    if (auto *player = RE::PlayerCharacter::GetSingleton()) {
+      if (!dav->RemoveVariantOverride(player, kPreviewVariantName)) {
+        logger::warn("Failed to remove SOSNG preview variant override");
+      }
+    }
+    if (!dav->DeleteVariant(kPreviewVariantName)) {
+      logger::warn("Failed to delete SOSNG preview variant");
     }
   }
 
-  return fallbackRowIndex >= 0 ? AddCatalogOverride(fallbackRowIndex, a_formID)
-                               : false;
+  previewFormID_ = 0;
+  previewTargetRowKey_.clear();
+  previewVariantJson_.clear();
 }
 
 bool VariantWorkbench::MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
@@ -626,6 +736,8 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
 
 void VariantWorkbench::Revert() {
   using integrations::DynamicArmorVariantsClient;
+
+  ClearPreview();
 
   auto *dav = DynamicArmorVariantsClient::Get();
   if (!dav) {

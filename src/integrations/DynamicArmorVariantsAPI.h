@@ -23,6 +23,10 @@ struct IDynamicArmorVariantsInterface001 {
   virtual bool SetVariantConditionsJson(const char *a_name,
                                         const char *a_conditionsJson) = 0;
   virtual bool RefreshActor(RE::Actor *a_actor) = 0;
+  virtual bool ApplyVariantOverride(RE::Actor *a_actor,
+                                    const char *a_variant) = 0;
+  virtual bool RemoveVariantOverride(RE::Actor *a_actor,
+                                     const char *a_variant) = 0;
 };
 } // namespace DynamicArmorVariantsAPI
 

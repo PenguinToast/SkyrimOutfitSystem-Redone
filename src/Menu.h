@@ -49,7 +49,8 @@ private:
   void RebuildFontAtlas();
   void DrawWindow();
   void DrawGearTab();
-  void DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);
+  [[nodiscard]] bool
+  DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);
   void DrawVariantWorkbenchPane();
   void DrawOutfitTab();
   void DrawOptionsTab();
@@ -66,6 +67,7 @@ private:
   void ApplyRowReorder(const DraggedEquipmentPayload &a_dragPayload,
                        int a_targetRowIndex, bool a_insertAfter);
   void AcceptOverrideDeletePayload();
+  void ClearCatalogSelection();
 
   [[nodiscard]] bool MatchesGearFilters(const GearEntry &a_entry) const;
   [[nodiscard]] bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
@@ -89,6 +91,8 @@ private:
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
   bool pendingFontAtlasRebuild_{false};
+  bool previewSelected_{true};
+  RE::FormID selectedCatalogFormID_{0};
   std::string settingsDirectory_;
   std::string imguiIniPath_;
   std::string userSettingsPath_;

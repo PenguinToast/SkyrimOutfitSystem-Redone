@@ -34,6 +34,8 @@ public:
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
   bool AddCatalogOverrideToBestRow(RE::FormID a_formID);
+  bool ApplyCatalogPreview(RE::FormID a_formID);
+  void ClearPreview();
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
   bool DeleteOverride(int a_rowIndex, int a_itemIndex);
@@ -54,8 +56,15 @@ public:
   [[nodiscard]] std::size_t GetRowCount() const { return rows_.size(); }
 
 private:
+  [[nodiscard]] int
+  FindBestCatalogTargetRowIndex(const EquipmentWidgetItem &a_item,
+                                bool a_requireAcceptable) const;
+
   std::vector<VariantWorkbenchRow> rows_;
   std::vector<std::string> rowOrder_;
   std::unordered_map<std::string, std::string> activeDavVariants_;
+  RE::FormID previewFormID_{0};
+  std::string previewTargetRowKey_;
+  std::string previewVariantJson_;
 };
 } // namespace sosng::workbench
