@@ -4,7 +4,7 @@
 
 #include <sstream>
 
-namespace sosng::armor {
+namespace sosr::armor {
 std::string FormatFormID(RE::FormID a_formID);
 std::string GetDisplayName(const RE::TESForm *a_form);
 std::string JoinStrings(const std::vector<std::string> &a_values);
@@ -36,4 +36,4 @@ template <class T = RE::TESForm>
   auto *form = dataHandler->LookupForm(localFormID, plugin);
   return form ? form->As<T>() : nullptr;
 }
-} // namespace sosng::armor
+} // namespace sosr::armor

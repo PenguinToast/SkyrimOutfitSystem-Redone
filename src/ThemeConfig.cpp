@@ -7,7 +7,8 @@
 #include <nlohmann/json.hpp>
 
 namespace {
-constexpr auto kThemeDirectory = "Data/Interface/SkyrimOutfitSystemNG/themes";
+constexpr auto kThemeDirectory =
+    "Data/Interface/SkyrimOutfitSystemRedone/themes";
 constexpr auto kDefaultThemeName = "default";
 
 using ColorEntry = std::pair<std::string_view, ImVec4>;
@@ -67,7 +68,7 @@ constexpr std::array<ColorEntry, 28> kDefaultColors{{
 }};
 } // namespace
 
-namespace sosng {
+namespace sosr {
 ThemeConfig *ThemeConfig::GetSingleton() {
   static ThemeConfig singleton;
   return std::addressof(singleton);
@@ -239,4 +240,4 @@ std::string ThemeConfig::BuildThemePath(std::string_view a_themeName) const {
           (std::string(theme) + ".json"))
       .string();
 }
-} // namespace sosng
+} // namespace sosr

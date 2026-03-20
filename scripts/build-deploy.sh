@@ -7,8 +7,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 MODE="releasedbg"
 CLEAN=0
-PLUGIN_NAME="SkyrimOutfitSystemNG"
-DEFAULT_MOD_DIR="/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng"
+PLUGIN_NAME="SkyrimOutfitSystemRedone"
+DEFAULT_MOD_DIR="/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_redone"
 MOD_DIR="${MOD_DIR:-$DEFAULT_MOD_DIR}"
 
 while (($#)); do

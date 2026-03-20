@@ -1,6 +1,6 @@
 #pragma once
 
-namespace sosng {
+namespace sosr {
 class InputManager {
 public:
   static InputManager *GetSingleton();
@@ -20,4 +20,4 @@ private:
   bool ctrlDown_{false};
   bool altDown_{false};
 };
-} // namespace sosng
+} // namespace sosr

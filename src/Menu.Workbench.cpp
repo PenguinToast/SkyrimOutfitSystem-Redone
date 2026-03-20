@@ -7,7 +7,7 @@
 #include <unordered_map>
 
 namespace {
-constexpr char kVariantItemPayloadType[] = "SOSNG_VARIANT_ITEM";
+constexpr char kVariantItemPayloadType[] = "SOSR_VARIANT_ITEM";
 
 struct ActiveWorkbenchVisual {
   std::string widgetId;
@@ -22,8 +22,8 @@ struct OverrideConflictInfo {
 };
 
 std::string DescribeActiveWorkbenchVisual(
-    const sosng::workbench::VariantWorkbenchRow &a_row,
-    const sosng::workbench::EquipmentWidgetItem &a_item, bool a_isOverride) {
+    const sosr::workbench::VariantWorkbenchRow &a_row,
+    const sosr::workbench::EquipmentWidgetItem &a_item, bool a_isOverride) {
   if (a_isOverride) {
     return a_item.name + " override on " + a_row.equipped.name;
   }
@@ -32,7 +32,7 @@ std::string DescribeActiveWorkbenchVisual(
 }
 } // namespace
 
-namespace sosng {
+namespace sosr {
 bool Menu::DrawEquipmentInfoWidget(const char *a_id,
                                    const workbench::EquipmentWidgetItem &a_item,
                                    bool a_allowDrag,
@@ -186,7 +186,7 @@ void Menu::DrawVariantWorkbenchPane() {
   if (ImGui::Button("Reset Equipped")) {
     workbench_.ClearPreview();
     if (workbench_.ResetEquippedRows()) {
-      workbench_.SyncDynamicArmorVariants();
+      workbench_.SyncDynamicArmorVariantsExtended();
     }
   }
   ImGui::SameLine();
@@ -194,7 +194,7 @@ void Menu::DrawVariantWorkbenchPane() {
     workbench_.ClearPreview();
     workbench_.ResetAllRows();
     workbench_.SyncRowsFromPlayer();
-    workbench_.SyncDynamicArmorVariants();
+    workbench_.SyncDynamicArmorVariantsExtended();
   }
   ImGui::Spacing();
 
@@ -529,4 +529,4 @@ void Menu::DrawVariantWorkbenchPane() {
   }
   ImGui::EndChild();
 }
-} // namespace sosng
+} // namespace sosr

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace sosng {
+namespace sosr {
 struct GearEntry {
   RE::FormID formID;
   std::string id;
@@ -70,4 +70,4 @@ private:
   std::string source_;
   std::string revision_;
 };
-} // namespace sosng
+} // namespace sosr

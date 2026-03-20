@@ -1,11 +1,11 @@
-# Skyrim Outfit System NG
+# Skyrim Outfit System Redone
 
-`Skyrim Outfit System NG` is a Skyrim SKSE mod for player vanity outfits.
+`Skyrim Outfit System Redone` is a Skyrim SKSE mod for player vanity outfits.
 
 The goal is to let players keep their real equipped gear for gameplay stats while swapping the
 visible appearance to a selected outfit loadout.
 
-The long-term plan is to integrate with a custom fork of Dynamic Armor Variants to handle the
+The long-term plan is to integrate with a custom fork of Dynamic Armor Variants Extended to handle the
 visual-swapping layer of the mod.
 
 The current milestone is the equipment and outfit selector portion of the project:
@@ -25,8 +25,8 @@ caching, search behavior, and the native Dear ImGui integration path.
 
 ## Getting Started
 ```bat
-git clone --recurse-submodules git@github.com:PenguinToast/skyrim-outfit-system-ng.git
-cd skyrim-outfit-system-ng
+git clone --recurse-submodules git@github.com:PenguinToast/SkyrimOutfitSystem-Redone.git
+cd SkyrimOutfitSystem-Redone
 ```
 
 If you cloned without submodules:
@@ -51,10 +51,10 @@ The current UI focus is a searchable browser for:
 * outfits
 
 Outfits are shown in a dedicated tab because they are collections of individual armor pieces.
-The menu is toggled in game with `F3`.
+The menu is toggled in game with `F6` by default.
 
 The packaged UI font is Ubuntu Regular, bundled with this mod under
-`Data/Interface/SkyrimOutfitSystemNG/fonts/` together with the Ubuntu font license text.
+`Data/Interface/SkyrimOutfitSystemRedone/fonts/` together with the Ubuntu font license text.
 The bundled files come from Canonical's Ubuntu Font Family download archive.
 
 To build from WSL and deploy directly into the local test mod folder:
@@ -70,7 +70,7 @@ For a full clean rebuild:
 ```
 
 This deploys the plugin to:
-`/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_ng`
+`/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_redone`
 
 ## Optional Output Paths
 You can redirect install output with either of these environment variables:

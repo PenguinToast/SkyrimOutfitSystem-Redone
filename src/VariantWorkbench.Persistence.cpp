@@ -1,7 +1,7 @@
 #include "VariantWorkbench.h"
 
 #include "ArmorUtils.h"
-#include "integrations/DynamicArmorVariantsClient.h"
+#include "integrations/DynamicArmorVariantsExtendedClient.h"
 
 #include <nlohmann/json.hpp>
 #include <unordered_set>
@@ -10,23 +10,24 @@ namespace {
 constexpr std::uint32_t kSerializationType = 'ROWS';
 constexpr std::uint32_t kSerializationVersion = 2;
 
-auto GetDynamicArmorVariantsClient()
-    -> DynamicArmorVariantsAPI::IDynamicArmorVariantsInterface001 * {
-  auto *dav = sosng::integrations::DynamicArmorVariantsClient::Get();
+auto GetDynamicArmorVariantsExtendedClient()
+    -> DynamicArmorVariantsExtendedAPI::
+        IDynamicArmorVariantsExtendedInterface001 * {
+  auto *dav = sosr::integrations::DynamicArmorVariantsExtendedClient::Get();
   if (dav) {
     return dav;
   }
 
-  sosng::integrations::DynamicArmorVariantsClient::Refresh();
-  return sosng::integrations::DynamicArmorVariantsClient::Get();
+  sosr::integrations::DynamicArmorVariantsExtendedClient::Refresh();
+  return sosr::integrations::DynamicArmorVariantsExtendedClient::Get();
 }
 
 std::string BuildDavVariantName(const RE::TESObjectARMO *a_sourceArmor) {
-  return "SOSNG|" + sosng::armor::GetFormIdentifier(a_sourceArmor);
+  return "SOSR|" + sosr::armor::GetFormIdentifier(a_sourceArmor);
 }
 
 std::string BuildPreviewVariantName(const std::string &a_rowKey) {
-  return "SOSNG|PreviewSelected|" + a_rowKey;
+  return "SOSR|PreviewSelected|" + a_rowKey;
 }
 
 auto BuildDavConditionsJson() -> std::string {
@@ -52,7 +53,7 @@ auto BuildDavVariantJson(
     if (!displayName.empty()) {
       displayName.append(" + ");
     }
-    displayName.append(sosng::armor::GetDisplayName(overrideArmor));
+    displayName.append(sosr::armor::GetDisplayName(overrideArmor));
 
     for (const auto *overrideAddon : overrideArmor->armorAddons) {
       if (!overrideAddon) {
@@ -60,7 +61,7 @@ auto BuildDavVariantJson(
       }
 
       const auto identifier =
-          sosng::armor::GetReplacementIdentifier(overrideArmor, overrideAddon);
+          sosr::armor::GetReplacementIdentifier(overrideArmor, overrideAddon);
       if (identifier.empty()) {
         continue;
       }
@@ -80,7 +81,7 @@ auto BuildDavVariantJson(
       continue;
     }
 
-    const auto sourceIdentifier = sosng::armor::GetFormIdentifier(sourceAddon);
+    const auto sourceIdentifier = sosr::armor::GetFormIdentifier(sourceAddon);
     if (sourceIdentifier.empty()) {
       continue;
     }
@@ -101,15 +102,15 @@ auto BuildDavVariantJson(
   nlohmann::json root{
       {"displayName",
        a_hideEquipped
-           ? "Hidden " + sosng::armor::GetDisplayName(a_sourceArmor)
-           : (displayName.empty() ? sosng::armor::GetDisplayName(a_sourceArmor)
+           ? "Hidden " + sosr::armor::GetDisplayName(a_sourceArmor)
+           : (displayName.empty() ? sosr::armor::GetDisplayName(a_sourceArmor)
                                   : displayName)},
       {"replaceByForm", replaceByForm}};
   return root.dump();
 }
 } // namespace
 
-namespace sosng::workbench {
+namespace sosr::workbench {
 bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
   std::vector<PlannedCatalogAssignment> assignments;
   if (!PlanCatalogAssignments(a_formID, assignments)) {
@@ -176,7 +177,7 @@ bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
     return true;
   }
 
-  auto *dav = GetDynamicArmorVariantsClient();
+  auto *dav = GetDynamicArmorVariantsExtendedClient();
   if (!dav || !dav->IsReady()) {
     ClearPreview();
     return false;
@@ -194,7 +195,7 @@ bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
   appliedPreviewVariants.reserve(desiredPreviewVariants.size());
   for (const auto &[variantName, variantJson] : desiredPreviewVariants) {
     if (!dav->RegisterVariantJson(variantName.c_str(), variantJson.c_str())) {
-      logger::warn("Failed to register SOSNG preview variant {}", variantName);
+      logger::warn("Failed to register SOSR preview variant {}", variantName);
       for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
         dav->RemoveVariantOverride(player, appliedVariantName.c_str());
         dav->DeleteVariant(appliedVariantName.c_str());
@@ -204,7 +205,7 @@ bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
     }
 
     if (!dav->ApplyVariantOverride(player, variantName.c_str())) {
-      logger::warn("Failed to apply SOSNG preview variant override {}",
+      logger::warn("Failed to apply SOSR preview variant override {}",
                    variantName);
       dav->DeleteVariant(variantName.c_str());
       for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
@@ -228,7 +229,7 @@ void VariantWorkbench::ClearPreview() {
     return;
   }
 
-  auto *dav = GetDynamicArmorVariantsClient();
+  auto *dav = GetDynamicArmorVariantsExtendedClient();
   auto *player = RE::PlayerCharacter::GetSingleton();
   bool variantsChanged = false;
 
@@ -236,14 +237,14 @@ void VariantWorkbench::ClearPreview() {
     if (player) {
       for (const auto &[variantName, _] : previewDavVariants_) {
         if (!dav->RemoveVariantOverride(player, variantName.c_str())) {
-          logger::warn("Failed to remove SOSNG preview variant override {}",
+          logger::warn("Failed to remove SOSR preview variant override {}",
                        variantName);
         }
       }
     }
     for (const auto &[variantName, _] : previewDavVariants_) {
       if (!dav->DeleteVariant(variantName.c_str())) {
-        logger::warn("Failed to delete SOSNG preview variant {}", variantName);
+        logger::warn("Failed to delete SOSR preview variant {}", variantName);
       } else {
         variantsChanged = true;
       }
@@ -257,8 +258,8 @@ void VariantWorkbench::ClearPreview() {
   previewDavVariants_.clear();
 }
 
-void VariantWorkbench::SyncDynamicArmorVariants() {
-  auto *dav = GetDynamicArmorVariantsClient();
+void VariantWorkbench::SyncDynamicArmorVariantsExtended() {
+  auto *dav = GetDynamicArmorVariantsExtendedClient();
   if (!dav || !dav->IsReady()) {
     return;
   }
@@ -402,20 +403,20 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
   }
 
   if (version != kSerializationVersion) {
-    logger::warn("Skipping SOSNG serialized rows from unsupported version {}",
+    logger::warn("Skipping SOSR serialized rows from unsupported version {}",
                  version);
     return;
   }
 
   std::string payload(length, '\0');
   if (!a_skse->ReadRecordData(payload.data(), length)) {
-    logger::error("Failed to read SOSNG serialized workbench payload");
+    logger::error("Failed to read SOSR serialized workbench payload");
     return;
   }
 
   const auto root = nlohmann::json::parse(payload, nullptr, false, true);
   if (root.is_discarded() || !root.is_object() || !root["rows"].is_array()) {
-    logger::error("Failed to parse SOSNG serialized workbench payload");
+    logger::error("Failed to parse SOSR serialized workbench payload");
     return;
   }
 
@@ -463,20 +464,20 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
     rowOrder_.push_back(rows_.back().key);
   }
 
-  SyncDynamicArmorVariants();
+  SyncDynamicArmorVariantsExtended();
 }
 
 void VariantWorkbench::Revert() {
   ClearPreview();
 
-  auto *dav = GetDynamicArmorVariantsClient();
+  auto *dav = GetDynamicArmorVariantsExtendedClient();
   auto *player = RE::PlayerCharacter::GetSingleton();
   bool variantsChanged = false;
 
   if (dav) {
     for (const auto &[variantName, _] : activeDavVariants_) {
       if (!dav->DeleteVariant(variantName.c_str())) {
-        logger::warn("Failed to delete DAV variant {} during SOSNG revert",
+        logger::warn("Failed to delete DAV variant {} during SOSR revert",
                      variantName);
       } else {
         variantsChanged = true;
@@ -491,4 +492,4 @@ void VariantWorkbench::Revert() {
   RebuildRowOrder();
   activeDavVariants_.clear();
 }
-} // namespace sosng::workbench
+} // namespace sosr::workbench

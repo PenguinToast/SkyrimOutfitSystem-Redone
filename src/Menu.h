@@ -10,7 +10,7 @@ struct IDXGISwapChain;
 struct ID3D11Device;
 struct ID3D11DeviceContext;
 
-namespace sosng {
+namespace sosr {
 class MenuHost;
 
 class Menu {
@@ -135,4 +135,4 @@ private:
   ImGuiTextFilter outfitPluginFilter_;
   workbench::VariantWorkbench workbench_;
 };
-} // namespace sosng
+} // namespace sosr

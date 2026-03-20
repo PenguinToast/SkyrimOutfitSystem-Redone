@@ -2,7 +2,7 @@
 
 #include "Menu.h"
 
-namespace sosng::serialization {
+namespace sosr::serialization {
 void SaveCallback(SKSE::SerializationInterface *a_skse) {
   Menu::GetSingleton()->GetWorkbench().Serialize(a_skse);
 }
@@ -14,4 +14,4 @@ void LoadCallback(SKSE::SerializationInterface *a_skse) {
 void RevertCallback([[maybe_unused]] SKSE::SerializationInterface *a_skse) {
   Menu::GetSingleton()->GetWorkbench().Revert();
 }
-} // namespace sosng::serialization
+} // namespace sosr::serialization

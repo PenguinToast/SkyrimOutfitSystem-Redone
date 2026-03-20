@@ -3,7 +3,7 @@
 #include "Menu.h"
 #include "imgui.h"
 
-namespace sosng {
+namespace sosr {
 namespace {
 auto MapScanCodeToImGuiKey(std::uint32_t a_scanCode) -> ImGuiKey {
   switch (a_scanCode) {
@@ -276,4 +276,4 @@ void InputManager::UpdateMousePosition() const {
                         static_cast<float>(cursorPos.y));
   }
 }
-} // namespace sosng
+} // namespace sosr

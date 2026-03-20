@@ -1,9 +1,9 @@
 #pragma once
 
-namespace sosng {
+namespace sosr {
 class MenuHost : public RE::IMenu {
 public:
-  static constexpr std::string_view MENU_NAME = "SkyrimOutfitSystemNGMenu";
+  static constexpr std::string_view MENU_NAME = "SkyrimOutfitSystemRedoneMenu";
 
   static void RegisterMenu();
 
@@ -14,4 +14,4 @@ private:
   static RE::IMenu *Creator();
   static void ForceCursor();
 };
-} // namespace sosng
+} // namespace sosr

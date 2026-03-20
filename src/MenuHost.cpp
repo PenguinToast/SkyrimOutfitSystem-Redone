@@ -2,7 +2,7 @@
 
 #include "Menu.h"
 
-namespace sosng {
+namespace sosr {
 void MenuHost::RegisterMenu() {
   static bool registered = false;
   if (registered) {
@@ -65,4 +65,4 @@ void MenuHost::ForceCursor() {
     }
   });
 }
-} // namespace sosng
+} // namespace sosr

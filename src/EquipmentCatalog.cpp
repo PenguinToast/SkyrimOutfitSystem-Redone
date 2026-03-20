@@ -224,7 +224,7 @@ void AppendSearchToken(std::string &a_searchText, std::string_view a_token) {
   a_searchText.append(a_token);
 }
 
-std::string BuildGearSearchText(const sosng::GearEntry &a_entry) {
+std::string BuildGearSearchText(const sosr::GearEntry &a_entry) {
   std::string text;
   text.reserve(256);
 
@@ -238,7 +238,7 @@ std::string BuildGearSearchText(const sosng::GearEntry &a_entry) {
   return text;
 }
 
-std::string BuildOutfitSearchText(const sosng::OutfitEntry &a_entry) {
+std::string BuildOutfitSearchText(const sosr::OutfitEntry &a_entry) {
   std::string text;
   text.reserve(256);
 
@@ -335,7 +335,7 @@ std::vector<std::string> BuildSortedUniqueOptions(const Entries &a_entries,
 
 } // namespace
 
-namespace sosng {
+namespace sosr {
 EquipmentCatalog &EquipmentCatalog::Get() {
   static EquipmentCatalog singleton;
   return singleton;
@@ -461,4 +461,4 @@ void EquipmentCatalog::RebuildDerivedData() {
         return a_entry.plugin;
       });
 }
-} // namespace sosng
+} // namespace sosr

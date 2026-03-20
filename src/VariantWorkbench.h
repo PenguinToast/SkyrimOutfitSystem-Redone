@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace sosng::workbench {
+namespace sosr::workbench {
 struct EquipmentWidgetItem {
   RE::FormID formID{0};
   std::string key;
@@ -50,7 +50,7 @@ public:
                         bool a_insertAfter);
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
-  void SyncDynamicArmorVariants();
+  void SyncDynamicArmorVariantsExtended();
   void Serialize(SKSE::SerializationInterface *a_skse) const;
   void Deserialize(SKSE::SerializationInterface *a_skse);
   void Revert();
@@ -89,4 +89,4 @@ private:
   RE::FormID previewFormID_{0};
   std::unordered_map<std::string, std::string> previewDavVariants_;
 };
-} // namespace sosng::workbench
+} // namespace sosr::workbench

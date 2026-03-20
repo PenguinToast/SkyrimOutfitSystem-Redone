@@ -4,7 +4,7 @@
 
 #include <format>
 
-namespace sosng::keycode {
+namespace sosr::keycode {
 bool IsKeyModifier(const std::uint32_t a_key) {
   return a_key == 0x2A || a_key == 0x36 || a_key == 0x1D || a_key == 0x9D ||
          a_key == 0x38 || a_key == 0xB8;
@@ -33,4 +33,4 @@ std::string GetKeyName(const std::uint32_t a_scanCode) {
 
   return std::format("Scan {:X}", a_scanCode);
 }
-} // namespace sosng::keycode
+} // namespace sosr::keycode

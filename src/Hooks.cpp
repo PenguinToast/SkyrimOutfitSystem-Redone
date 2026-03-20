@@ -13,14 +13,14 @@ static inline REL::Relocation<decltype(hk_PollInputDevices)> g_inputHandler;
 void hk_PollInputDevices(RE::BSTEventSource<RE::InputEvent *> *a_dispatcher,
                          RE::InputEvent **a_events) {
   if (a_events) {
-    sosng::InputManager::GetSingleton()->AddEventToQueue(a_events);
+    sosr::InputManager::GetSingleton()->AddEventToQueue(a_events);
   }
 
   g_inputHandler(a_dispatcher, a_events);
 }
 } // namespace
 
-namespace sosng::hooks {
+namespace sosr::hooks {
 struct D3DInitHook {
   static void thunk() {
     func();
@@ -69,4 +69,4 @@ void Install() {
                                    REL::VariantOffset(0x9, 0x9, 0x15).offset(),
                                PresentHook::thunk);
 }
-} // namespace sosng::hooks
+} // namespace sosr::hooks

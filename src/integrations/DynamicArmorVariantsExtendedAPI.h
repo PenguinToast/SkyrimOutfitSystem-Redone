@@ -3,19 +3,20 @@
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 
-namespace DynamicArmorVariantsAPI {
-constexpr auto DynamicArmorVariantsPluginName = "DynamicArmorVariants";
+namespace DynamicArmorVariantsExtendedAPI {
+constexpr auto DynamicArmorVariantsExtendedPluginName = "DynamicArmorVariants";
 
-struct DynamicArmorVariantsMessage {
-  enum : std::uint32_t { kMessage_QueryInterface = 'DAVI' };
+struct DynamicArmorVariantsExtendedMessage {
+  enum : std::uint32_t { kMessage_QueryInterface = 'DAVX' };
 
   void *(*GetApiFunction)(unsigned int revisionNumber) = nullptr;
 };
 
-struct IDynamicArmorVariantsInterface001;
-IDynamicArmorVariantsInterface001 *GetDynamicArmorVariantsInterface001();
+struct IDynamicArmorVariantsExtendedInterface001;
+IDynamicArmorVariantsExtendedInterface001 *
+GetDynamicArmorVariantsExtendedInterface001();
 
-struct IDynamicArmorVariantsInterface001 {
+struct IDynamicArmorVariantsExtendedInterface001 {
   virtual bool IsReady() = 0;
   virtual bool RegisterVariantJson(const char *a_name,
                                    const char *a_variantJson) = 0;
@@ -28,7 +29,8 @@ struct IDynamicArmorVariantsInterface001 {
   virtual bool RemoveVariantOverride(RE::Actor *a_actor,
                                      const char *a_variant) = 0;
 };
-} // namespace DynamicArmorVariantsAPI
+} // namespace DynamicArmorVariantsExtendedAPI
 
-extern DynamicArmorVariantsAPI::IDynamicArmorVariantsInterface001
-    *g_DynamicArmorVariantsInterface;
+extern DynamicArmorVariantsExtendedAPI::
+    IDynamicArmorVariantsExtendedInterface001
+        *g_DynamicArmorVariantsExtendedInterface;

@@ -9,7 +9,7 @@
 #include <string_view>
 #include <unordered_map>
 
-namespace sosng {
+namespace sosr {
 class ThemeConfig {
 public:
   static ThemeConfig *GetSingleton();
@@ -39,4 +39,4 @@ private:
   std::string themeName_{"default"};
   std::string themeDirectory_;
 };
-} // namespace sosng
+} // namespace sosr

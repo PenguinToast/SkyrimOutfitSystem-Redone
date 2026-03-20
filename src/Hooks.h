@@ -1,5 +1,5 @@
 #pragma once
 
-namespace sosng::hooks {
+namespace sosr::hooks {
 void Install();
 }

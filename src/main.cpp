@@ -2,21 +2,21 @@
 #include "Hooks.h"
 #include "InputManager.h"
 #include "Serialization.h"
-#include "integrations/DynamicArmorVariantsClient.h"
+#include "integrations/DynamicArmorVariantsExtendedClient.h"
 
 static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
   switch (a_message->type) {
   case SKSE::MessagingInterface::kPostLoad:
-    sosng::integrations::DynamicArmorVariantsClient::Refresh();
+    sosr::integrations::DynamicArmorVariantsExtendedClient::Refresh();
     break;
   case SKSE::MessagingInterface::kDataLoaded:
-    sosng::EquipmentCatalog::Get().RefreshFromGame();
+    sosr::EquipmentCatalog::Get().RefreshFromGame();
     logger::info("Equipment catalog initialized");
-    sosng::InputManager::GetSingleton()->Init();
+    sosr::InputManager::GetSingleton()->Init();
     logger::info("Input manager initialized");
     break;
   case SKSE::MessagingInterface::kPostPostLoad:
-    sosng::hooks::Install();
+    sosr::hooks::Install();
     break;
   default:
     break;
@@ -41,12 +41,12 @@ SKSEPlugin_Load(const SKSE::LoadInterface *a_skse) {
   messaging->RegisterListener("SKSE", SKSEMessageHandler);
 
   if (auto *serialization = SKSE::GetSerializationInterface()) {
-    serialization->SetUniqueID(sosng::serialization::kID);
-    serialization->SetSaveCallback(&sosng::serialization::SaveCallback);
-    serialization->SetLoadCallback(&sosng::serialization::LoadCallback);
-    serialization->SetRevertCallback(&sosng::serialization::RevertCallback);
+    serialization->SetUniqueID(sosr::serialization::kID);
+    serialization->SetSaveCallback(&sosr::serialization::SaveCallback);
+    serialization->SetLoadCallback(&sosr::serialization::LoadCallback);
+    serialization->SetRevertCallback(&sosr::serialization::RevertCallback);
   }
 
-  logger::info("Skyrim Outfit System NG loaded");
+  logger::info("Skyrim Outfit System Redone loaded");
   return true;
 }

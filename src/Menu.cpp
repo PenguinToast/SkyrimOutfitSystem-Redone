@@ -10,11 +10,12 @@
 #include <nlohmann/json.hpp>
 
 namespace {
-constexpr auto kSettingsDirectory = "Data/SKSE/Plugins/SkyrimOutfitSystemNG";
+constexpr auto kSettingsDirectory =
+    "Data/SKSE/Plugins/SkyrimOutfitSystemRedone";
 constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
 constexpr auto kDefaultFontPath =
-    "Data/Interface/SkyrimOutfitSystemNG/fonts/Ubuntu-R.ttf";
+    "Data/Interface/SkyrimOutfitSystemRedone/fonts/Ubuntu-R.ttf";
 constexpr int kDefaultFontSizePixels = 16;
 constexpr int kMinFontSizePixels = 8;
 constexpr int kMaxFontSizePixels = 48;
@@ -110,7 +111,7 @@ std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
 
 } // namespace
 
-namespace sosng {
+namespace sosr {
 Menu *Menu::GetSingleton() {
   static Menu singleton;
   return std::addressof(singleton);
@@ -417,7 +418,7 @@ void Menu::DrawWindow() {
       ImGuiCond_FirstUseEver, ImVec2(0.50f, 0.50f));
 
   bool open = enabled_;
-  if (!ImGui::Begin("Skyrim Outfit System NG", &open,
+  if (!ImGui::Begin("Skyrim Outfit System Redone", &open,
                     ImGuiWindowFlags_NoCollapse)) {
     ImGui::End();
     if (!open) {
@@ -522,7 +523,7 @@ void Menu::DrawWindow() {
       ImGui::EndTable();
     }
 
-    workbench_.SyncDynamicArmorVariants();
+    workbench_.SyncDynamicArmorVariantsExtended();
   }
 
   ImGui::End();
@@ -1189,4 +1190,4 @@ void Menu::DrawOptionsTab() {
     ImGui::EndPopup();
   }
 }
-} // namespace sosng
+} // namespace sosr

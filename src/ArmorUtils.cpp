@@ -58,7 +58,7 @@ std::string GetPo3EditorID(RE::FormID a_formID) {
 }
 } // namespace
 
-namespace sosng::armor {
+namespace sosr::armor {
 std::string FormatFormID(RE::FormID a_formID) {
   std::array<char, 16> buffer{};
   std::snprintf(buffer.data(), buffer.size(), "%08X", a_formID);
@@ -149,4 +149,4 @@ std::string GetReplacementIdentifier(const RE::TESObjectARMO *a_armor,
 
   return armorIdentifier + "|" + armorAddonIdentifier;
 }
-} // namespace sosng::armor
+} // namespace sosr::armor

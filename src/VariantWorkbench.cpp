@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <unordered_set>
 
-namespace sosng::workbench {
+namespace sosr::workbench {
 bool VariantWorkbench::ResolveCatalogArmors(
     RE::FormID a_formID,
     std::vector<const RE::TESObjectARMO *> &a_armors) const {
@@ -447,4 +447,4 @@ bool VariantWorkbench::ApplyRowReorder(int a_sourceRowIndex,
   RebuildRowOrder();
   return true;
 }
-} // namespace sosng::workbench
+} // namespace sosr::workbench

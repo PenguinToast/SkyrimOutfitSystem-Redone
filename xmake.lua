@@ -3,7 +3,7 @@ set_xmakever("3.0.0")
 
 includes("lib/commonlibsse-ng")
 
-set_project("SkyrimOutfitSystemNG")
+set_project("SkyrimOutfitSystemRedone")
 set_version("0.1.0")
 set_license("GPL-3.0")
 
@@ -17,12 +17,12 @@ add_rules("plugin.vsxmake.autoupdate")
 
 add_requires("nlohmann_json v3.12.0")
 
-target("SkyrimOutfitSystemNG")
+target("SkyrimOutfitSystemRedone")
     add_deps("commonlibsse-ng")
     add_packages("nlohmann_json")
 
     add_rules("commonlibsse-ng.plugin", {
-        name = "Skyrim Outfit System NG",
+        name = "Skyrim Outfit System Redone",
         author = "PenguinToast",
         description = "SKSE64 plugin using CommonLibSSE-NG and Dear ImGui"
     })
