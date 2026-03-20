@@ -57,7 +57,6 @@ auto BuildDavVariantJson(
     return {};
   }
 
-  bool assignedPrimarySourceAddon = false;
   for (const auto *sourceAddon : a_sourceArmor->armorAddons) {
     if (!sourceAddon) {
       continue;
@@ -68,15 +67,10 @@ auto BuildDavVariantJson(
       continue;
     }
 
-    if (!assignedPrimarySourceAddon) {
-      assignedPrimarySourceAddon = true;
-      if (replacements.size() == 1) {
-        replaceByForm[sourceIdentifier] = replacements.front();
-      } else {
-        replaceByForm[sourceIdentifier] = replacements;
-      }
+    if (replacements.size() == 1) {
+      replaceByForm[sourceIdentifier] = replacements.front();
     } else {
-      replaceByForm[sourceIdentifier] = nlohmann::json::array();
+      replaceByForm[sourceIdentifier] = replacements;
     }
   }
 
