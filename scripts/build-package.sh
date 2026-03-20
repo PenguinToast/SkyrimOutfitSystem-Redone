@@ -52,13 +52,13 @@ if (( ${#HEAD_TAGS[@]} != 1 )); then
 fi
 
 TAG="${HEAD_TAGS[0]}"
-SEMVER_REGEX='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+SEMVER_REGEX='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
 if [[ ! "${TAG}" =~ ${SEMVER_REGEX} ]]; then
     echo "Current git tag '${TAG}' is not valid semver." >&2
     exit 1
 fi
 
-VERSION="${TAG}"
+VERSION="${TAG#v}"
 ARCHIVE_NAME="${MOD_NAME} v${VERSION}.zip"
 ARCHIVE_PATH="${DIST_DIR}/${ARCHIVE_NAME}"
 REMOTE_URL="$(git -C "${REPO_ROOT}" remote get-url upstream 2>/dev/null || git -C "${REPO_ROOT}" remote get-url origin)"
