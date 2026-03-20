@@ -6,6 +6,7 @@
 #include "VariantWorkbench.h"
 #include "imgui.h"
 
+#include <array>
 #include <unordered_set>
 
 struct IDXGISwapChain;
@@ -63,6 +64,7 @@ private:
 
   enum class BrowserTab { Gear, Outfits, Kits, Options };
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
+  enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
 
   Menu() = default;
   friend class MenuHost;
@@ -79,6 +81,7 @@ private:
   void ApplySmoothScroll();
   void OnMenuShow();
   void OnMenuHide();
+  void HandleCancel();
   void DrawWindow();
   void DrawCatalogFilters();
   [[nodiscard]] bool DrawGearTab();
@@ -88,9 +91,15 @@ private:
   [[nodiscard]] bool DrawOutfitTab();
   [[nodiscard]] bool DrawKitTab();
   void DrawOptionsTab();
+  void DrawCreateKitDialog();
   bool DrawSearchableStringCombo(const char *a_label, const char *a_allLabel,
                                  const std::vector<std::string> &a_options,
                                  int &a_index, ImGuiTextFilter &a_filter);
+  bool DrawEditableDropdown(const char *a_label, const char *a_hint,
+                            char *a_buffer, std::size_t a_bufferSize,
+                            const std::vector<std::string> &a_options,
+                            float a_width,
+                            std::string *a_selectedOption = nullptr);
   bool DrawEquipmentInfoWidget(const char *a_id,
                                const workbench::EquipmentWidgetItem &a_item,
                                bool a_allowDrag, DragSourceKind a_sourceKind,
@@ -122,6 +131,8 @@ private:
   void AddGearEntryToWorkbench(const GearEntry &a_entry);
   void AddOutfitEntryToWorkbench(const OutfitEntry &a_entry);
   void AddKitEntryToWorkbench(const KitEntry &a_entry);
+  void OpenCreateKitDialog(KitCreationSource a_source);
+  [[nodiscard]] bool SavePendingKit();
   void PreviewGearEntry(const GearEntry &a_entry);
   void PreviewOutfitEntry(const OutfitEntry &a_entry);
   void PreviewKitEntry(const KitEntry &a_entry);
@@ -175,6 +186,14 @@ private:
   ImGuiTextFilter gearPluginFilter_;
   ImGuiTextFilter outfitPluginFilter_;
   ImGuiTextFilter kitCollectionFilter_;
+  bool openCreateKitDialog_{false};
+  bool createKitDialogOpen_{false};
+  bool createKitDialogCancelRequested_{false};
+  KitCreationSource createKitSource_{KitCreationSource::Equipped};
+  std::vector<RE::FormID> pendingKitFormIDs_;
+  std::array<char, 256> pendingKitName_{};
+  std::array<char, 256> pendingKitCollection_{};
+  std::string createKitError_;
   bool favoritesOnly_{false};
   std::unordered_set<std::string> favoriteKeys_;
   workbench::VariantWorkbench workbench_;

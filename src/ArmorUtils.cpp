@@ -75,15 +75,24 @@ std::string GetDisplayName(const RE::TESForm *a_form) {
     return name;
   }
 
-  auto editorID = CopyCString(a_form->GetFormEditorID());
-  if (editorID.empty()) {
-    editorID = GetPo3EditorID(a_form->GetFormID());
-  }
+  auto editorID = GetEditorID(a_form);
   if (!editorID.empty()) {
     return editorID;
   }
 
   return "Form " + FormatFormID(a_form->GetFormID());
+}
+
+std::string GetEditorID(const RE::TESForm *a_form) {
+  if (!a_form) {
+    return {};
+  }
+
+  auto editorID = CopyCString(a_form->GetFormEditorID());
+  if (editorID.empty()) {
+    editorID = GetPo3EditorID(a_form->GetFormID());
+  }
+  return editorID;
 }
 
 std::string JoinStrings(const std::vector<std::string> &a_values) {

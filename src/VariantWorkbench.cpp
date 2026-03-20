@@ -426,6 +426,46 @@ bool VariantWorkbench::ResetEquippedRows() {
 
 void VariantWorkbench::ResetAllRows() { Revert(); }
 
+std::vector<RE::FormID> VariantWorkbench::CollectEquippedArmorFormIDs() const {
+  std::vector<RE::FormID> formIDs;
+  std::unordered_set<RE::FormID> seen;
+  formIDs.reserve(rows_.size());
+
+  for (const auto &row : rows_) {
+    if (!row.isEquipped || row.equipped.formID == 0) {
+      continue;
+    }
+    if (seen.insert(row.equipped.formID).second) {
+      formIDs.push_back(row.equipped.formID);
+    }
+  }
+
+  return formIDs;
+}
+
+std::vector<RE::FormID>
+VariantWorkbench::CollectOverrideArmorFormIDsFromEquippedRows() const {
+  std::vector<RE::FormID> formIDs;
+  std::unordered_set<RE::FormID> seen;
+
+  for (const auto &row : rows_) {
+    if (!row.isEquipped) {
+      continue;
+    }
+
+    for (const auto &item : row.overrides) {
+      if (item.formID == 0) {
+        continue;
+      }
+      if (seen.insert(item.formID).second) {
+        formIDs.push_back(item.formID);
+      }
+    }
+  }
+
+  return formIDs;
+}
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
                                         int a_targetRowIndex,

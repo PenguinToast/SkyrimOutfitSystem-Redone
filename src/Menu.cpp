@@ -1,5 +1,6 @@
 #include "Menu.h"
 
+#include "ArmorUtils.h"
 #include "InputManager.h"
 #include "MenuHost.h"
 #include "backends/imgui_impl_dx11.h"
@@ -17,6 +18,7 @@ constexpr auto kSettingsDirectory =
 constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
 constexpr auto kFavoritesFilename = "favorites.json";
+constexpr auto kModexKitDirectory = "data/interface/modex/user/kits";
 constexpr auto kDefaultFontPath =
     "Data/Interface/SkyrimOutfitSystemRedone/fonts/Ubuntu-R.ttf";
 constexpr auto kDefaultIconFontPath =
@@ -59,6 +61,62 @@ enum class KitColumn : ImGuiID { Name = 1, Collection, Pieces };
 
 constexpr std::string_view kFavoritePrefix = "\xEE\x83\xB5 ";
 constexpr std::array<ImWchar, 3> kLucideIconRanges = {0xE038, 0xE63F, 0};
+
+std::string TrimText(std::string_view a_text) {
+  std::size_t start = 0;
+  while (start < a_text.size() &&
+         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
+    ++start;
+  }
+
+  std::size_t end = a_text.size();
+  while (end > start &&
+         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
+    --end;
+  }
+
+  return std::string(a_text.substr(start, end - start));
+}
+
+bool ContainsCaseInsensitive(std::string_view a_haystack,
+                             std::string_view a_needle) {
+  if (a_needle.empty()) {
+    return true;
+  }
+
+  const auto lower = [](const unsigned char a_value) {
+    return static_cast<char>(std::tolower(a_value));
+  };
+
+  for (std::size_t index = 0; index + a_needle.size() <= a_haystack.size();
+       ++index) {
+    bool matches = true;
+    for (std::size_t offset = 0; offset < a_needle.size(); ++offset) {
+      if (lower(static_cast<unsigned char>(a_haystack[index + offset])) !=
+          lower(static_cast<unsigned char>(a_needle[offset]))) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+std::string NormalizeKitCollection(std::string_view a_collection) {
+  auto normalized = TrimText(a_collection);
+  std::replace(normalized.begin(), normalized.end(), '\\', '/');
+  while (!normalized.empty() && normalized.front() == '/') {
+    normalized.erase(normalized.begin());
+  }
+  while (!normalized.empty() && normalized.back() == '/') {
+    normalized.pop_back();
+  }
+  return normalized;
+}
 
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
@@ -425,6 +483,20 @@ void Menu::OnMenuHide() {
   enabled_ = false;
 }
 
+void Menu::HandleCancel() {
+  if (createKitDialogOpen_) {
+    createKitDialogCancelRequested_ = true;
+    return;
+  }
+
+  if (awaitingToggleKeyCapture_ || openToggleKeyPopup_) {
+    CloseToggleKeyCapture();
+    return;
+  }
+
+  Close();
+}
+
 void Menu::Toggle() {
   if (enabled_) {
     Close();
@@ -508,6 +580,122 @@ void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry) {
 
 void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry) {
   workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+}
+
+void Menu::OpenCreateKitDialog(const KitCreationSource a_source) {
+  pendingKitFormIDs_.clear();
+  if (a_source == KitCreationSource::Equipped) {
+    pendingKitFormIDs_ = workbench_.CollectEquippedArmorFormIDs();
+  } else {
+    pendingKitFormIDs_ =
+        workbench_.CollectOverrideArmorFormIDsFromEquippedRows();
+  }
+
+  if (pendingKitFormIDs_.empty()) {
+    return;
+  }
+
+  createKitSource_ = a_source;
+  pendingKitName_.fill('\0');
+  pendingKitCollection_.fill('\0');
+  createKitError_.clear();
+  openCreateKitDialog_ = true;
+}
+
+bool Menu::SavePendingKit() {
+  const auto name = TrimText(pendingKitName_.data());
+  if (name.empty()) {
+    createKitError_ = "Kit name is required.";
+    return false;
+  }
+  if (name.find_first_of("\"'") != std::string::npos) {
+    createKitError_ = "Kit name cannot contain quotes.";
+    return false;
+  }
+  if (name.find_first_of("/\\") != std::string::npos) {
+    createKitError_ = "Kit name cannot contain path separators.";
+    return false;
+  }
+
+  auto collection = NormalizeKitCollection(pendingKitCollection_.data());
+  if (collection.find_first_of("\"'") != std::string::npos) {
+    createKitError_ = "Collection cannot contain quotes.";
+    return false;
+  }
+
+  nlohmann::json items = nlohmann::json::object();
+  for (const auto formID : pendingKitFormIDs_) {
+    const auto *armorForm = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID);
+    if (!armorForm) {
+      continue;
+    }
+
+    const auto editorID = armor::GetEditorID(armorForm);
+    if (editorID.empty()) {
+      createKitError_ = "Cannot save kit because '" +
+                        armor::GetDisplayName(armorForm) +
+                        "' has no editor ID.";
+      return false;
+    }
+
+    items[editorID] = {{"Plugin", armor::GetPluginName(armorForm)},
+                       {"Name", armor::GetDisplayName(armorForm)},
+                       {"Amount", 1},
+                       {"Equipped", true}};
+  }
+
+  if (items.empty()) {
+    createKitError_ = "No valid armor items were available to save.";
+    return false;
+  }
+
+  const auto &kits = EquipmentCatalog::Get().GetKits();
+  const auto existingIt =
+      std::ranges::find_if(kits, [&](const KitEntry &a_kit) {
+        return CompareText(a_kit.name, name) == 0;
+      });
+
+  std::filesystem::path relativePath;
+  std::filesystem::path fullPath;
+  if (existingIt != kits.end()) {
+    relativePath = existingIt->key;
+    fullPath = existingIt->filepath;
+    collection = existingIt->collection;
+  } else {
+    relativePath = std::filesystem::path(collection) / (name + ".json");
+    fullPath = std::filesystem::path(kModexKitDirectory) / relativePath;
+  }
+
+  try {
+    std::filesystem::create_directories(fullPath.parent_path());
+  } catch (const std::exception &exception) {
+    createKitError_ =
+        "Failed to create kit directory: " + std::string(exception.what());
+    return false;
+  }
+
+  nlohmann::json data = nlohmann::json::object();
+  data[name] = nlohmann::json::object();
+  data[name]["Collection"] = collection;
+  data[name]["Description"] = "Created by Skyrim Outfit System Redone.";
+  data[name]["Items"] = std::move(items);
+
+  std::ofstream file(fullPath, std::ios::trunc);
+  if (!file.is_open()) {
+    createKitError_ = "Failed to open kit file for writing.";
+    return false;
+  }
+
+  file << data.dump(4) << '\n';
+  file.close();
+
+  EquipmentCatalog::Get().RefreshFromGame();
+  selectedCatalogKey_ = "kit:" + relativePath.generic_string();
+  activeTab_ = BrowserTab::Kits;
+  openCreateKitDialog_ = false;
+  pendingKitFormIDs_.clear();
+  createKitError_.clear();
+  return true;
 }
 
 void Menu::PreviewGearEntry(const GearEntry &a_entry) {
@@ -912,13 +1100,12 @@ void Menu::DrawWindow() {
     workbench_.SyncDynamicArmorVariantsExtended();
   }
 
-  const bool requestClose =
-      ImGui::Shortcut(ImGuiKey_Escape, ImGuiInputFlags_RouteActive);
+  DrawCreateKitDialog();
 
   ImGui::End();
   ImGui::PopStyleVar();
 
-  if (!open || requestClose) {
+  if (!open) {
     Close();
   }
 }
@@ -1241,6 +1428,194 @@ bool Menu::DrawSearchableStringCombo(const char *a_label,
   ImGui::PopID();
 
   return changed;
+}
+
+bool Menu::DrawEditableDropdown(const char *a_label, const char *a_hint,
+                                char *a_buffer, const std::size_t a_bufferSize,
+                                const std::vector<std::string> &a_options,
+                                const float a_width,
+                                std::string *a_selectedOption) {
+  bool changed = false;
+  const auto popupId = std::string(a_label) + "##popup";
+  ImGuiID popupImGuiId = 0;
+  const auto openId = std::string(a_label) + "##open";
+  const auto buttonWidth = ImGui::GetFrameHeight();
+  const auto inputWidth =
+      (std::max)(1.0f, a_width - buttonWidth - ImGui::GetStyle().ItemSpacing.x);
+
+  ImGui::PushID(a_label);
+  auto *storage = ImGui::GetStateStorage();
+  const auto openStorageId = ImGui::GetID(openId.c_str());
+  popupImGuiId = ImGui::GetID(popupId.c_str());
+  ImGui::SetNextItemWidth(inputWidth);
+  if (ImGui::InputTextWithHint("##input", a_hint, a_buffer, a_bufferSize)) {
+    changed = true;
+  }
+  const bool inputTextActive = ImGui::IsItemActive();
+  if (ImGui::IsItemActivated()) {
+    InputManager::GetSingleton()->Flush();
+    storage->SetBool(openStorageId, true);
+    ImGui::OpenPopup(popupId.c_str());
+  }
+
+  const auto inputMin = ImGui::GetItemRectMin();
+  const auto inputMax = ImGui::GetItemRectMax();
+  ImGui::SameLine(0.0f, ImGui::GetStyle().ItemSpacing.x);
+  if (ImGui::ArrowButton("##open", ImGuiDir_Down)) {
+    storage->SetBool(openStorageId, true);
+    ImGui::OpenPopup(popupId.c_str());
+  }
+  const bool arrowHovered = ImGui::IsItemHovered();
+  const bool arrowPressed = ImGui::IsItemActivated();
+  bool dropdownOpen = storage->GetBool(openStorageId, false);
+  if (arrowPressed) {
+    dropdownOpen = true;
+  }
+
+  if (dropdownOpen) {
+    ImGui::SetNextWindowPos(
+        ImVec2(inputMin.x, inputMax.y + ImGui::GetStyle().ItemSpacing.y));
+    ImGui::SetNextWindowSizeConstraints(
+        ImVec2(a_width, 0.0f),
+        ImVec2(a_width, ImGui::GetTextLineHeightWithSpacing() * 12.0f));
+    ImGuiWindowFlags popupFlags =
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+        ImGuiWindowFlags_NoNav;
+    bool popupVisible = false;
+    bool popupHovered = false;
+    if (ImGui::BeginPopupEx(popupImGuiId, popupFlags)) {
+      popupVisible = true;
+      ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+      popupHovered = ImGui::IsWindowHovered(
+          ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+
+      const auto needle = TrimText(a_buffer);
+      bool anyVisible = false;
+      for (const auto &option : a_options) {
+        if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
+          continue;
+        }
+
+        anyVisible = true;
+        if (ImGui::Selectable(option.c_str())) {
+          std::snprintf(a_buffer, a_bufferSize, "%s", option.c_str());
+          if (a_selectedOption) {
+            *a_selectedOption = option;
+          }
+          changed = true;
+          dropdownOpen = false;
+          ImGui::CloseCurrentPopup();
+          ImGui::SetKeyboardFocusHere(-1);
+        }
+      }
+
+      if (!anyVisible) {
+        ImGui::TextDisabled("No matches");
+      }
+      ImGui::EndPopup();
+    }
+
+    if (!popupVisible || (!inputTextActive && !arrowHovered && !popupHovered)) {
+      dropdownOpen = false;
+    }
+  }
+
+  storage->SetBool(openStorageId, dropdownOpen);
+  ImGui::PopID();
+  return changed;
+}
+
+void Menu::DrawCreateKitDialog() {
+  if (openCreateKitDialog_) {
+    ImGui::OpenPopup("Create Modex Kit");
+    openCreateKitDialog_ = false;
+  }
+
+  const auto &catalog = EquipmentCatalog::Get();
+  std::vector<std::string> existingNames;
+  existingNames.reserve(catalog.GetKits().size());
+  for (const auto &kit : catalog.GetKits()) {
+    if (std::ranges::find(existingNames, kit.name) == existingNames.end()) {
+      existingNames.push_back(kit.name);
+    }
+  }
+  std::ranges::sort(existingNames);
+
+  createKitDialogOpen_ = false;
+  if (ImGui::BeginPopupModal("Create Modex Kit", nullptr,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
+    createKitDialogOpen_ = true;
+    const bool popupAppearing = ImGui::IsWindowAppearing();
+    ImGui::TextWrapped(
+        "%s",
+        createKitSource_ == KitCreationSource::Equipped
+            ? "Create a Modex kit from the player's currently equipped armor."
+            : "Create a Modex kit from overrides on currently equipped armor "
+              "only.");
+    ImGui::Separator();
+    ImGui::Text("Items: %zu", pendingKitFormIDs_.size());
+
+    constexpr float fieldWidth = 360.0f;
+    std::string selectedName;
+    ImGui::TextUnformatted("Name");
+    if (popupAppearing) {
+      ImGui::SetKeyboardFocusHere();
+    }
+    if (DrawEditableDropdown("kit-name", "New or existing kit name",
+                             pendingKitName_.data(), pendingKitName_.size(),
+                             existingNames, fieldWidth, &selectedName) &&
+        !selectedName.empty()) {
+      if (const auto it = std::ranges::find_if(catalog.GetKits(),
+                                               [&](const KitEntry &a_entry) {
+                                                 return a_entry.name ==
+                                                        selectedName;
+                                               });
+          it != catalog.GetKits().end()) {
+        std::snprintf(pendingKitCollection_.data(),
+                      pendingKitCollection_.size(), "%s",
+                      it->collection.c_str());
+      }
+    }
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Collection");
+    DrawEditableDropdown(
+        "kit-collection", "Collection (optional)", pendingKitCollection_.data(),
+        pendingKitCollection_.size(), catalog.GetKitCollections(), fieldWidth);
+
+    if (!createKitError_.empty()) {
+      ImGui::Spacing();
+      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(
+                             ThemeConfig::GetSingleton()->GetColorU32("WARN")),
+                         "%s", createKitError_.c_str());
+    }
+
+    ImGui::Spacing();
+    const bool requestClose =
+        createKitDialogCancelRequested_ ||
+        ImGui::Shortcut(ImGuiKey_Escape, ImGuiInputFlags_RouteFocused);
+    if (ImGui::Button("Save", ImVec2(120.0f, 0.0f))) {
+      if (SavePendingKit()) {
+        ImGui::CloseCurrentPopup();
+      }
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) || requestClose) {
+      createKitError_.clear();
+      pendingKitFormIDs_.clear();
+      pendingKitName_.fill('\0');
+      pendingKitCollection_.fill('\0');
+      createKitDialogOpen_ = false;
+      createKitDialogCancelRequested_ = false;
+      ImGui::CloseCurrentPopup();
+    }
+
+    ImGui::EndPopup();
+  } else {
+    createKitDialogOpen_ = false;
+    createKitDialogCancelRequested_ = false;
+  }
 }
 
 void Menu::DrawCatalogFilters() {

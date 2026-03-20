@@ -183,6 +183,10 @@ void Menu::DrawVariantWorkbenchPane() {
   ImGui::TextUnformatted("Variant workbench");
   ImGui::Separator();
 
+  const auto equippedKitFormIDs = workbench_.CollectEquippedArmorFormIDs();
+  const auto overrideKitFormIDs =
+      workbench_.CollectOverrideArmorFormIDsFromEquippedRows();
+
   if (ImGui::Button("Reset Equipped")) {
     workbench_.ClearPreview();
     if (workbench_.ResetEquippedRows()) {
@@ -195,6 +199,42 @@ void Menu::DrawVariantWorkbenchPane() {
     workbench_.ResetAllRows();
     workbench_.SyncRowsFromPlayer();
     workbench_.SyncDynamicArmorVariantsExtended();
+  }
+  ImGui::SameLine();
+  const bool canCreateEquippedKit = !equippedKitFormIDs.empty();
+  if (!canCreateEquippedKit) {
+    ImGui::BeginDisabled();
+  }
+  if (ImGui::Button("Kit from Equipped")) {
+    OpenCreateKitDialog(KitCreationSource::Equipped);
+  }
+  if (!canCreateEquippedKit) {
+    ImGui::EndDisabled();
+  }
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
+                           ImGuiHoveredFlags_AllowWhenDisabled)) {
+    ImGui::BeginTooltip();
+    ImGui::TextUnformatted(
+        "Create a Modex kit from the player's currently equipped armor.");
+    ImGui::EndTooltip();
+  }
+  ImGui::SameLine();
+  const bool canCreateOverrideKit = !overrideKitFormIDs.empty();
+  if (!canCreateOverrideKit) {
+    ImGui::BeginDisabled();
+  }
+  if (ImGui::Button("Kit from Overrides")) {
+    OpenCreateKitDialog(KitCreationSource::Overrides);
+  }
+  if (!canCreateOverrideKit) {
+    ImGui::EndDisabled();
+  }
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
+                           ImGuiHoveredFlags_AllowWhenDisabled)) {
+    ImGui::BeginTooltip();
+    ImGui::TextUnformatted(
+        "Create a Modex kit from overrides on currently equipped armor only.");
+    ImGui::EndTooltip();
   }
   ImGui::Spacing();
 

@@ -49,6 +49,9 @@ public:
   bool SetHideEquipped(int a_rowIndex, bool a_hideEquipped);
   bool ResetEquippedRows();
   void ResetAllRows();
+  [[nodiscard]] std::vector<RE::FormID> CollectEquippedArmorFormIDs() const;
+  [[nodiscard]] std::vector<RE::FormID>
+  CollectOverrideArmorFormIDsFromEquippedRows() const;
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   bool InsertCatalogRow(RE::FormID a_formID, int a_targetRowIndex,
                         bool a_insertAfter);

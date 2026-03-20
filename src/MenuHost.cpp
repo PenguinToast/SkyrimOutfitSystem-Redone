@@ -171,7 +171,7 @@ RE::UI_MESSAGE_RESULTS MenuHost::ProcessMessage(RE::UIMessage &a_message) {
             reinterpret_cast<RE::BSUIMessageData *>(a_message.data);
         data != nullptr) {
       if (data->fixedStr == "Cancel") {
-        Menu::GetSingleton()->Close();
+        Menu::GetSingleton()->HandleCancel();
         return RE::UI_MESSAGE_RESULTS::kHandled;
       }
     }
