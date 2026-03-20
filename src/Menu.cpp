@@ -737,7 +737,9 @@ void Menu::AcceptOverridePayload(int a_targetRowIndex) {
     workbench_.MoveOverride(dragPayload.rowIndex, dragPayload.itemIndex,
                             a_targetRowIndex);
   } else if (dragPayload.sourceKind ==
-             static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
+                 static_cast<std::uint32_t>(DragSourceKind::Catalog) ||
+             dragPayload.sourceKind ==
+                 static_cast<std::uint32_t>(DragSourceKind::Row)) {
     workbench_.AddCatalogOverride(a_targetRowIndex, dragPayload.formID);
   }
 }
