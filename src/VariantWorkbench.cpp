@@ -213,24 +213,9 @@ bool VariantWorkbench::CanAcceptOverride(int a_targetRowIndex,
     return false;
   }
 
-  const auto &row = rows_[static_cast<std::size_t>(a_targetRowIndex)];
   if (a_item.slotMask == 0) {
     return false;
   }
-
-  for (int itemIndex = 0; itemIndex < static_cast<int>(row.overrides.size());
-       ++itemIndex) {
-    if (a_targetRowIndex == a_sourceRowIndex &&
-        itemIndex == a_sourceItemIndex) {
-      continue;
-    }
-
-    const auto &existing = row.overrides[static_cast<std::size_t>(itemIndex)];
-    if ((existing.slotMask & a_item.slotMask) != 0) {
-      return false;
-    }
-  }
-
   return true;
 }
 bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
