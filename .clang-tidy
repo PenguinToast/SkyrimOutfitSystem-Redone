@@ -3,7 +3,8 @@ Checks: >
   clang-analyzer-*,
   bugprone-*,
   performance-*,
-  modernize-*
+  modernize-*,
+  -modernize-use-trailing-return-type
 WarningsAsErrors: ''
 HeaderFilterRegex: '^(src|include)/'
 FormatStyle: file

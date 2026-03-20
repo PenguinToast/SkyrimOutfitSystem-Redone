@@ -25,10 +25,10 @@ class VariantWorkbench {
 public:
   void SyncRowsFromPlayer();
   bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
-  bool CanAcceptOverride(int a_targetRowIndex,
-                         const EquipmentWidgetItem &a_item,
-                         int a_sourceRowIndex = -1,
-                         int a_sourceItemIndex = -1) const;
+  [[nodiscard]] bool CanAcceptOverride(int a_targetRowIndex,
+                                       const EquipmentWidgetItem &a_item,
+                                       int a_sourceRowIndex = -1,
+                                       int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
@@ -37,8 +37,10 @@ public:
                        bool a_insertAfter);
   void SyncDynamicArmorVariants();
 
-  const std::vector<VariantWorkbenchRow> &GetRows() const { return rows_; }
-  std::size_t GetRowCount() const { return rows_.size(); }
+  [[nodiscard]] const std::vector<VariantWorkbenchRow> &GetRows() const {
+    return rows_;
+  }
+  [[nodiscard]] std::size_t GetRowCount() const { return rows_.size(); }
 
 private:
   std::vector<VariantWorkbenchRow> rows_;

@@ -50,9 +50,9 @@ std::string CopyCString(const char *a_text) {
 
 namespace sosng::armor {
 std::string FormatFormID(RE::FormID a_formID) {
-  char buffer[16]{};
-  std::snprintf(buffer, sizeof(buffer), "%08X", a_formID);
-  return buffer;
+  std::array<char, 16> buffer{};
+  std::snprintf(buffer.data(), buffer.size(), "%08X", a_formID);
+  return buffer.data();
 }
 
 std::string GetDisplayName(const RE::TESForm *a_form) {

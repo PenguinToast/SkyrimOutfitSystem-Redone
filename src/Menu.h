@@ -19,8 +19,8 @@ public:
   void Open();
   void Close();
   void Toggle();
-  bool IsEnabled() const { return enabled_; }
-  bool IsInitialized() const { return initialized_; }
+  [[nodiscard]] bool IsEnabled() const { return enabled_; }
+  [[nodiscard]] bool IsInitialized() const { return initialized_; }
 
 private:
   enum class DragSourceKind : std::uint32_t {
@@ -63,11 +63,11 @@ private:
                        int a_targetRowIndex, bool a_insertAfter);
   void AcceptOverrideDeletePayload();
 
-  bool MatchesGearFilters(const GearEntry &a_entry) const;
-  bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
+  [[nodiscard]] bool MatchesGearFilters(const GearEntry &a_entry) const;
+  [[nodiscard]] bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
 
-  std::vector<const GearEntry *> BuildFilteredGear() const;
-  std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
+  [[nodiscard]] std::vector<const GearEntry *> BuildFilteredGear() const;
+  [[nodiscard]] std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
   void SortGearRows(std::vector<const GearEntry *> &a_rows,
                     ImGuiTableSortSpecs *a_sortSpecs) const;
   void SortOutfitRows(std::vector<const OutfitEntry *> &a_rows,

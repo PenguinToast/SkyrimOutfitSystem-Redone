@@ -5,7 +5,7 @@
 
 namespace sosng {
 namespace {
-ImGuiKey MapScanCodeToImGuiKey(std::uint32_t a_scanCode) {
+auto MapScanCodeToImGuiKey(std::uint32_t a_scanCode) -> ImGuiKey {
   switch (a_scanCode) {
   case 0x01:
     return ImGuiKey_Escape;
@@ -79,7 +79,7 @@ ImGuiKey MapScanCodeToImGuiKey(std::uint32_t a_scanCode) {
 }
 } // namespace
 
-InputManager *InputManager::GetSingleton() {
+auto InputManager::GetSingleton() -> InputManager * {
   static InputManager singleton;
   return std::addressof(singleton);
 }

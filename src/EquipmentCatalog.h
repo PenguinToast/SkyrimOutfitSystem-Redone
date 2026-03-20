@@ -37,20 +37,26 @@ public:
 
   void RefreshFromGame();
 
-  const std::vector<GearEntry> &GetGear() const { return gear_; }
-  const std::vector<OutfitEntry> &GetOutfits() const { return outfits_; }
+  [[nodiscard]] const std::vector<GearEntry> &GetGear() const { return gear_; }
+  [[nodiscard]] const std::vector<OutfitEntry> &GetOutfits() const {
+    return outfits_;
+  }
 
-  const std::vector<std::string> &GetGearPlugins() const {
+  [[nodiscard]] const std::vector<std::string> &GetGearPlugins() const {
     return gearPlugins_;
   }
-  const std::vector<std::string> &GetGearSlots() const { return gearSlots_; }
-  const std::vector<std::string> &GetOutfitPlugins() const {
+  [[nodiscard]] const std::vector<std::string> &GetGearSlots() const {
+    return gearSlots_;
+  }
+  [[nodiscard]] const std::vector<std::string> &GetOutfitPlugins() const {
     return outfitPlugins_;
   }
-  const std::vector<std::string> &GetOutfitTags() const { return outfitTags_; }
+  [[nodiscard]] const std::vector<std::string> &GetOutfitTags() const {
+    return outfitTags_;
+  }
 
-  std::string_view GetSource() const { return source_; }
-  std::string_view GetRevision() const { return revision_; }
+  [[nodiscard]] std::string_view GetSource() const { return source_; }
+  [[nodiscard]] std::string_view GetRevision() const { return revision_; }
 
 private:
   EquipmentCatalog();
