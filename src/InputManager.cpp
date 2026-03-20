@@ -206,4 +206,32 @@ void InputManager::ProcessInputEvents() {
     }
   }
 }
+
+void InputManager::UpdateMousePosition() const {
+  if (ImGui::GetCurrentContext() == nullptr) {
+    return;
+  }
+
+  auto *ui = RE::UI::GetSingleton();
+  if (ui == nullptr) {
+    return;
+  }
+
+  auto &io = ImGui::GetIO();
+  if (ui->IsMenuOpen(RE::CursorMenu::MENU_NAME)) {
+    if (const auto *menuCursor = RE::MenuCursor::GetSingleton();
+        menuCursor != nullptr) {
+      io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
+      io.AddMousePosEvent(menuCursor->cursorPosX, menuCursor->cursorPosY);
+    }
+    return;
+  }
+
+  POINT cursorPos{};
+  if (GetCursorPos(&cursorPos) != FALSE) {
+    io.AddMouseSourceEvent(ImGuiMouseSource_Mouse);
+    io.AddMousePosEvent(static_cast<float>(cursorPos.x),
+                        static_cast<float>(cursorPos.y));
+  }
+}
 } // namespace sosng

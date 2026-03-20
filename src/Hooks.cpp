@@ -16,12 +16,7 @@ void hk_PollInputDevices(RE::BSTEventSource<RE::InputEvent *> *a_dispatcher,
     sosng::InputManager::GetSingleton()->AddEventToQueue(a_events);
   }
 
-  if (sosng::Menu::GetSingleton()->IsEnabled()) {
-    static RE::InputEvent *dummy[] = {nullptr};
-    g_inputHandler(a_dispatcher, dummy);
-  } else {
-    g_inputHandler(a_dispatcher, a_events);
-  }
+  g_inputHandler(a_dispatcher, a_events);
 }
 } // namespace
 

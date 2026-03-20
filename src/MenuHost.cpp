@@ -55,10 +55,12 @@ void MenuHost::ForceCursor() {
     return;
   }
 
-  if (auto *messagingQueue = RE::UIMessageQueue::GetSingleton();
-      messagingQueue != nullptr) {
-    messagingQueue->AddMessage(RE::CursorMenu::MENU_NAME,
-                               RE::UI_MESSAGE_TYPE::kShow, nullptr);
-  }
+  SKSE::GetTaskInterface()->AddUITask([]() {
+    if (auto *messagingQueue = RE::UIMessageQueue::GetSingleton();
+        messagingQueue != nullptr) {
+      messagingQueue->AddMessage(RE::CursorMenu::MENU_NAME,
+                                 RE::UI_MESSAGE_TYPE::kShow, nullptr);
+    }
+  });
 }
 } // namespace sosng

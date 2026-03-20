@@ -272,7 +272,7 @@ void Menu::OnMenuShow() {
   }
 
   auto &io = ImGui::GetIO();
-  io.MouseDrawCursor = true;
+  io.MouseDrawCursor = false;
   io.ClearInputKeys();
   io.ClearEventsQueue();
   enabled_ = true;
@@ -322,6 +322,7 @@ void Menu::Draw() {
 
   ImGui_ImplWin32_NewFrame();
   ImGui_ImplDX11_NewFrame();
+  InputManager::GetSingleton()->UpdateMousePosition();
   ImGui::NewFrame();
 
   DrawWindow();
