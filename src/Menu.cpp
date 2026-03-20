@@ -19,6 +19,29 @@ constexpr int kDefaultFontSizePixels = 16;
 constexpr int kMinFontSizePixels = 8;
 constexpr int kMaxFontSizePixels = 48;
 
+using UserEventFlag = RE::ControlMap::UEFlag;
+
+constexpr auto kBlockedGameplayControls = static_cast<UserEventFlag>(
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kMovement) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kLooking) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kActivate) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kFighting) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kSneaking) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kJumping) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kPOVSwitch) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kMainFour) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(
+        UserEventFlag::kWheelZoom) |
+    static_cast<std::underlying_type_t<UserEventFlag>>(UserEventFlag::kVATS));
+
 enum class GearColumn : ImGuiID { Name = 1, Plugin, Slot };
 
 enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Pieces };
@@ -260,6 +283,12 @@ void Menu::OnMenuShow() {
     return;
   }
 
+  if (auto *controlMap = RE::ControlMap::GetSingleton();
+      controlMap != nullptr) {
+    controlMap->StoreControls();
+    controlMap->ToggleControls(kBlockedGameplayControls, false, true);
+  }
+
   auto &io = ImGui::GetIO();
   io.MouseDrawCursor = false;
   io.ClearInputKeys();
@@ -273,6 +302,11 @@ void Menu::OnMenuHide() {
   }
 
   ClearCatalogSelection();
+
+  if (auto *controlMap = RE::ControlMap::GetSingleton();
+      controlMap != nullptr) {
+    controlMap->LoadStoredControls();
+  }
 
   auto &io = ImGui::GetIO();
   io.MouseDrawCursor = false;
