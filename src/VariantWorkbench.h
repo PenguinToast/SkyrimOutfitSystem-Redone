@@ -19,6 +19,7 @@ struct VariantWorkbenchRow {
   std::string key;
   EquipmentWidgetItem equipped;
   std::vector<EquipmentWidgetItem> overrides;
+  bool hideEquipped{false};
 };
 
 class VariantWorkbench {
@@ -33,6 +34,7 @@ public:
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
   bool DeleteOverride(int a_rowIndex, int a_itemIndex);
+  bool SetHideEquipped(int a_rowIndex, bool a_hideEquipped);
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
   void SyncDynamicArmorVariants();

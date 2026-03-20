@@ -19,8 +19,8 @@ auto BuildDavConditionsJson() -> std::string {
 
 auto BuildDavVariantJson(
     const RE::TESObjectARMO *a_sourceArmor,
-    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors)
-    -> std::string {
+    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
+    bool a_hideEquipped) -> std::string {
   nlohmann::json replaceByForm = nlohmann::json::object();
   std::vector<std::string> replacements;
   std::unordered_set<std::string> replacementSet;
@@ -53,7 +53,7 @@ auto BuildDavVariantJson(
     }
   }
 
-  if (replacements.empty()) {
+  if (replacements.empty() && !a_hideEquipped) {
     return {};
   }
 
@@ -67,7 +67,9 @@ auto BuildDavVariantJson(
       continue;
     }
 
-    if (replacements.size() == 1) {
+    if (a_hideEquipped) {
+      replaceByForm[sourceIdentifier] = nlohmann::json::array();
+    } else if (replacements.size() == 1) {
       replaceByForm[sourceIdentifier] = replacements.front();
     } else {
       replaceByForm[sourceIdentifier] = replacements;
@@ -79,9 +81,11 @@ auto BuildDavVariantJson(
   }
 
   nlohmann::json root{
-      {"displayName", displayName.empty()
-                          ? sosng::armor::GetDisplayName(a_sourceArmor)
-                          : displayName},
+      {"displayName",
+       a_hideEquipped
+           ? "Hidden " + sosng::armor::GetDisplayName(a_sourceArmor)
+           : (displayName.empty() ? sosng::armor::GetDisplayName(a_sourceArmor)
+                                  : displayName)},
       {"replaceByForm", replaceByForm}};
   return root.dump();
 }
@@ -98,9 +102,12 @@ void VariantWorkbench::SyncRowsFromPlayer() {
 
   std::unordered_map<std::string, std::vector<EquipmentWidgetItem>>
       existingOverrides;
+  std::unordered_map<std::string, bool> existingHiddenFlags;
   existingOverrides.reserve(rows_.size());
+  existingHiddenFlags.reserve(rows_.size());
   for (auto &row : rows_) {
     existingOverrides.emplace(row.key, std::move(row.overrides));
+    existingHiddenFlags.emplace(row.key, row.hideEquipped);
   }
 
   std::unordered_map<std::string, VariantWorkbenchRow> rowMap;
@@ -164,6 +171,10 @@ void VariantWorkbench::SyncRowsFromPlayer() {
     if (const auto it = existingOverrides.find(row.key);
         it != existingOverrides.end()) {
       row.overrides = std::move(it->second);
+    }
+    if (const auto it = existingHiddenFlags.find(row.key);
+        it != existingHiddenFlags.end()) {
+      row.hideEquipped = it->second;
     }
     discoveredKeys.push_back(row.key);
     rowMap.emplace(row.key, std::move(row));
@@ -260,7 +271,6 @@ bool VariantWorkbench::CanAcceptOverride(int a_targetRowIndex,
 
   return true;
 }
-
 bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
                                           RE::FormID a_formID) {
   EquipmentWidgetItem item{};
@@ -311,6 +321,15 @@ bool VariantWorkbench::DeleteOverride(int a_rowIndex, int a_itemIndex) {
   }
 
   overrides.erase(overrides.begin() + a_itemIndex);
+  return true;
+}
+
+bool VariantWorkbench::SetHideEquipped(int a_rowIndex, bool a_hideEquipped) {
+  if (a_rowIndex < 0 || a_rowIndex >= static_cast<int>(rows_.size())) {
+    return false;
+  }
+
+  rows_[static_cast<std::size_t>(a_rowIndex)].hideEquipped = a_hideEquipped;
   return true;
 }
 
@@ -381,7 +400,7 @@ void VariantWorkbench::SyncDynamicArmorVariants() {
       }
     }
 
-    if (overrideArmors.empty()) {
+    if (overrideArmors.empty() && !row.hideEquipped) {
       continue;
     }
 
@@ -390,7 +409,8 @@ void VariantWorkbench::SyncDynamicArmorVariants() {
       continue;
     }
 
-    const auto variantJson = BuildDavVariantJson(sourceArmor, overrideArmors);
+    const auto variantJson =
+        BuildDavVariantJson(sourceArmor, overrideArmors, row.hideEquipped);
     if (variantJson.empty()) {
       continue;
     }

@@ -772,7 +772,8 @@ void Menu::DrawVariantWorkbenchPane() {
   ImGui::Separator();
   ImGui::TextWrapped(
       "Each row is a currently equipped armor piece. Drag the left column to "
-      "reorder rows. Drop armor into the Overrides column. Only overlapping "
+      "reorder rows. Drop armor into the Overrides column. Use Hide to "
+      "suppress the equipped item's visuals entirely. Only overlapping "
       "override slots on the same row are rejected.");
   ImGui::Spacing();
 
@@ -787,15 +788,19 @@ void Menu::DrawVariantWorkbenchPane() {
       (std::max)(0.0f, ImGui::GetContentRegionAvail().y - deletePaneHeight);
   if (ImGui::BeginChild("##variant-workbench-scroll", ImVec2(0.0f, tableHeight),
                         ImGuiChildFlags_None)) {
-    if (ImGui::BeginTable("##variant-workbench", 2,
+    if (ImGui::BeginTable("##variant-workbench", 3,
                           ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                               ImGuiTableFlags_Resizable |
                               ImGuiTableFlags_ScrollY,
                           ImVec2(0.0f, 0.0f))) {
       ImGui::TableSetupColumn("Equipped", ImGuiTableColumnFlags_WidthStretch,
-                              0.85f);
+                              0.80f);
       ImGui::TableSetupColumn("Overrides", ImGuiTableColumnFlags_WidthStretch,
-                              1.15f);
+                              1.05f);
+      ImGui::TableSetupColumn("Hide",
+                              ImGuiTableColumnFlags_WidthFixed |
+                                  ImGuiTableColumnFlags_NoResize,
+                              72.0f);
       ImGui::TableSetupScrollFreeze(0, 1);
       ImGui::TableHeadersRow();
 
@@ -909,17 +914,33 @@ void Menu::DrawVariantWorkbenchPane() {
         const ImRect dropRect(childPos, ImVec2(childPos.x + childSize.x,
                                                childPos.y + childSize.y));
         if (ImGui::BeginDragDropTargetCustom(
-                dropRect, ImGui::GetID("##override-cell-target"))) {
+                dropRect, ImGui::GetID(("##override-cell-target-" +
+                                        std::to_string(rowIndex))
+                                           .c_str()))) {
           AcceptOverridePayload(rowIndex);
           ImGui::EndDragDropTarget();
         }
 
         ImGui::EndChild();
 
+        ImGui::TableSetColumnIndex(2);
+        bool hideEquipped =
+            rows[static_cast<std::size_t>(rowIndex)].hideEquipped;
+        ImGui::SetCursorPosX(
+            ImGui::GetCursorPosX() +
+            (ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight()) *
+                0.5f);
+        if (ImGui::Checkbox(
+                ("##hide-equipped-" + std::to_string(rowIndex)).c_str(),
+                &hideEquipped)) {
+          workbench_.SetHideEquipped(rowIndex, hideEquipped);
+        }
+
         if (const auto *rowTable = ImGui::GetCurrentTable()) {
-          rowBottomY.push_back(dropRect.Max.y + rowTable->RowCellPaddingY);
+          const auto bottomRect = ImGui::TableGetCellBgRect(rowTable, 2);
+          rowBottomY.push_back(bottomRect.Max.y + rowTable->RowCellPaddingY);
         } else {
-          rowBottomY.push_back(dropRect.Max.y);
+          rowBottomY.push_back(ImGui::GetItemRectMax().y);
         }
       }
 
