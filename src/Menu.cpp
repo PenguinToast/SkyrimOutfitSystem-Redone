@@ -1093,7 +1093,8 @@ void Menu::DrawCatalogFilters() {
       const auto padding = ImGui::GetStyle().FramePadding;
       ImGui::GetWindowDrawList()->AddText(
           ImVec2(rectMin.x + padding.x, rectMin.y + padding.y),
-          IM_COL32(140, 148, 161, 255), a_placeholder);
+          ThemeConfig::GetSingleton()->GetColorU32("TEXT_DISABLED", 0.90f),
+          a_placeholder);
     }
   };
   const auto drawSlotMultiCombo = [&]() {

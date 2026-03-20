@@ -159,14 +159,15 @@ void ThemeConfig::ApplyToImGui() const {
 }
 
 ImVec4 ThemeConfig::GetColor(std::string_view a_key, float a_alphaMult) const {
+  const auto styleAlpha = ImGui::GetStyle().Alpha;
   if (const auto it = colors_.find(std::string(a_key)); it != colors_.end()) {
     auto color = it->second;
-    color.w *= a_alphaMult;
+    color.w *= (a_alphaMult * styleAlpha);
     ClampColor(color);
     return color;
   }
 
-  return ImVec4(0.8f, 0.2f, 0.2f, 0.5f * a_alphaMult);
+  return ImVec4(0.8f, 0.2f, 0.2f, 0.5f * a_alphaMult * styleAlpha);
 }
 
 ImVec4 ThemeConfig::GetHover(std::string_view a_key, float a_alphaMult) const {
