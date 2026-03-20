@@ -56,19 +56,20 @@ bool Menu::DrawEquipmentInfoWidget(const char *a_id,
   const auto hovered = ImGui::IsItemHovered();
   const auto active = ImGui::IsItemActive();
   auto *drawList = ImGui::GetWindowDrawList();
+  const auto *theme = ThemeConfig::GetSingleton();
 
-  ImU32 fillColor = IM_COL32(28, 33, 41, 242);
-  ImU32 borderColor = IM_COL32(85, 103, 122, 255);
+  ImU32 fillColor = theme->GetColorU32("BG_LIGHT");
+  ImU32 borderColor = theme->GetColorU32("BORDER");
   if (a_conflict) {
-    fillColor = IM_COL32(76, 24, 24, 242);
-    borderColor = IM_COL32(192, 84, 84, 255);
+    fillColor = theme->GetColorU32("ERROR", 0.45f);
+    borderColor = theme->GetColorU32("ERROR");
   }
   if (active) {
-    fillColor =
-        a_conflict ? IM_COL32(112, 36, 36, 255) : IM_COL32(45, 63, 86, 255);
+    fillColor = a_conflict ? theme->GetColorU32("ERROR", 0.75f)
+                           : theme->GetColorU32("PRIMARY", 0.80f);
   } else if (hovered) {
-    fillColor =
-        a_conflict ? IM_COL32(94, 32, 32, 250) : IM_COL32(37, 47, 60, 250);
+    fillColor = a_conflict ? theme->GetColorU32("ERROR", 0.62f)
+                           : theme->GetColorU32("BG_LIGHT", 1.0f);
   }
 
   drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);
@@ -90,18 +91,20 @@ bool Menu::DrawEquipmentInfoWidget(const char *a_id,
       a_showDeleteButton && ImGui::IsMouseHoveringRect(buttonMin, buttonMax);
 
   drawList->PushClipRect(clipMin, clipMax, true);
-  drawList->AddText(namePos, IM_COL32(235, 239, 244, 255), a_item.name.c_str());
-  drawList->AddText(slotPos, IM_COL32(161, 188, 214, 255),
+  drawList->AddText(namePos, theme->GetColorU32("TEXT"), a_item.name.c_str());
+  drawList->AddText(slotPos, theme->GetColorU32("TEXT_HEADER", 0.92f),
                     a_item.slotText.c_str());
   drawList->PopClipRect();
 
   if (a_showDeleteButton) {
     const auto deleteFill =
-        deleteHovered ? IM_COL32(122, 52, 52, 255) : IM_COL32(88, 43, 43, 235);
-    drawList->AddRectFilled(buttonMin, buttonMax, deleteFill, 4.0f);
-    drawList->AddRect(buttonMin, buttonMax, IM_COL32(160, 92, 92, 255), 4.0f);
+        deleteHovered ? theme->GetHover("DECLINE") : theme->GetColor("DECLINE");
+    drawList->AddRectFilled(buttonMin, buttonMax,
+                            ImGui::ColorConvertFloat4ToU32(deleteFill), 4.0f);
+    drawList->AddRect(buttonMin, buttonMax, theme->GetColorU32("DECLINE"),
+                      4.0f);
     drawList->AddText(ImVec2(buttonMin.x + 6.0f, buttonMin.y + 2.0f),
-                      IM_COL32(244, 232, 232, 255), "X");
+                      theme->GetColorU32("TEXT"), "X");
 
     if (deleteHovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
       deleteClicked = true;
@@ -318,8 +321,9 @@ void Menu::DrawVariantWorkbenchPane() {
         const auto rowHeight = (std::max)(widgetHeight, dropZoneHeight);
         ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
         if (rows[static_cast<std::size_t>(rowIndex)].isEquipped) {
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                                 IM_COL32(36, 58, 41, 112));
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("SECONDARY", 0.35f));
         }
 
         ImGui::TableSetColumnIndex(0);
@@ -466,7 +470,8 @@ void Menu::DrawVariantWorkbenchPane() {
         auto *drawList = ImGui::GetWindowDrawList();
         drawList->AddLine(ImVec2(insertionLineX1, insertionLineY),
                           ImVec2(insertionLineX2, insertionLineY),
-                          IM_COL32(116, 189, 255, 255), 2.0f);
+                          ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"),
+                          2.0f);
       }
 
       if (!hoveredConflictWidgetId.empty()) {
@@ -478,8 +483,10 @@ void Menu::DrawVariantWorkbenchPane() {
                conflictIt->second.targetWidgetIds) {
             if (const auto rectIt = widgetRects.find(targetWidgetId);
                 rectIt != widgetRects.end()) {
-              drawList->AddRect(rectIt->second.Min, rectIt->second.Max,
-                                IM_COL32(255, 204, 96, 255), 8.0f, 0, 3.0f);
+              drawList->AddRect(
+                  rectIt->second.Min, rectIt->second.Max,
+                  ThemeConfig::GetSingleton()->GetColorU32("WARN"), 8.0f, 0,
+                  3.0f);
             }
           }
         }

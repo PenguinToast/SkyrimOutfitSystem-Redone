@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EquipmentCatalog.h"
+#include "ThemeConfig.h"
 #include "VariantWorkbench.h"
 #include "imgui.h"
 
@@ -107,6 +108,7 @@ private:
   bool pauseGameWhenOpen_{false};
   bool previewSelected_{true};
   RE::FormID selectedCatalogFormID_{0};
+  std::string themeName_{"default"};
   std::string settingsDirectory_;
   std::string imguiIniPath_;
   std::string userSettingsPath_;

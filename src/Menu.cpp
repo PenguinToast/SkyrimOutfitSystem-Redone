@@ -127,6 +127,7 @@ void Menu::Init(IDXGISwapChain *a_swapChain, ID3D11Device *a_device,
   device_ = a_device;
   context_ = a_context;
 
+  ThemeConfig::GetSingleton()->Load(themeName_);
   ApplyStyle();
   initialized_ = true;
 
@@ -154,6 +155,7 @@ void Menu::LoadUserSettings() {
                                  kMinFontSizePixels, kMaxFontSizePixels);
     pendingFontSizePixels_ = fontSizePixels_;
     pauseGameWhenOpen_ = json.value("pauseGameWhileOpen", pauseGameWhenOpen_);
+    themeName_ = json.value("theme", themeName_);
   } catch (const std::exception &exception) {
     logger::warn("Failed to parse user settings from {}: {}", userSettingsPath_,
                  exception.what());
@@ -176,7 +178,8 @@ void Menu::SaveUserSettings() const {
   }
 
   const nlohmann::json json = {{"fontSizePx", fontSizePixels_},
-                               {"pauseGameWhileOpen", pauseGameWhenOpen_}};
+                               {"pauseGameWhileOpen", pauseGameWhenOpen_},
+                               {"theme", themeName_}};
 
   output << json.dump(2) << '\n';
 }
@@ -212,34 +215,20 @@ void Menu::RebuildFontAtlas() {
 void Menu::ApplyStyle() {
   ImGui::StyleColorsDark();
   auto &style = ImGui::GetStyle();
-  style.WindowRounding = 12.0f;
-  style.FrameRounding = 8.0f;
-  style.PopupRounding = 8.0f;
-  style.ScrollbarRounding = 8.0f;
-  style.GrabRounding = 8.0f;
+  style.WindowRounding = 4.0f;
+  style.ChildRounding = 3.0f;
+  style.FrameRounding = 4.0f;
+  style.PopupRounding = 4.0f;
+  style.ScrollbarRounding = 4.0f;
+  style.GrabRounding = 4.0f;
+  style.TabRounding = 4.0f;
   style.FrameBorderSize = 1.0f;
   style.WindowBorderSize = 1.0f;
-  style.WindowPadding = {14.0f, 14.0f};
-  style.ItemSpacing = {10.0f, 8.0f};
-  style.CellPadding = {8.0f, 6.0f};
-
-  auto &colors = style.Colors;
-  colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.09f, 0.11f, 0.96f);
-  colors[ImGuiCol_TitleBg] = ImVec4(0.11f, 0.12f, 0.15f, 1.00f);
-  colors[ImGuiCol_TitleBgActive] = ImVec4(0.15f, 0.17f, 0.21f, 1.00f);
-  colors[ImGuiCol_Header] = ImVec4(0.20f, 0.28f, 0.37f, 0.70f);
-  colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.35f, 0.47f, 0.85f);
-  colors[ImGuiCol_HeaderActive] = ImVec4(0.27f, 0.39f, 0.54f, 1.00f);
-  colors[ImGuiCol_Button] = ImVec4(0.22f, 0.30f, 0.40f, 0.75f);
-  colors[ImGuiCol_ButtonHovered] = ImVec4(0.29f, 0.40f, 0.53f, 0.92f);
-  colors[ImGuiCol_ButtonActive] = ImVec4(0.32f, 0.45f, 0.60f, 1.00f);
-  colors[ImGuiCol_FrameBg] = ImVec4(0.13f, 0.15f, 0.18f, 0.94f);
-  colors[ImGuiCol_FrameBgHovered] = ImVec4(0.18f, 0.21f, 0.25f, 1.00f);
-  colors[ImGuiCol_FrameBgActive] = ImVec4(0.21f, 0.24f, 0.29f, 1.00f);
-  colors[ImGuiCol_Tab] = ImVec4(0.13f, 0.15f, 0.18f, 0.94f);
-  colors[ImGuiCol_TabHovered] = ImVec4(0.24f, 0.33f, 0.45f, 0.96f);
-  colors[ImGuiCol_TabActive] = ImVec4(0.20f, 0.28f, 0.37f, 0.96f);
-  colors[ImGuiCol_TableHeaderBg] = ImVec4(0.10f, 0.12f, 0.15f, 1.00f);
+  style.WindowPadding = {12.0f, 12.0f};
+  style.FramePadding = {8.0f, 6.0f};
+  style.ItemSpacing = {8.0f, 6.0f};
+  style.CellPadding = {6.0f, 5.0f};
+  ThemeConfig::GetSingleton()->ApplyToImGui();
 }
 
 void Menu::Open() {
@@ -874,11 +863,13 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::Text("%s", entry.slot.data());
 
         if (selected) {
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                                 IM_COL32(54, 84, 118, 132));
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY", 0.40f));
         } else if (rowHovered) {
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                                 IM_COL32(44, 58, 73, 112));
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
         }
 
         if (clicked) {
@@ -955,11 +946,13 @@ bool Menu::DrawOutfitTab() {
         ImGui::SetCursorScreenPos(rowContentPos);
 
         if (selected) {
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                                 IM_COL32(54, 84, 118, 132));
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY", 0.40f));
         } else if (rowHovered) {
-          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
-                                 IM_COL32(44, 58, 73, 112));
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
         }
 
         if (clicked) {
