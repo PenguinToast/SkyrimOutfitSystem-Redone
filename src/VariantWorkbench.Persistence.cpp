@@ -229,9 +229,11 @@ void VariantWorkbench::ClearPreview() {
   }
 
   auto *dav = GetDynamicArmorVariantsClient();
+  auto *player = RE::PlayerCharacter::GetSingleton();
+  bool variantsChanged = false;
 
   if (dav) {
-    if (auto *player = RE::PlayerCharacter::GetSingleton()) {
+    if (player) {
       for (const auto &[variantName, _] : previewDavVariants_) {
         if (!dav->RemoveVariantOverride(player, variantName.c_str())) {
           logger::warn("Failed to remove SOSNG preview variant override {}",
@@ -242,7 +244,12 @@ void VariantWorkbench::ClearPreview() {
     for (const auto &[variantName, _] : previewDavVariants_) {
       if (!dav->DeleteVariant(variantName.c_str())) {
         logger::warn("Failed to delete SOSNG preview variant {}", variantName);
+      } else {
+        variantsChanged = true;
       }
+    }
+    if (variantsChanged && player) {
+      dav->RefreshActor(player);
     }
   }
 
@@ -463,13 +470,20 @@ void VariantWorkbench::Revert() {
   ClearPreview();
 
   auto *dav = GetDynamicArmorVariantsClient();
+  auto *player = RE::PlayerCharacter::GetSingleton();
+  bool variantsChanged = false;
 
   if (dav) {
     for (const auto &[variantName, _] : activeDavVariants_) {
       if (!dav->DeleteVariant(variantName.c_str())) {
         logger::warn("Failed to delete DAV variant {} during SOSNG revert",
                      variantName);
+      } else {
+        variantsChanged = true;
       }
+    }
+    if (variantsChanged && player) {
+      dav->RefreshActor(player);
     }
   }
 

@@ -180,6 +180,21 @@ void Menu::DrawVariantWorkbenchPane() {
   ImGui::TextUnformatted("Variant workbench");
   ImGui::Separator();
 
+  if (ImGui::Button("Reset Equipped")) {
+    workbench_.ClearPreview();
+    if (workbench_.ResetEquippedRows()) {
+      workbench_.SyncDynamicArmorVariants();
+    }
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Reset All")) {
+    workbench_.ClearPreview();
+    workbench_.ResetAllRows();
+    workbench_.SyncRowsFromPlayer();
+    workbench_.SyncDynamicArmorVariants();
+  }
+  ImGui::Spacing();
+
   const auto &rows = workbench_.GetRows();
   if (rows.empty()) {
     ImGui::TextWrapped("No equipped armor pieces were found on the player.");
