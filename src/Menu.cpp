@@ -16,8 +16,11 @@ constexpr auto kSettingsDirectory =
     "Data/SKSE/Plugins/SkyrimOutfitSystemRedone";
 constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
+constexpr auto kFavoritesFilename = "favorites.json";
 constexpr auto kDefaultFontPath =
     "Data/Interface/SkyrimOutfitSystemRedone/fonts/Ubuntu-R.ttf";
+constexpr auto kDefaultIconFontPath =
+    "Data/Interface/SkyrimOutfitSystemRedone/fonts/lucide.ttf";
 constexpr int kDefaultFontSizePixels = 16;
 constexpr int kMinFontSizePixels = 8;
 constexpr int kMaxFontSizePixels = 48;
@@ -53,6 +56,9 @@ enum class GearColumn : ImGuiID { Name = 1, Plugin, Slot };
 enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Pieces };
 
 enum class KitColumn : ImGuiID { Name = 1, Collection, Pieces };
+
+constexpr std::string_view kFavoritePrefix = "\xEE\x83\xB5 ";
+constexpr std::array<ImWchar, 3> kLucideIconRanges = {0xE038, 0xE63F, 0};
 
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
@@ -142,7 +148,10 @@ void Menu::Init(IDXGISwapChain *a_swapChain, ID3D11Device *a_device,
   userSettingsPath_ =
       (std::filesystem::path(settingsDirectory_) / kUserSettingsFilename)
           .string();
+  favoritesPath_ =
+      (std::filesystem::path(settingsDirectory_) / kFavoritesFilename).string();
   LoadUserSettings();
+  LoadFavorites();
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -227,6 +236,61 @@ void Menu::SaveUserSettings() const {
   output << json.dump(2) << '\n';
 }
 
+void Menu::LoadFavorites() {
+  try {
+    std::filesystem::create_directories(settingsDirectory_);
+  } catch (const std::exception &exception) {
+    logger::error("Failed to create favorites directory {}: {}",
+                  settingsDirectory_, exception.what());
+    return;
+  }
+
+  favoriteKeys_.clear();
+
+  std::ifstream input(favoritesPath_);
+  if (!input.is_open()) {
+    SaveFavorites();
+    return;
+  }
+
+  try {
+    const auto json = nlohmann::json::parse(input, nullptr, true, true);
+    if (const auto it = json.find("favorites");
+        it != json.end() && it->is_array()) {
+      for (const auto &entry : *it) {
+        if (entry.is_string()) {
+          favoriteKeys_.insert(entry.get<std::string>());
+        }
+      }
+    }
+  } catch (const std::exception &exception) {
+    logger::warn("Failed to parse favorites from {}: {}", favoritesPath_,
+                 exception.what());
+  }
+}
+
+void Menu::SaveFavorites() const {
+  try {
+    std::filesystem::create_directories(settingsDirectory_);
+  } catch (const std::exception &exception) {
+    logger::error("Failed to create favorites directory {}: {}",
+                  settingsDirectory_, exception.what());
+    return;
+  }
+
+  std::ofstream output(favoritesPath_, std::ios::trunc);
+  if (!output.is_open()) {
+    logger::error("Failed to write favorites to {}", favoritesPath_);
+    return;
+  }
+
+  std::vector<std::string> favorites(favoriteKeys_.begin(),
+                                     favoriteKeys_.end());
+  std::ranges::sort(favorites);
+  const nlohmann::json json = {{"favorites", favorites}};
+  output << json.dump(2) << '\n';
+}
+
 void Menu::RebuildFontAtlas() {
   auto &io = ImGui::GetIO();
   auto &style = ImGui::GetStyle();
@@ -244,6 +308,16 @@ void Menu::RebuildFontAtlas() {
   }
   if (!io.FontDefault) {
     io.FontDefault = io.Fonts->AddFontDefaultVector(&fontConfig);
+  }
+  if (io.FontDefault && std::filesystem::exists(kDefaultIconFontPath)) {
+    ImFontConfig iconConfig{};
+    iconConfig.MergeMode = true;
+    iconConfig.PixelSnapH = true;
+    iconConfig.GlyphOffset.y = 3.0f;
+    iconConfig.DstFont = io.FontDefault;
+    io.Fonts->AddFontFromFileTTF(kDefaultIconFontPath,
+                                 static_cast<float>(fontSizePixels_),
+                                 &iconConfig, kLucideIconRanges.data());
   }
   io.Fonts->Build();
   style.FontScaleMain = 1.0f;
@@ -371,6 +445,83 @@ bool Menu::QueueSmoothScroll(const float a_deltaY) {
 void Menu::ClearCatalogSelection() {
   selectedCatalogKey_.clear();
   workbench_.ClearPreview();
+}
+
+std::string Menu::BuildFavoriteKey(const BrowserTab a_tab,
+                                   const std::string_view a_id) const {
+  std::string prefix;
+  switch (a_tab) {
+  case BrowserTab::Gear:
+    prefix = "gear:";
+    break;
+  case BrowserTab::Outfits:
+    prefix = "outfit:";
+    break;
+  case BrowserTab::Kits:
+    prefix = "kit:";
+    break;
+  case BrowserTab::Options:
+    prefix = "options:";
+    break;
+  }
+
+  return prefix + std::string(a_id);
+}
+
+bool Menu::IsFavorite(const BrowserTab a_tab,
+                      const std::string_view a_id) const {
+  return favoriteKeys_.contains(BuildFavoriteKey(a_tab, a_id));
+}
+
+void Menu::SetFavorite(const BrowserTab a_tab, const std::string_view a_id,
+                       const bool a_favorite) {
+  const auto key = BuildFavoriteKey(a_tab, a_id);
+  if (a_favorite) {
+    favoriteKeys_.insert(key);
+  } else {
+    favoriteKeys_.erase(key);
+    if (favoritesOnly_ && activeTab_ == a_tab && selectedCatalogKey_ == a_id) {
+      ClearCatalogSelection();
+    }
+  }
+  SaveFavorites();
+}
+
+std::string Menu::BuildFavoriteLabel(const std::string_view a_name,
+                                     const bool a_favorite) const {
+  if (!a_favorite) {
+    return std::string(a_name);
+  }
+
+  return std::string(kFavoritePrefix) + std::string(a_name);
+}
+
+void Menu::AddGearEntryToWorkbench(const GearEntry &a_entry) {
+  workbench_.AddCatalogSelectionToWorkbench(
+      std::vector<RE::FormID>{a_entry.formID});
+}
+
+void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry) {
+  workbench_.AddCatalogSelectionToWorkbench(
+      std::vector<RE::FormID>{a_entry.formID});
+}
+
+void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry) {
+  workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+}
+
+void Menu::PreviewGearEntry(const GearEntry &a_entry) {
+  workbench_.ApplyCatalogPreview(a_entry.id,
+                                 std::vector<RE::FormID>{a_entry.formID});
+}
+
+void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {
+  workbench_.ApplyCatalogPreview(a_entry.id,
+                                 std::vector<RE::FormID>{a_entry.formID});
+}
+
+void Menu::PreviewKitEntry(const KitEntry &a_entry) {
+  workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs);
 }
 
 void Menu::QueueHideMessage() {
@@ -703,6 +854,12 @@ void Menu::DrawWindow() {
     ImGui::Separator();
     DrawCatalogFilters();
     ImGui::Spacing();
+    if (ImGui::Checkbox("Favorites Only", &favoritesOnly_) && favoritesOnly_ &&
+        !selectedCatalogKey_.empty() &&
+        !IsFavorite(activeTab_, selectedCatalogKey_)) {
+      ClearCatalogSelection();
+    }
+    ImGui::SameLine();
     if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
       if (!previewSelected_) {
         workbench_.ClearPreview();
@@ -767,6 +924,10 @@ void Menu::DrawWindow() {
 }
 
 bool Menu::MatchesGearFilters(const GearEntry &a_entry) const {
+  if (favoritesOnly_ && !IsFavorite(BrowserTab::Gear, a_entry.id)) {
+    return false;
+  }
+
   const auto &catalog = EquipmentCatalog::Get();
   if (gearPluginIndex_ > 0 &&
       a_entry.plugin != catalog.GetGearPlugins()[gearPluginIndex_ - 1]) {
@@ -778,6 +939,10 @@ bool Menu::MatchesGearFilters(const GearEntry &a_entry) const {
 }
 
 bool Menu::MatchesOutfitFilters(const OutfitEntry &a_entry) const {
+  if (favoritesOnly_ && !IsFavorite(BrowserTab::Outfits, a_entry.id)) {
+    return false;
+  }
+
   const auto &catalog = EquipmentCatalog::Get();
   if (outfitPluginIndex_ > 0 &&
       a_entry.plugin != catalog.GetOutfitPlugins()[outfitPluginIndex_ - 1]) {
@@ -789,6 +954,10 @@ bool Menu::MatchesOutfitFilters(const OutfitEntry &a_entry) const {
 }
 
 bool Menu::MatchesKitFilters(const KitEntry &a_entry) const {
+  if (favoritesOnly_ && !IsFavorite(BrowserTab::Kits, a_entry.id)) {
+    return false;
+  }
+
   const auto &catalog = EquipmentCatalog::Get();
   if (kitCollectionIndex_ > 0 &&
       a_entry.collection !=
@@ -1227,6 +1396,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
       for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
            ++rowIndex) {
         const auto &entry = *rows[static_cast<std::size_t>(rowIndex)];
+        const auto favorite = IsFavorite(BrowserTab::Gear, entry.id);
         workbench::EquipmentWidgetItem item{};
         if (!workbench_.BuildCatalogItem(entry.formID, item)) {
           item.formID = entry.formID;
@@ -1234,6 +1404,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           item.name = entry.name;
           item.slotText = entry.slot;
         }
+        item.name = BuildFavoriteLabel(item.name, favorite);
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
@@ -1254,6 +1425,17 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
             ImVec2(0.0f, rowHeight));
         const bool rowHovered = ImGui::IsItemHovered();
         ImGui::PopStyleColor(3);
+        if (ImGui::BeginPopupContextItem()) {
+          const auto favoriteLabel =
+              favorite ? "Remove from Favorites" : "Add to Favorites";
+          if (ImGui::MenuItem(favoriteLabel)) {
+            SetFavorite(BrowserTab::Gear, entry.id, !favorite);
+          }
+          if (ImGui::MenuItem("Add Override")) {
+            AddGearEntryToWorkbench(entry);
+          }
+          ImGui::EndPopup();
+        }
         ImGui::SetCursorScreenPos(rowContentPos);
         DrawEquipmentInfoWidget(item.key.c_str(), item, true,
                                 DragSourceKind::Catalog);
@@ -1281,8 +1463,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           } else {
             selectedCatalogKey_ = entry.id;
             if (previewSelected_) {
-              workbench_.ApplyCatalogPreview(
-                  entry.id, std::vector<RE::FormID>{item.formID});
+              PreviewGearEntry(entry);
             } else {
               workbench_.ClearPreview();
             }
@@ -1291,8 +1472,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
 
         if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           rowClicked = true;
-          workbench_.AddCatalogSelectionToWorkbench(
-              std::vector<RE::FormID>{item.formID});
+          AddGearEntryToWorkbench(entry);
         }
       }
     }
@@ -1332,6 +1512,7 @@ bool Menu::DrawOutfitTab() {
       for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
            ++rowIndex) {
         const auto &outfit = *rows[static_cast<std::size_t>(rowIndex)];
+        const auto favorite = IsFavorite(BrowserTab::Outfits, outfit.id);
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
@@ -1351,6 +1532,17 @@ bool Menu::DrawOutfitTab() {
             ImVec2(0.0f, rowHeight));
         const bool rowHovered = ImGui::IsItemHovered();
         ImGui::PopStyleColor(3);
+        if (ImGui::BeginPopupContextItem()) {
+          const auto favoriteLabel =
+              favorite ? "Remove from Favorites" : "Add to Favorites";
+          if (ImGui::MenuItem(favoriteLabel)) {
+            SetFavorite(BrowserTab::Outfits, outfit.id, !favorite);
+          }
+          if (ImGui::MenuItem("Add Override")) {
+            AddOutfitEntryToWorkbench(outfit);
+          }
+          ImGui::EndPopup();
+        }
         ImGui::SetCursorScreenPos(rowContentPos);
 
         if (selected) {
@@ -1370,8 +1562,7 @@ bool Menu::DrawOutfitTab() {
           } else {
             selectedCatalogKey_ = outfit.id;
             if (previewSelected_) {
-              workbench_.ApplyCatalogPreview(
-                  outfit.id, std::vector<RE::FormID>{outfit.formID});
+              PreviewOutfitEntry(outfit);
             } else {
               workbench_.ClearPreview();
             }
@@ -1380,11 +1571,11 @@ bool Menu::DrawOutfitTab() {
 
         if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           rowClicked = true;
-          workbench_.AddCatalogSelectionToWorkbench(
-              std::vector<RE::FormID>{outfit.formID});
+          AddOutfitEntryToWorkbench(outfit);
         }
 
-        ImGui::TextUnformatted(outfit.name.data());
+        const auto displayName = BuildFavoriteLabel(outfit.name, favorite);
+        ImGui::TextUnformatted(displayName.c_str());
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(outfit.plugin.data());
@@ -1440,6 +1631,7 @@ bool Menu::DrawKitTab() {
       for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
            ++rowIndex) {
         const auto &kit = *rows[static_cast<std::size_t>(rowIndex)];
+        const auto favorite = IsFavorite(BrowserTab::Kits, kit.id);
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
@@ -1459,6 +1651,17 @@ bool Menu::DrawKitTab() {
             ImVec2(0.0f, rowHeight));
         const bool rowHovered = ImGui::IsItemHovered();
         ImGui::PopStyleColor(3);
+        if (ImGui::BeginPopupContextItem()) {
+          const auto favoriteLabel =
+              favorite ? "Remove from Favorites" : "Add to Favorites";
+          if (ImGui::MenuItem(favoriteLabel)) {
+            SetFavorite(BrowserTab::Kits, kit.id, !favorite);
+          }
+          if (ImGui::MenuItem("Add Override")) {
+            AddKitEntryToWorkbench(kit);
+          }
+          ImGui::EndPopup();
+        }
         ImGui::SetCursorScreenPos(rowContentPos);
 
         if (selected) {
@@ -1478,7 +1681,7 @@ bool Menu::DrawKitTab() {
           } else {
             selectedCatalogKey_ = kit.id;
             if (previewSelected_) {
-              workbench_.ApplyCatalogPreview(kit.id, kit.armorFormIDs);
+              PreviewKitEntry(kit);
             } else {
               workbench_.ClearPreview();
             }
@@ -1487,10 +1690,11 @@ bool Menu::DrawKitTab() {
 
         if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           rowClicked = true;
-          workbench_.AddCatalogSelectionToWorkbench(kit.armorFormIDs);
+          AddKitEntryToWorkbench(kit);
         }
 
-        ImGui::TextUnformatted(kit.name.c_str());
+        const auto displayName = BuildFavoriteLabel(kit.name, favorite);
+        ImGui::TextUnformatted(displayName.c_str());
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(kit.collection.empty() ? "Root"

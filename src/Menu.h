@@ -6,6 +6,8 @@
 #include "VariantWorkbench.h"
 #include "imgui.h"
 
+#include <unordered_set>
+
 struct IDXGISwapChain;
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -68,6 +70,8 @@ private:
   void ApplyStyle();
   void LoadUserSettings();
   void SaveUserSettings() const;
+  void LoadFavorites();
+  void SaveFavorites() const;
   void RebuildFontAtlas();
   void SyncAllowTextInput();
   void UpdateVisibilityAnimation(float a_deltaTime);
@@ -98,6 +102,12 @@ private:
                        int a_targetRowIndex, bool a_insertAfter);
   void AcceptOverrideDeletePayload();
   void ClearCatalogSelection();
+  [[nodiscard]] std::string BuildFavoriteKey(BrowserTab a_tab,
+                                             std::string_view a_id) const;
+  [[nodiscard]] bool IsFavorite(BrowserTab a_tab, std::string_view a_id) const;
+  void SetFavorite(BrowserTab a_tab, std::string_view a_id, bool a_favorite);
+  [[nodiscard]] std::string BuildFavoriteLabel(std::string_view a_name,
+                                               bool a_favorite) const;
   void SyncSelectedSlotFilters();
   [[nodiscard]] bool HasAnySelectedSlotFilter() const;
   [[nodiscard]] bool
@@ -109,6 +119,12 @@ private:
   [[nodiscard]] bool MatchesGearFilters(const GearEntry &a_entry) const;
   [[nodiscard]] bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
   [[nodiscard]] bool MatchesKitFilters(const KitEntry &a_entry) const;
+  void AddGearEntryToWorkbench(const GearEntry &a_entry);
+  void AddOutfitEntryToWorkbench(const OutfitEntry &a_entry);
+  void AddKitEntryToWorkbench(const KitEntry &a_entry);
+  void PreviewGearEntry(const GearEntry &a_entry);
+  void PreviewOutfitEntry(const OutfitEntry &a_entry);
+  void PreviewKitEntry(const KitEntry &a_entry);
   [[nodiscard]] std::vector<const GearEntry *> BuildFilteredGear() const;
   [[nodiscard]] std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
   [[nodiscard]] std::vector<const KitEntry *> BuildFilteredKits() const;
@@ -152,12 +168,15 @@ private:
   std::string settingsDirectory_;
   std::string imguiIniPath_;
   std::string userSettingsPath_;
+  std::string favoritesPath_;
   ImGuiTextFilter gearSearch_;
   ImGuiTextFilter outfitSearch_;
   ImGuiTextFilter kitSearch_;
   ImGuiTextFilter gearPluginFilter_;
   ImGuiTextFilter outfitPluginFilter_;
   ImGuiTextFilter kitCollectionFilter_;
+  bool favoritesOnly_{false};
+  std::unordered_set<std::string> favoriteKeys_;
   workbench::VariantWorkbench workbench_;
 };
 } // namespace sosr
