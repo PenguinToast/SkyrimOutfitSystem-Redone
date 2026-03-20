@@ -291,19 +291,6 @@ void Menu::DrawWindow() {
   ImGui::SameLine();
   ImGui::TextDisabled("| F3 toggles visibility");
   ImGui::Separator();
-  ImGui::TextWrapped("Current goal: browse every installed armor and outfit, "
-                     "then wire the visual-swapping layer through a custom "
-                     "Dynamic Armor Variants fork later.");
-  ImGui::Spacing();
-  ImGui::BulletText(
-      "Catalog source: %.*s",
-      static_cast<int>(EquipmentCatalog::Get().GetSource().size()),
-      EquipmentCatalog::Get().GetSource().data());
-  ImGui::BulletText(
-      "Catalog revision: %.*s",
-      static_cast<int>(EquipmentCatalog::Get().GetRevision().size()),
-      EquipmentCatalog::Get().GetRevision().data());
-  ImGui::Separator();
 
   if (ImGui::BeginTabBar("##catalog-tabs")) {
     if (ImGui::BeginTabItem("Gear")) {
@@ -523,40 +510,80 @@ bool Menu::DrawSearchableStringCombo(const char *a_label,
 
 void Menu::DrawGearTab() {
   const auto &catalog = EquipmentCatalog::Get();
-
-  ImGui::PushItemWidth(260.0f);
-  gearSearch_.Draw("Search installed armor", 260.0f);
-  ImGui::PopItemWidth();
-  ImGui::SameLine();
-
-  DrawSearchableStringCombo("Plugin", "All plugins", catalog.GetGearPlugins(),
-                            gearPluginIndex_, gearPluginFilter_);
-
-  ImGui::SameLine();
-  if (ImGui::BeginCombo(
-          "Slot", gearSlotIndex_ == 0
-                      ? "Any slot"
-                      : catalog.GetGearSlots()[gearSlotIndex_ - 1].data())) {
-    const bool anySelected = gearSlotIndex_ == 0;
-    if (ImGui::Selectable("Any slot", anySelected)) {
-      gearSlotIndex_ = 0;
+  const auto itemSpacingX = ImGui::GetStyle().ItemSpacing.x;
+  const auto filterBarWidth = ImGui::GetContentRegionAvail().x;
+  const auto drawSearchField = [&](float a_width) {
+    ImGui::PushItemWidth(a_width);
+    gearSearch_.Draw("##gear-search", a_width);
+    ImGui::PopItemWidth();
+    if (gearSearch_.InputBuf[0] == '\0') {
+      const auto text = "Search installed armor";
+      const auto rectMin = ImGui::GetItemRectMin();
+      const auto padding = ImGui::GetStyle().FramePadding;
+      ImGui::GetWindowDrawList()->AddText(
+          ImVec2(rectMin.x + padding.x, rectMin.y + padding.y),
+          IM_COL32(140, 148, 161, 255), text);
     }
-    if (anySelected) {
-      ImGui::SetItemDefaultFocus();
-    }
-
-    for (std::size_t index = 0; index < catalog.GetGearSlots().size();
-         ++index) {
-      const bool selected = gearSlotIndex_ == static_cast<int>(index + 1);
-      if (ImGui::Selectable(catalog.GetGearSlots()[index].data(), selected)) {
-        gearSlotIndex_ = static_cast<int>(index + 1);
+  };
+  const auto drawSlotCombo = [&]() {
+    if (ImGui::BeginCombo(
+            "##gear-slot",
+            gearSlotIndex_ == 0
+                ? "Any slot"
+                : catalog.GetGearSlots()[gearSlotIndex_ - 1].data())) {
+      const bool anySelected = gearSlotIndex_ == 0;
+      if (ImGui::Selectable("Any slot", anySelected)) {
+        gearSlotIndex_ = 0;
       }
+      if (anySelected) {
+        ImGui::SetItemDefaultFocus();
+      }
+
+      for (std::size_t index = 0; index < catalog.GetGearSlots().size();
+           ++index) {
+        const bool selected = gearSlotIndex_ == static_cast<int>(index + 1);
+        if (ImGui::Selectable(catalog.GetGearSlots()[index].data(), selected)) {
+          gearSlotIndex_ = static_cast<int>(index + 1);
+        }
+      }
+      ImGui::EndCombo();
     }
-    ImGui::EndCombo();
+  };
+
+  if (filterBarWidth < 560.0f) {
+    drawSearchField(-FLT_MIN);
+
+    const auto halfWidth = (filterBarWidth - itemSpacingX) * 0.5f;
+    ImGui::SetNextItemWidth(halfWidth);
+    DrawSearchableStringCombo("##gear-plugin", "All plugins",
+                              catalog.GetGearPlugins(), gearPluginIndex_,
+                              gearPluginFilter_);
+
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    drawSlotCombo();
+  } else {
+    const auto searchWidth = filterBarWidth * 0.40f;
+    const auto pluginWidth = filterBarWidth * 0.28f;
+    const auto slotWidth =
+        filterBarWidth - searchWidth - pluginWidth - (itemSpacingX * 2.0f);
+
+    drawSearchField(searchWidth);
+    ImGui::SameLine();
+
+    ImGui::SetNextItemWidth(pluginWidth);
+    DrawSearchableStringCombo("##gear-plugin", "All plugins",
+                              catalog.GetGearPlugins(), gearPluginIndex_,
+                              gearPluginFilter_);
+
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(slotWidth);
+    drawSlotCombo();
   }
 
   auto rows = BuildFilteredGear();
   workbench_.SyncRowsFromPlayer();
+  ImGui::Spacing();
   if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
     if (!previewSelected_) {
       workbench_.ClearPreview();
