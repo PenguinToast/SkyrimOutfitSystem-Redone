@@ -16,7 +16,7 @@ constexpr auto kDefaultFontPath =
     "Data/Interface/SkyrimOutfitSystemNG/fonts/Ubuntu-R.ttf";
 constexpr int kDefaultFontSizePixels = 16;
 constexpr int kMinFontSizePixels = 8;
-constexpr int kMaxFontSizePixels = 28;
+constexpr int kMaxFontSizePixels = 48;
 
 enum class GearColumn : ImGuiID { Name = 1, Plugin, Slot };
 
@@ -980,24 +980,44 @@ void Menu::DrawOptionsTab() {
   ClearCatalogSelection();
   ImGui::TextUnformatted("Interface");
   ImGui::Separator();
-  ImGui::TextWrapped("Adjust the UI font size for this session. The value is "
-                     "stored in integer pixels and the font atlas rebuild is "
-                     "applied after you finish editing.");
 
-  ImGui::SliderInt("Font size", &pendingFontSizePixels_, kMinFontSizePixels,
-                   kMaxFontSizePixels, "%d px");
-  if (ImGui::IsItemDeactivatedAfterEdit()) {
-    fontSizePixels_ = pendingFontSizePixels_;
-    SaveUserSettings();
-    pendingFontAtlasRebuild_ = true;
-  }
+  if (ImGui::BeginChild("##options-font-panel", ImVec2(0.0f, 0.0f),
+                        ImGuiChildFlags_Borders |
+                            ImGuiChildFlags_AutoResizeY)) {
+    if (ImGui::BeginTable("##options-layout", 2,
+                          ImGuiTableFlags_SizingStretchProp,
+                          ImVec2(0.0f, 0.0f))) {
+      ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch,
+                              1.15f);
+      ImGui::TableSetupColumn("Controls", ImGuiTableColumnFlags_WidthStretch,
+                              0.85f);
+      ImGui::TableNextRow();
 
-  ImGui::SameLine();
-  if (ImGui::Button("Reset")) {
-    fontSizePixels_ = kDefaultFontSizePixels;
-    pendingFontSizePixels_ = fontSizePixels_;
-    SaveUserSettings();
-    pendingFontAtlasRebuild_ = true;
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextUnformatted("Font Size");
+      ImGui::TextDisabled("Range: %d px to %d px", kMinFontSizePixels,
+                          kMaxFontSizePixels);
+
+      ImGui::TableSetColumnIndex(1);
+      ImGui::SetNextItemWidth(-FLT_MIN);
+      ImGui::SliderInt("##font-size", &pendingFontSizePixels_,
+                       kMinFontSizePixels, kMaxFontSizePixels, "%d px");
+      if (ImGui::IsItemDeactivatedAfterEdit()) {
+        fontSizePixels_ = pendingFontSizePixels_;
+        SaveUserSettings();
+        pendingFontAtlasRebuild_ = true;
+      }
+
+      if (ImGui::Button("Reset to Default")) {
+        fontSizePixels_ = kDefaultFontSizePixels;
+        pendingFontSizePixels_ = fontSizePixels_;
+        SaveUserSettings();
+        pendingFontAtlasRebuild_ = true;
+      }
+
+      ImGui::EndTable();
+    }
+    ImGui::EndChild();
   }
 }
 } // namespace sosng
