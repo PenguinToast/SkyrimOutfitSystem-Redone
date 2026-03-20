@@ -92,15 +92,6 @@ private:
   [[nodiscard]] bool DrawKitTab();
   void DrawOptionsTab();
   void DrawCreateKitDialog();
-  bool DrawSearchableStringCombo(const char *a_label, const char *a_allLabel,
-                                 const std::vector<std::string> &a_options,
-                                 int &a_index, ImGuiTextFilter &a_filter);
-  bool DrawEditableDropdown(const char *a_label, const char *a_hint,
-                            char *a_buffer, std::size_t a_bufferSize,
-                            const std::vector<std::string> &a_options,
-                            float a_width,
-                            std::string *a_selectedOption = nullptr,
-                            bool a_acceptAutocompleteOnEnter = true);
   bool DrawEquipmentInfoWidget(const char *a_id,
                                const workbench::EquipmentWidgetItem &a_item,
                                bool a_allowDrag, DragSourceKind a_sourceKind,

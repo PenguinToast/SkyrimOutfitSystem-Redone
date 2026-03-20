@@ -1,8 +1,8 @@
 #include "Hooks.h"
 
 #include "InputManager.h"
-#include "Menu.h"
-#include "MenuHost.h"
+#include "ui/Menu.h"
+#include "ui/MenuHost.h"
 
 namespace {
 static void

@@ -1,6 +1,6 @@
 #include "Serialization.h"
 
-#include "Menu.h"
+#include "ui/Menu.h"
 
 namespace sosr::serialization {
 void SaveCallback(SKSE::SerializationInterface *a_skse) {

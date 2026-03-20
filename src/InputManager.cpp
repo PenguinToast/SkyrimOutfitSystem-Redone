@@ -1,7 +1,7 @@
 #include "InputManager.h"
 
-#include "Menu.h"
 #include "imgui.h"
+#include "ui/Menu.h"
 
 namespace sosr {
 namespace {

@@ -1,9 +1,9 @@
 #include "EquipmentCatalog.h"
 #include "Hooks.h"
 #include "InputManager.h"
-#include "Menu.h"
 #include "Serialization.h"
 #include "integrations/DynamicArmorVariantsExtendedClient.h"
+#include "ui/Menu.h"
 
 static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
   switch (a_message->type) {
