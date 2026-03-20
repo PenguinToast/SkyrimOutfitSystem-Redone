@@ -112,8 +112,14 @@ auto BuildDavVariantJson(
 
 namespace sosr::workbench {
 bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
+  return ApplyCatalogPreview("form:" + armor::FormatFormID(a_formID),
+                             std::vector<RE::FormID>{a_formID});
+}
+
+bool VariantWorkbench::ApplyCatalogPreview(
+    std::string_view a_selectionKey, const std::vector<RE::FormID> &a_formIDs) {
   std::vector<PlannedCatalogAssignment> assignments;
-  if (!PlanCatalogAssignments(a_formID, assignments)) {
+  if (!PlanCatalogAssignments(a_formIDs, assignments)) {
     ClearPreview();
     return false;
   }
@@ -172,7 +178,7 @@ bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
     return false;
   }
 
-  if (previewFormID_ == a_formID &&
+  if (previewSelectionKey_ == a_selectionKey &&
       previewDavVariants_ == desiredPreviewVariants) {
     return true;
   }
@@ -219,13 +225,13 @@ bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
     appliedPreviewVariants.emplace(variantName, variantJson);
   }
 
-  previewFormID_ = a_formID;
+  previewSelectionKey_ = a_selectionKey;
   previewDavVariants_ = std::move(desiredPreviewVariants);
   return true;
 }
 
 void VariantWorkbench::ClearPreview() {
-  if (previewFormID_ == 0 && previewDavVariants_.empty()) {
+  if (previewSelectionKey_.empty() && previewDavVariants_.empty()) {
     return;
   }
 
@@ -254,7 +260,7 @@ void VariantWorkbench::ClearPreview() {
     }
   }
 
-  previewFormID_ = 0;
+  previewSelectionKey_.clear();
   previewDavVariants_.clear();
 }
 

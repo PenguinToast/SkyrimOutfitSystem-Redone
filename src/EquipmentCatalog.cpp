@@ -1,11 +1,18 @@
 #include "EquipmentCatalog.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <iterator>
+#include <nlohmann/json.hpp>
+#include <unordered_set>
 #include <windows.h>
 
 namespace {
 using BipedSlot = RE::BIPED_MODEL::BipedObjectSlot;
+
+const auto kModexKitPath =
+    std::filesystem::path("data") / "interface" / "modex" / "user" / "kits";
 
 constexpr std::array<std::pair<BipedSlot, std::string_view>, 32>
     kArmorSlotNames{
@@ -252,11 +259,31 @@ std::string BuildOutfitSearchText(const sosr::OutfitEntry &a_entry) {
   return text;
 }
 
+std::string BuildKitSearchText(const sosr::KitEntry &a_entry) {
+  std::string text;
+  text.reserve(256);
+
+  AppendSearchToken(text, a_entry.name);
+  AppendSearchToken(text, a_entry.collection);
+  AppendSearchToken(text, a_entry.summary);
+  AppendSearchToken(text, a_entry.piecesText);
+  AppendSearchToken(text, a_entry.slotsText);
+
+  return text;
+}
+
 struct OutfitDescription {
   std::vector<std::string> pieces;
   std::vector<std::string> slots;
   std::vector<std::string> tags;
   std::size_t armorCount{0};
+};
+
+struct KitDescription {
+  std::vector<RE::FormID> armorFormIDs;
+  std::vector<std::string> pieces;
+  std::vector<std::string> slots;
+  bool hasMissingItems{false};
 };
 
 OutfitDescription DescribeOutfit(const RE::BGSOutfit *a_outfit) {
@@ -316,6 +343,75 @@ std::string BuildOutfitSummary(const OutfitDescription &a_description) {
   return summary;
 }
 
+nlohmann::json OpenJsonFile(const std::filesystem::path &a_path) {
+  if (!std::filesystem::exists(a_path)) {
+    return nlohmann::json::object();
+  }
+
+  try {
+    std::ifstream file(a_path);
+    if (!file.is_open()) {
+      return nlohmann::json::object();
+    }
+
+    nlohmann::json data;
+    file >> data;
+    return data;
+  } catch (...) {
+    return nlohmann::json::object();
+  }
+}
+
+KitDescription DescribeKitItems(const nlohmann::json &a_items) {
+  KitDescription description;
+  if (!a_items.is_object()) {
+    return description;
+  }
+
+  std::unordered_set<RE::FormID> seenArmorForms;
+  for (const auto &[editorID, _] : a_items.items()) {
+    auto *form = RE::TESForm::LookupByEditorID(editorID);
+    if (!form) {
+      description.hasMissingItems = true;
+      break;
+    }
+
+    const auto *armor = form->As<RE::TESObjectARMO>();
+    if (!armor) {
+      continue;
+    }
+
+    if (!seenArmorForms.insert(armor->GetFormID()).second) {
+      continue;
+    }
+
+    description.armorFormIDs.push_back(armor->GetFormID());
+    description.pieces.push_back(GetDisplayName(armor));
+
+    auto slots = GetArmorSlots(armor);
+    description.slots.insert(description.slots.end(), slots.begin(),
+                             slots.end());
+  }
+
+  SortUniqueStrings(description.pieces);
+  SortUniqueStrings(description.slots);
+  return description;
+}
+
+std::string BuildKitSummary(const KitDescription &a_description) {
+  const auto armorCount = a_description.armorFormIDs.size();
+  if (armorCount == 0) {
+    return "No armor items.";
+  }
+
+  std::string summary =
+      "Contains " + std::to_string(armorCount) + " armor item";
+  if (armorCount != 1) {
+    summary.push_back('s');
+  }
+  return summary;
+}
+
 template <class Entries, class Projection>
 std::vector<std::string> BuildSortedUniqueOptions(const Entries &a_entries,
                                                   Projection a_projection) {
@@ -347,9 +443,11 @@ EquipmentCatalog::EquipmentCatalog()
 void EquipmentCatalog::RefreshFromGame() {
   gear_.clear();
   outfits_.clear();
+  kits_.clear();
   gearPlugins_.clear();
   gearSlots_.clear();
   outfitPlugins_.clear();
+  kitCollections_.clear();
 
   auto *dataHandler = RE::TESDataHandler::GetSingleton();
   if (!dataHandler) {
@@ -437,14 +535,68 @@ void EquipmentCatalog::RefreshFromGame() {
     outfits_.push_back(std::move(entry));
   }
 
+  if (std::filesystem::is_directory(kModexKitPath)) {
+    for (const auto &entry :
+         std::filesystem::recursive_directory_iterator(kModexKitPath)) {
+      if (!entry.is_regular_file() || entry.path().extension() != ".json") {
+        continue;
+      }
+
+      const auto relativePath = entry.path().lexically_relative(kModexKitPath);
+      if (relativePath.string().starts_with("..")) {
+        continue;
+      }
+
+      const auto json = OpenJsonFile(entry.path());
+      if (!json.is_object() || json.size() != 1) {
+        continue;
+      }
+
+      const auto kitItem = json.items().begin();
+      const auto &kitData = kitItem.value();
+      if (!kitData.is_object()) {
+        continue;
+      }
+
+      const auto description =
+          DescribeKitItems(kitData.value("Items", nlohmann::json::object()));
+      if (description.hasMissingItems || description.armorFormIDs.empty()) {
+        continue;
+      }
+
+      auto name = kitItem.key();
+      if (name.empty()) {
+        name = entry.path().stem().string();
+      }
+
+      KitEntry kitEntry{};
+      kitEntry.id = "kit:" + relativePath.generic_string();
+      kitEntry.key = relativePath.generic_string();
+      kitEntry.name = std::move(name);
+      kitEntry.collection = relativePath.parent_path().generic_string();
+      kitEntry.filepath = entry.path().string();
+      kitEntry.summary = BuildKitSummary(description);
+      kitEntry.armorFormIDs = description.armorFormIDs;
+      kitEntry.pieces = description.pieces;
+      kitEntry.slots = description.slots;
+      kitEntry.piecesText = JoinStrings(kitEntry.pieces);
+      kitEntry.slotsText = JoinStrings(kitEntry.slots);
+      kitEntry.searchText = BuildKitSearchText(kitEntry);
+
+      kits_.push_back(std::move(kitEntry));
+    }
+  }
+
   RebuildDerivedData();
 
   source_ = "Runtime cache from TESDataHandler";
   revision_ = "armor=" + std::to_string(gear_.size()) +
-              ", outfits=" + std::to_string(outfits_.size());
+              ", outfits=" + std::to_string(outfits_.size()) +
+              ", kits=" + std::to_string(kits_.size());
 
-  logger::info("Equipment catalog refreshed: {} gear entries, {} outfits",
-               gear_.size(), outfits_.size());
+  logger::info(
+      "Equipment catalog refreshed: {} gear entries, {} outfits, {} kits",
+      gear_.size(), outfits_.size(), kits_.size());
 }
 
 void EquipmentCatalog::RebuildDerivedData() {
@@ -459,6 +611,10 @@ void EquipmentCatalog::RebuildDerivedData() {
   outfitPlugins_ = BuildSortedUniqueOptions(
       outfits_, [](const OutfitEntry &a_entry) -> const std::string & {
         return a_entry.plugin;
+      });
+  kitCollections_ = BuildSortedUniqueOptions(
+      kits_, [](const KitEntry &a_entry) -> const std::string & {
+        return a_entry.collection;
       });
 }
 } // namespace sosr

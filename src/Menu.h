@@ -56,7 +56,7 @@ private:
     RE::FormID formID{0};
   };
 
-  enum class BrowserTab { Gear, Outfits, Options };
+  enum class BrowserTab { Gear, Outfits, Kits, Options };
 
   Menu() = default;
   friend class MenuHost;
@@ -74,6 +74,7 @@ private:
   DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);
   void DrawVariantWorkbenchPane();
   [[nodiscard]] bool DrawOutfitTab();
+  [[nodiscard]] bool DrawKitTab();
   void DrawOptionsTab();
   bool DrawSearchableStringCombo(const char *a_label, const char *a_allLabel,
                                  const std::vector<std::string> &a_options,
@@ -99,12 +100,16 @@ private:
 
   [[nodiscard]] bool MatchesGearFilters(const GearEntry &a_entry) const;
   [[nodiscard]] bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
+  [[nodiscard]] bool MatchesKitFilters(const KitEntry &a_entry) const;
   [[nodiscard]] std::vector<const GearEntry *> BuildFilteredGear() const;
   [[nodiscard]] std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
+  [[nodiscard]] std::vector<const KitEntry *> BuildFilteredKits() const;
   void SortGearRows(std::vector<const GearEntry *> &a_rows,
                     ImGuiTableSortSpecs *a_sortSpecs) const;
   void SortOutfitRows(std::vector<const OutfitEntry *> &a_rows,
                       ImGuiTableSortSpecs *a_sortSpecs) const;
+  void SortKitRows(std::vector<const KitEntry *> &a_rows,
+                   ImGuiTableSortSpecs *a_sortSpecs) const;
 
   bool initialized_{false};
   bool enabled_{false};
@@ -113,6 +118,7 @@ private:
   BrowserTab activeTab_{BrowserTab::Gear};
   int gearPluginIndex_{0};
   int outfitPluginIndex_{0};
+  int kitCollectionIndex_{0};
   std::vector<bool> selectedSlotFilters_;
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
@@ -121,7 +127,7 @@ private:
   bool previewSelected_{true};
   std::uint32_t toggleKey_{0x40};
   std::uint32_t toggleModifier_{0};
-  RE::FormID selectedCatalogFormID_{0};
+  std::string selectedCatalogKey_;
   std::string themeName_{"default"};
   std::string toggleKeyCaptureError_;
   bool awaitingToggleKeyCapture_{false};
@@ -131,8 +137,10 @@ private:
   std::string userSettingsPath_;
   ImGuiTextFilter gearSearch_;
   ImGuiTextFilter outfitSearch_;
+  ImGuiTextFilter kitSearch_;
   ImGuiTextFilter gearPluginFilter_;
   ImGuiTextFilter outfitPluginFilter_;
+  ImGuiTextFilter kitCollectionFilter_;
   workbench::VariantWorkbench workbench_;
 };
 } // namespace sosr

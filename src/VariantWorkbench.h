@@ -28,14 +28,18 @@ class VariantWorkbench {
 public:
   void SyncRowsFromPlayer();
   bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
-  [[nodiscard]] bool IsPreviewingForm(RE::FormID a_formID) const;
+  [[nodiscard]] bool
+  IsPreviewingSelection(std::string_view a_selectionKey) const;
   [[nodiscard]] bool CanAcceptOverride(int a_targetRowIndex,
                                        const EquipmentWidgetItem &a_item,
                                        int a_sourceRowIndex = -1,
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
   bool AddCatalogSelectionToWorkbench(RE::FormID a_formID);
+  bool AddCatalogSelectionToWorkbench(const std::vector<RE::FormID> &a_formIDs);
   bool ApplyCatalogPreview(RE::FormID a_formID);
+  bool ApplyCatalogPreview(std::string_view a_selectionKey,
+                           const std::vector<RE::FormID> &a_formIDs);
   void ClearPreview();
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
@@ -69,6 +73,9 @@ private:
   [[nodiscard]] bool
   ResolveCatalogArmors(RE::FormID a_formID,
                        std::vector<const RE::TESObjectARMO *> &a_armors) const;
+  [[nodiscard]] bool
+  ResolveCatalogArmors(const std::vector<RE::FormID> &a_formIDs,
+                       std::vector<const RE::TESObjectARMO *> &a_armors) const;
   [[nodiscard]] int FindBestCatalogTargetRowIndex(
       const EquipmentWidgetItem &a_item, bool a_requireAcceptable,
       const std::vector<PlannedCatalogAssignment> *a_pendingAssignments) const;
@@ -78,6 +85,9 @@ private:
   [[nodiscard]] bool PlanCatalogAssignments(
       RE::FormID a_formID,
       std::vector<PlannedCatalogAssignment> &a_assignments) const;
+  [[nodiscard]] bool PlanCatalogAssignments(
+      const std::vector<RE::FormID> &a_formIDs,
+      std::vector<PlannedCatalogAssignment> &a_assignments) const;
   [[nodiscard]] int
   FindBestCatalogTargetRowIndex(const EquipmentWidgetItem &a_item,
                                 bool a_requireAcceptable) const;
@@ -86,7 +96,7 @@ private:
   std::vector<VariantWorkbenchRow> rows_;
   std::vector<std::string> rowOrder_;
   std::unordered_map<std::string, std::string> activeDavVariants_;
-  RE::FormID previewFormID_{0};
+  std::string previewSelectionKey_;
   std::unordered_map<std::string, std::string> previewDavVariants_;
 };
 } // namespace sosr::workbench

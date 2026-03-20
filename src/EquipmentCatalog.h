@@ -34,6 +34,21 @@ struct OutfitEntry {
   std::string searchText;
 };
 
+struct KitEntry {
+  std::string id;
+  std::string key;
+  std::string name;
+  std::string collection;
+  std::string filepath;
+  std::string summary;
+  std::vector<RE::FormID> armorFormIDs;
+  std::vector<std::string> pieces;
+  std::vector<std::string> slots;
+  std::string piecesText;
+  std::string slotsText;
+  std::string searchText;
+};
+
 class EquipmentCatalog {
 public:
   static EquipmentCatalog &Get();
@@ -44,6 +59,7 @@ public:
   [[nodiscard]] const std::vector<OutfitEntry> &GetOutfits() const {
     return outfits_;
   }
+  [[nodiscard]] const std::vector<KitEntry> &GetKits() const { return kits_; }
 
   [[nodiscard]] const std::vector<std::string> &GetGearPlugins() const {
     return gearPlugins_;
@@ -53,6 +69,9 @@ public:
   }
   [[nodiscard]] const std::vector<std::string> &GetOutfitPlugins() const {
     return outfitPlugins_;
+  }
+  [[nodiscard]] const std::vector<std::string> &GetKitCollections() const {
+    return kitCollections_;
   }
 
   [[nodiscard]] std::string_view GetSource() const { return source_; }
@@ -64,9 +83,11 @@ private:
 
   std::vector<GearEntry> gear_;
   std::vector<OutfitEntry> outfits_;
+  std::vector<KitEntry> kits_;
   std::vector<std::string> gearPlugins_;
   std::vector<std::string> gearSlots_;
   std::vector<std::string> outfitPlugins_;
+  std::vector<std::string> kitCollections_;
   std::string source_;
   std::string revision_;
 };
