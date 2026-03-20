@@ -35,7 +35,10 @@ public:
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
   bool DeleteOverride(int a_rowIndex, int a_itemIndex);
+  bool DeleteRow(int a_rowIndex);
   bool SetHideEquipped(int a_rowIndex, bool a_hideEquipped);
+  bool InsertCatalogRow(RE::FormID a_formID, int a_targetRowIndex,
+                        bool a_insertAfter);
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
   void SyncDynamicArmorVariants();

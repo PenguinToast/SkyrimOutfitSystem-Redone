@@ -286,12 +286,66 @@ bool VariantWorkbench::DeleteOverride(int a_rowIndex, int a_itemIndex) {
   return true;
 }
 
+bool VariantWorkbench::DeleteRow(int a_rowIndex) {
+  if (a_rowIndex < 0 || a_rowIndex >= static_cast<int>(rows_.size())) {
+    return false;
+  }
+
+  rows_.erase(rows_.begin() + a_rowIndex);
+
+  rowOrder_.clear();
+  rowOrder_.reserve(rows_.size());
+  for (const auto &row : rows_) {
+    rowOrder_.push_back(row.key);
+  }
+
+  return true;
+}
+
 bool VariantWorkbench::SetHideEquipped(int a_rowIndex, bool a_hideEquipped) {
   if (a_rowIndex < 0 || a_rowIndex >= static_cast<int>(rows_.size())) {
     return false;
   }
 
   rows_[static_cast<std::size_t>(a_rowIndex)].hideEquipped = a_hideEquipped;
+  return true;
+}
+
+bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
+                                        int a_targetRowIndex,
+                                        bool a_insertAfter) {
+  if (a_targetRowIndex < 0 ||
+      a_targetRowIndex >= static_cast<int>(rows_.size())) {
+    return false;
+  }
+
+  EquipmentWidgetItem equipped{};
+  if (!BuildCatalogItem(a_formID, equipped)) {
+    return false;
+  }
+
+  const auto rowKey = "armor:" + armor::FormatFormID(a_formID);
+  if (std::ranges::find(rows_, rowKey, [](const VariantWorkbenchRow &a_row) {
+        return a_row.key;
+      }) != rows_.end()) {
+    return false;
+  }
+
+  VariantWorkbenchRow row{};
+  row.key = rowKey;
+  row.equipped = std::move(equipped);
+  row.equipped.key = rowKey;
+
+  auto insertIndex = a_targetRowIndex + (a_insertAfter ? 1 : 0);
+  insertIndex = std::clamp(insertIndex, 0, static_cast<int>(rows_.size()));
+  rows_.insert(rows_.begin() + insertIndex, std::move(row));
+
+  rowOrder_.clear();
+  rowOrder_.reserve(rows_.size());
+  for (const auto &existingRow : rows_) {
+    rowOrder_.push_back(existingRow.key);
+  }
+
   return true;
 }
 

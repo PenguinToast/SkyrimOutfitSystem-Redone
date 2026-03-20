@@ -750,6 +750,10 @@ void Menu::ApplyRowReorder(const DraggedEquipmentPayload &a_dragPayload,
       static_cast<std::uint32_t>(DragSourceKind::Row)) {
     workbench_.ApplyRowReorder(a_dragPayload.rowIndex, a_targetRowIndex,
                                a_insertAfter);
+  } else if (a_dragPayload.sourceKind ==
+             static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
+    workbench_.InsertCatalogRow(a_dragPayload.formID, a_targetRowIndex,
+                                a_insertAfter);
   }
 }
 
@@ -764,6 +768,9 @@ void Menu::AcceptOverrideDeletePayload() {
   if (dragPayload.sourceKind ==
       static_cast<std::uint32_t>(DragSourceKind::Override)) {
     workbench_.DeleteOverride(dragPayload.rowIndex, dragPayload.itemIndex);
+  } else if (dragPayload.sourceKind ==
+             static_cast<std::uint32_t>(DragSourceKind::Row)) {
+    workbench_.DeleteRow(dragPayload.rowIndex);
   }
 }
 
@@ -799,13 +806,16 @@ void Menu::DrawVariantWorkbenchPane() {
       ImGui::TableHeadersRow();
 
       const auto *activePayload = ImGui::GetDragDropPayload();
-      const bool rowDragActive =
+      const bool reorderPreviewActive =
           activePayload && activePayload->Data != nullptr &&
           activePayload->IsDataType(kVariantItemPayloadType) &&
           activePayload->DataSize == sizeof(DraggedEquipmentPayload) &&
-          static_cast<const DraggedEquipmentPayload *>(activePayload->Data)
-                  ->sourceKind ==
-              static_cast<std::uint32_t>(DragSourceKind::Row);
+          ([](const DraggedEquipmentPayload *a_payload) {
+            return a_payload->sourceKind ==
+                       static_cast<std::uint32_t>(DragSourceKind::Row) ||
+                   a_payload->sourceKind ==
+                       static_cast<std::uint32_t>(DragSourceKind::Catalog);
+          })(static_cast<const DraggedEquipmentPayload *>(activePayload->Data));
       float insertionLineY = -1.0f;
       float insertionLineX1 = -1.0f;
       float insertionLineX2 = -1.0f;
@@ -847,7 +857,7 @@ void Menu::DrawVariantWorkbenchPane() {
               ImGui::GetIO().MousePos.y >
               ((leftCellRect.Min.y + leftCellRect.Max.y) * 0.5f);
 
-          if (rowDragActive &&
+          if (reorderPreviewActive &&
               ImGui::IsMouseHoveringRect(leftCellRect.Min, leftCellRect.Max)) {
             hoveredRowReorderIndex = rowIndex;
             hoveredRowInsertAfter = insertAfter;
@@ -867,7 +877,9 @@ void Menu::DrawVariantWorkbenchPane() {
               DraggedEquipmentPayload dragPayload{};
               std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
               if (dragPayload.sourceKind ==
-                  static_cast<std::uint32_t>(DragSourceKind::Row)) {
+                      static_cast<std::uint32_t>(DragSourceKind::Row) ||
+                  dragPayload.sourceKind ==
+                      static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
                 acceptedRowReorderPayload = dragPayload;
                 acceptedRowReorderIndex = rowIndex;
                 acceptedRowInsertAfter = insertAfter;
@@ -951,7 +963,7 @@ void Menu::DrawVariantWorkbenchPane() {
                 : rowTopY[static_cast<std::size_t>(hoveredRowReorderIndex)];
       }
 
-      if (rowDragActive && insertionLineY >= 0.0f &&
+      if (reorderPreviewActive && insertionLineY >= 0.0f &&
           insertionLineX2 > insertionLineX1) {
         auto *drawList = ImGui::GetWindowDrawList();
         drawList->AddLine(ImVec2(insertionLineX1, insertionLineY),
@@ -976,7 +988,7 @@ void Menu::DrawVariantWorkbenchPane() {
       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
   const auto deletePos = ImGui::GetWindowPos();
   const auto deleteSize = ImGui::GetWindowSize();
-  ImGui::TextWrapped("Drag an override here to delete it.");
+  ImGui::TextWrapped("Drag an override or row here to delete it.");
   const ImRect deleteRect(deletePos, ImVec2(deletePos.x + deleteSize.x,
                                             deletePos.y + deleteSize.y));
   if (ImGui::BeginDragDropTargetCustom(
