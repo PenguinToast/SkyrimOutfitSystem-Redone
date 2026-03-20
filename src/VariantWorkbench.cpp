@@ -213,6 +213,20 @@ bool VariantWorkbench::CanAcceptOverride(int a_targetRowIndex,
     return false;
   }
 
+  const auto &row = rows_[static_cast<std::size_t>(a_targetRowIndex)];
+  for (int itemIndex = 0; itemIndex < static_cast<int>(row.overrides.size());
+       ++itemIndex) {
+    if (a_targetRowIndex == a_sourceRowIndex &&
+        itemIndex == a_sourceItemIndex) {
+      continue;
+    }
+
+    if (row.overrides[static_cast<std::size_t>(itemIndex)].formID ==
+        a_item.formID) {
+      return false;
+    }
+  }
+
   if (a_item.slotMask == 0) {
     return false;
   }
