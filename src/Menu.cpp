@@ -4,6 +4,7 @@
 #include "MenuHost.h"
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
+#include "imgui_internal.h"
 
 #include <filesystem>
 #include <fstream>
@@ -109,6 +110,12 @@ std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
 
   truncated.append(ellipsis);
   return truncated;
+}
+
+void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
+  using Func = decltype(&AllowTextInput);
+  static REL::Relocation<Func> func{RELOCATION_ID(67252, 68552)};
+  func(a_controlMap, a_allow);
 }
 
 } // namespace
@@ -312,6 +319,10 @@ void Menu::OnMenuHide() {
 
   if (auto *controlMap = RE::ControlMap::GetSingleton();
       controlMap != nullptr) {
+    if (wantTextInput_) {
+      AllowTextInput(controlMap, false);
+      wantTextInput_ = false;
+    }
     controlMap->ToggleControls(kBlockedGameplayControls, true, false);
   }
 
@@ -343,6 +354,24 @@ void Menu::OpenToggleKeyCapture() {
   awaitingToggleKeyCapture_ = true;
   openToggleKeyPopup_ = true;
   toggleKeyCaptureError_.clear();
+}
+
+void Menu::SyncAllowTextInput() {
+  const bool currentWantTextInput = ImGui::GetIO().WantTextInput;
+
+  if (!wantTextInput_ && currentWantTextInput) {
+    if (auto *controlMap = RE::ControlMap::GetSingleton();
+        controlMap != nullptr) {
+      AllowTextInput(controlMap, true);
+    }
+  } else if (wantTextInput_ && !currentWantTextInput) {
+    if (auto *controlMap = RE::ControlMap::GetSingleton();
+        controlMap != nullptr) {
+      AllowTextInput(controlMap, false);
+    }
+  }
+
+  wantTextInput_ = currentWantTextInput;
 }
 
 void Menu::CloseToggleKeyCapture() {
@@ -403,6 +432,7 @@ void Menu::Draw() {
   ImGui_ImplDX11_NewFrame();
   InputManager::GetSingleton()->UpdateMousePosition();
   ImGui::NewFrame();
+  SyncAllowTextInput();
 
   DrawWindow();
 
@@ -582,9 +612,12 @@ void Menu::DrawWindow() {
     workbench_.SyncDynamicArmorVariantsExtended();
   }
 
+  const bool requestClose =
+      ImGui::Shortcut(ImGuiKey_Escape, ImGuiInputFlags_RouteActive);
+
   ImGui::End();
 
-  if (!open) {
+  if (!open || requestClose) {
     Close();
   }
 }
@@ -858,6 +891,9 @@ bool Menu::DrawSearchableStringCombo(const char *a_label,
     }
 
     a_filter.Draw("##search", -FLT_MIN);
+    if (ImGui::IsItemActivated()) {
+      InputManager::GetSingleton()->Flush();
+    }
     ImGui::Separator();
 
     if (a_filter.PassFilter(a_allLabel)) {
@@ -905,6 +941,9 @@ void Menu::DrawCatalogFilters() {
     ImGui::PushItemWidth(a_width);
     a_filter.Draw(a_id, a_width);
     ImGui::PopItemWidth();
+    if (ImGui::IsItemActivated()) {
+      InputManager::GetSingleton()->Flush();
+    }
     if (a_filter.InputBuf[0] == '\0') {
       const auto rectMin = ImGui::GetItemRectMin();
       const auto padding = ImGui::GetStyle().FramePadding;

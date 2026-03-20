@@ -101,6 +101,37 @@ void InputManager::OnFocusChange(bool a_focus) {
   altDown_ = false;
 }
 
+void InputManager::Flush() {
+  {
+    std::scoped_lock lock(inputLock_);
+    inputQueue_.clear();
+  }
+
+  if (auto *inputMgr = RE::BSInputDeviceManager::GetSingleton();
+      inputMgr != nullptr) {
+    if (auto *device = inputMgr->GetKeyboard(); device != nullptr) {
+      device->ClearInputState();
+    }
+  }
+
+  if (auto *eventQueue = RE::BSInputEventQueue::GetSingleton();
+      eventQueue != nullptr) {
+    eventQueue->ClearInputQueue();
+  }
+
+  shiftDown_ = false;
+  ctrlDown_ = false;
+  altDown_ = false;
+
+  if (ImGui::GetCurrentContext() == nullptr) {
+    return;
+  }
+
+  auto &io = ImGui::GetIO();
+  io.ClearInputKeys();
+  io.ClearEventsQueue();
+}
+
 void InputManager::AddEventToQueue(RE::InputEvent **a_events) {
   if (!a_events || !*a_events) {
     return;
@@ -133,10 +164,6 @@ void InputManager::ProcessInputEvents() {
   for (const auto *event : queuedEvents) {
     switch (event->GetEventType()) {
     case RE::INPUT_EVENT_TYPE::kChar:
-      if (menu->IsEnabled()) {
-        io.AddInputCharacter(
-            static_cast<const RE::CharEvent *>(event)->keyCode);
-      }
       break;
     case RE::INPUT_EVENT_TYPE::kButton: {
       const auto *buttonEvent = static_cast<const RE::ButtonEvent *>(event);
@@ -153,27 +180,8 @@ void InputManager::ProcessInputEvents() {
         altDown_ = buttonEvent->IsPressed();
       }
 
-      if (menu->IsEnabled()) {
-        io.AddKeyEvent(ImGuiMod_Shift, shiftDown_);
-        io.AddKeyEvent(ImGuiMod_Ctrl, ctrlDown_);
-        io.AddKeyEvent(ImGuiMod_Alt, altDown_);
-      }
-
       switch (buttonEvent->device.get()) {
       case RE::INPUT_DEVICE::kMouse:
-        if (!menu->IsEnabled()) {
-          break;
-        }
-
-        if (scanCode > 7) {
-          io.AddMouseWheelEvent(0.0f, buttonEvent->Value() *
-                                          (scanCode == 8 ? 1.0f : -1.0f));
-        } else if (scanCode > 5) {
-          io.AddMouseButtonEvent(5, buttonEvent->IsPressed());
-        } else {
-          io.AddMouseButtonEvent(static_cast<int>(scanCode),
-                                 buttonEvent->IsPressed());
-        }
         break;
       case RE::INPUT_DEVICE::kKeyboard:
         if (menu->IsCapturingToggleKey() && buttonEvent->IsDown()) {
@@ -197,15 +205,6 @@ void InputManager::ProcessInputEvents() {
           break;
         }
 
-        if (scanCode == 0x01 && buttonEvent->IsDown()) {
-          menu->Close();
-          io.ClearInputKeys();
-          break;
-        }
-
-        if (imguiKey != ImGuiKey_None) {
-          io.AddKeyEvent(imguiKey, buttonEvent->IsDown());
-        }
         break;
       default:
         break;

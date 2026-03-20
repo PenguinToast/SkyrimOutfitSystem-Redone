@@ -65,6 +65,7 @@ private:
   void LoadUserSettings();
   void SaveUserSettings() const;
   void RebuildFontAtlas();
+  void SyncAllowTextInput();
   void OnMenuShow();
   void OnMenuHide();
   void DrawWindow();
@@ -132,6 +133,7 @@ private:
   std::string toggleKeyCaptureError_;
   bool awaitingToggleKeyCapture_{false};
   bool openToggleKeyPopup_{false};
+  bool wantTextInput_{false};
   std::string settingsDirectory_;
   std::string imguiIniPath_;
   std::string userSettingsPath_;

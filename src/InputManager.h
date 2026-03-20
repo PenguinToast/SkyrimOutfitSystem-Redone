@@ -8,6 +8,7 @@ public:
   void Init();
   void OnFocusChange(bool a_focus);
   void AddEventToQueue(RE::InputEvent **a_events);
+  void Flush();
   void ProcessInputEvents();
   void UpdateMousePosition() const;
   [[nodiscard]] bool IsBoundModifierDown() const;
