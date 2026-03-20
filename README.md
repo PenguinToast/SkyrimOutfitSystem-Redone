@@ -72,6 +72,23 @@ For a full clean rebuild:
 This deploys the plugin to:
 `/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_redone`
 
+To build and package a release mod archive:
+```bash
+./scripts/build-package.sh
+```
+
+This writes a zip under `dist/` named like:
+`Skyrim Outfit System Redone v1.2.3.zip`
+
+The package script will fail unless:
+* the worktree is clean
+* `HEAD` has exactly one tag
+* that tag is valid semver
+
+The archive root contains the normal mod payload (`SKSE/`, `Interface/`, etc.)
+plus `fomod/info.xml` with mod metadata. Packaging uses `releasedbg`, so the
+archive also includes a `.pdb` next to the DLL for symbolized crash logs.
+
 ## Optional Output Paths
 You can redirect install output with either of these environment variables:
 
