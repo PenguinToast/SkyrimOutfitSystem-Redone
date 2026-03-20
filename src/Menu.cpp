@@ -646,18 +646,37 @@ void Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        const auto rowContentPos = ImGui::GetCursorScreenPos();
+        const auto rowHeight =
+            18.0f + (ImGui::GetTextLineHeight() * 2.0f) + 14.0f;
+        ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+        ImGui::Selectable(
+            ("##catalog-row-hit-" + std::to_string(rowIndex)).c_str(), false,
+            ImGuiSelectableFlags_SpanAllColumns |
+                ImGuiSelectableFlags_AllowOverlap |
+                ImGuiSelectableFlags_AllowDoubleClick,
+            ImVec2(0.0f, rowHeight));
+        const bool rowHovered = ImGui::IsItemHovered();
+        ImGui::PopStyleColor(3);
+        ImGui::SetCursorScreenPos(rowContentPos);
         DrawEquipmentInfoWidget(item.key.c_str(), item, true,
                                 DragSourceKind::Catalog);
-        if (ImGui::IsItemHovered() &&
-            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-          workbench_.AddCatalogOverrideToBestRow(item.formID);
-        }
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(entry.plugin.data());
 
         ImGui::TableSetColumnIndex(2);
         ImGui::Text("%s", entry.slot.data());
+
+        if (rowHovered) {
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                 IM_COL32(44, 58, 73, 112));
+          if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            workbench_.AddCatalogOverrideToBestRow(item.formID);
+          }
+        }
       }
     }
 
