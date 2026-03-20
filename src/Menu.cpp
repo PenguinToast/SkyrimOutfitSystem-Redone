@@ -6,6 +6,7 @@
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -20,6 +21,9 @@ constexpr auto kDefaultFontPath =
 constexpr int kDefaultFontSizePixels = 16;
 constexpr int kMinFontSizePixels = 8;
 constexpr int kMaxFontSizePixels = 48;
+constexpr float kFadeDurationSeconds = 0.30f;
+constexpr float kSmoothScrollStepMultiplier = 5.0f;
+constexpr float kSmoothScrollLerpFactor = 0.20f;
 
 using UserEventFlag = RE::ControlMap::UEFlag;
 
@@ -188,6 +192,7 @@ void Menu::LoadUserSettings() {
                                  kMinFontSizePixels, kMaxFontSizePixels);
     pendingFontSizePixels_ = fontSizePixels_;
     pauseGameWhenOpen_ = json.value("pauseGameWhileOpen", pauseGameWhenOpen_);
+    smoothScroll_ = json.value("smoothScroll", smoothScroll_);
     toggleKey_ = json.value("toggleKey", toggleKey_);
     toggleModifier_ = json.value("toggleModifier", toggleModifier_);
     themeName_ = json.value("theme", themeName_);
@@ -214,6 +219,7 @@ void Menu::SaveUserSettings() const {
 
   const nlohmann::json json = {{"fontSizePx", fontSizePixels_},
                                {"pauseGameWhileOpen", pauseGameWhenOpen_},
+                               {"smoothScroll", smoothScroll_},
                                {"toggleKey", toggleKey_},
                                {"toggleModifier", toggleModifier_},
                                {"theme", themeName_}};
@@ -269,7 +275,7 @@ void Menu::ApplyStyle() {
 }
 
 void Menu::Open() {
-  if (!initialized_) {
+  if (!initialized_ || enabled_) {
     return;
   }
 
@@ -281,15 +287,11 @@ void Menu::Open() {
 }
 
 void Menu::Close() {
-  if (!initialized_) {
+  if (!initialized_ || !enabled_ ||
+      visibilityState_ == VisibilityState::Closing) {
     return;
   }
-
-  if (auto *messageQueue = RE::UIMessageQueue::GetSingleton();
-      messageQueue != nullptr) {
-    messageQueue->AddMessage(MenuHost::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide,
-                             nullptr);
-  }
+  visibilityState_ = VisibilityState::Closing;
 }
 
 void Menu::OnMenuShow() {
@@ -306,6 +308,12 @@ void Menu::OnMenuShow() {
   io.MouseDrawCursor = false;
   io.ClearInputKeys();
   io.ClearEventsQueue();
+  visibilityState_ = VisibilityState::Opening;
+  windowAlpha_ = 0.0f;
+  hideMessageQueued_ = false;
+  pendingSmoothWheelDelta_ = 0.0f;
+  smoothScrollWindowId_ = 0;
+  smoothScrollTargetY_ = 0.0f;
   enabled_ = true;
 }
 
@@ -330,6 +338,12 @@ void Menu::OnMenuHide() {
   io.MouseDrawCursor = false;
   io.ClearInputKeys();
   io.ClearEventsQueue();
+  pendingSmoothWheelDelta_ = 0.0f;
+  smoothScrollWindowId_ = 0;
+  smoothScrollTargetY_ = 0.0f;
+  hideMessageQueued_ = false;
+  visibilityState_ = VisibilityState::Closed;
+  windowAlpha_ = 0.0f;
   if (io.IniFilename) {
     ImGui::SaveIniSettingsToDisk(io.IniFilename);
   }
@@ -345,9 +359,134 @@ void Menu::Toggle() {
   }
 }
 
+bool Menu::QueueSmoothScroll(const float a_deltaY) {
+  if (!enabled_ || !smoothScroll_ || a_deltaY == 0.0f) {
+    return false;
+  }
+
+  pendingSmoothWheelDelta_ += a_deltaY;
+  return true;
+}
+
 void Menu::ClearCatalogSelection() {
   selectedCatalogKey_.clear();
   workbench_.ClearPreview();
+}
+
+void Menu::QueueHideMessage() {
+  if (hideMessageQueued_) {
+    return;
+  }
+
+  if (auto *messageQueue = RE::UIMessageQueue::GetSingleton();
+      messageQueue != nullptr) {
+    messageQueue->AddMessage(MenuHost::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide,
+                             nullptr);
+    hideMessageQueued_ = true;
+  }
+}
+
+void Menu::UpdateVisibilityAnimation(const float a_deltaTime) {
+  switch (visibilityState_) {
+  case VisibilityState::Opening:
+    windowAlpha_ += a_deltaTime / kFadeDurationSeconds;
+    if (windowAlpha_ >= 1.0f) {
+      windowAlpha_ = 1.0f;
+      visibilityState_ = VisibilityState::Open;
+    }
+    break;
+  case VisibilityState::Closing:
+    windowAlpha_ -= a_deltaTime / kFadeDurationSeconds;
+    if (windowAlpha_ <= 0.0f) {
+      windowAlpha_ = 0.0f;
+      QueueHideMessage();
+    }
+    break;
+  case VisibilityState::Open:
+    windowAlpha_ = 1.0f;
+    break;
+  case VisibilityState::Closed:
+    windowAlpha_ = 0.0f;
+    break;
+  }
+}
+
+void Menu::ApplySmoothScroll() {
+  if (!smoothScroll_) {
+    pendingSmoothWheelDelta_ = 0.0f;
+    smoothScrollWindowId_ = 0;
+    return;
+  }
+
+  auto *context = ImGui::GetCurrentContext();
+  if (context == nullptr) {
+    pendingSmoothWheelDelta_ = 0.0f;
+    smoothScrollWindowId_ = 0;
+    return;
+  }
+
+  auto findScrollWindow = [](ImGuiWindow *a_window) -> ImGuiWindow * {
+    while (a_window != nullptr) {
+      if (!(a_window->Flags & ImGuiWindowFlags_NoScrollWithMouse) &&
+          a_window->ScrollMax.y > 0.0f) {
+        return a_window;
+      }
+      a_window = a_window->ParentWindow;
+    }
+    return nullptr;
+  };
+
+  if (pendingSmoothWheelDelta_ != 0.0f) {
+    if (auto *scrollWindow = findScrollWindow(context->HoveredWindow);
+        scrollWindow != nullptr) {
+      if (smoothScrollWindowId_ != scrollWindow->ID) {
+        smoothScrollWindowId_ = scrollWindow->ID;
+        smoothScrollTargetY_ = scrollWindow->Scroll.y;
+      }
+
+      const auto scrollStep =
+          ImGui::GetTextLineHeightWithSpacing() * kSmoothScrollStepMultiplier;
+      smoothScrollTargetY_ = std::clamp(
+          smoothScrollTargetY_ - pendingSmoothWheelDelta_ * scrollStep, 0.0f,
+          scrollWindow->ScrollMax.y);
+    }
+    pendingSmoothWheelDelta_ = 0.0f;
+  }
+
+  if (smoothScrollWindowId_ == 0) {
+    return;
+  }
+
+  ImGuiWindow *scrollWindow = nullptr;
+  for (auto *window : context->Windows) {
+    if (window->ID == smoothScrollWindowId_) {
+      scrollWindow = window;
+      break;
+    }
+  }
+
+  if (scrollWindow == nullptr) {
+    smoothScrollWindowId_ = 0;
+    smoothScrollTargetY_ = 0.0f;
+    return;
+  }
+
+  smoothScrollTargetY_ =
+      std::clamp(smoothScrollTargetY_, 0.0f, scrollWindow->ScrollMax.y);
+  const auto currentScrollY = scrollWindow->Scroll.y;
+  auto nextScrollY = currentScrollY + ((smoothScrollTargetY_ - currentScrollY) *
+                                       kSmoothScrollLerpFactor);
+  if (std::abs(smoothScrollTargetY_ - nextScrollY) <= 0.5f) {
+    nextScrollY = smoothScrollTargetY_;
+  }
+
+  scrollWindow->Scroll.y = nextScrollY;
+  scrollWindow->ScrollTarget.y = nextScrollY;
+  scrollWindow->ScrollTargetCenterRatio.y = 0.0f;
+
+  if (std::abs(smoothScrollTargetY_ - nextScrollY) <= 0.5f) {
+    smoothScrollWindowId_ = 0;
+  }
 }
 
 void Menu::OpenToggleKeyCapture() {
@@ -435,6 +574,8 @@ void Menu::Draw() {
   SyncAllowTextInput();
 
   DrawWindow();
+  ApplySmoothScroll();
+  UpdateVisibilityAnimation(ImGui::GetIO().DeltaTime);
 
   ImGui::Render();
   ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -450,9 +591,11 @@ void Menu::DrawWindow() {
       ImGuiCond_FirstUseEver, ImVec2(0.50f, 0.50f));
 
   bool open = enabled_;
+  ImGui::PushStyleVar(ImGuiStyleVar_Alpha, windowAlpha_);
   if (!ImGui::Begin("Skyrim Outfit System Redone", &open,
                     ImGuiWindowFlags_NoCollapse)) {
     ImGui::End();
+    ImGui::PopStyleVar();
     if (!open) {
       Close();
     }
@@ -616,6 +759,7 @@ void Menu::DrawWindow() {
       ImGui::Shortcut(ImGuiKey_Escape, ImGuiInputFlags_RouteActive);
 
   ImGui::End();
+  ImGui::PopStyleVar();
 
   if (!open || requestClose) {
     Close();
@@ -1428,6 +1572,20 @@ void Menu::DrawOptionsTab() {
       bool pauseGameWhenOpen = pauseGameWhenOpen_;
       if (ImGui::Checkbox("##pause-game-while-open", &pauseGameWhenOpen)) {
         pauseGameWhenOpen_ = pauseGameWhenOpen;
+        SaveUserSettings();
+      }
+
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextUnformatted("Smooth Scrolling");
+
+      ImGui::TableSetColumnIndex(1);
+      bool smoothScroll = smoothScroll_;
+      if (ImGui::Checkbox("##smooth-scrolling", &smoothScroll)) {
+        smoothScroll_ = smoothScroll;
+        pendingSmoothWheelDelta_ = 0.0f;
+        smoothScrollWindowId_ = 0;
+        smoothScrollTargetY_ = 0.0f;
         SaveUserSettings();
       }
 

@@ -1,6 +1,7 @@
 {
   "fontSizePx": 13,
   "pauseGameWhileOpen": false,
+  "smoothScroll": true,
   "toggleKey": 64,
   "toggleModifier": 0,
   "theme": "default"

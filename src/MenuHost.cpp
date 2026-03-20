@@ -92,7 +92,9 @@ void OnMouseEvent(const RE::GFxEvent *a_event, bool a_down) {
 
 void OnMouseWheelEvent(const RE::GFxEvent *a_event) {
   const auto *mouseEvent = reinterpret_cast<const RE::GFxMouseEvent *>(a_event);
-  ImGui::GetIO().AddMouseWheelEvent(0.0f, mouseEvent->scrollDelta);
+  if (!sosr::Menu::GetSingleton()->QueueSmoothScroll(mouseEvent->scrollDelta)) {
+    ImGui::GetIO().AddMouseWheelEvent(0.0f, mouseEvent->scrollDelta);
+  }
 }
 
 void OnKeyEvent(const RE::GFxEvent *a_event, bool a_down) {

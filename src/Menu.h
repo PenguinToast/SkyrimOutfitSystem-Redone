@@ -26,6 +26,7 @@ public:
   [[nodiscard]] bool IsEnabled() const { return enabled_; }
   [[nodiscard]] bool IsInitialized() const { return initialized_; }
   [[nodiscard]] bool PauseGameWhenOpen() const { return pauseGameWhenOpen_; }
+  [[nodiscard]] bool QueueSmoothScroll(float a_deltaY);
   [[nodiscard]] std::string GetToggleKeyLabel() const;
   [[nodiscard]] std::uint32_t GetToggleKey() const { return toggleKey_; }
   [[nodiscard]] std::uint32_t GetToggleModifier() const {
@@ -57,6 +58,7 @@ private:
   };
 
   enum class BrowserTab { Gear, Outfits, Kits, Options };
+  enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
 
   Menu() = default;
   friend class MenuHost;
@@ -66,6 +68,9 @@ private:
   void SaveUserSettings() const;
   void RebuildFontAtlas();
   void SyncAllowTextInput();
+  void UpdateVisibilityAnimation(float a_deltaTime);
+  void QueueHideMessage();
+  void ApplySmoothScroll();
   void OnMenuShow();
   void OnMenuHide();
   void DrawWindow();
@@ -125,6 +130,7 @@ private:
   int pendingFontSizePixels_{13};
   bool pendingFontAtlasRebuild_{false};
   bool pauseGameWhenOpen_{false};
+  bool smoothScroll_{true};
   bool previewSelected_{true};
   std::uint32_t toggleKey_{0x40};
   std::uint32_t toggleModifier_{0};
@@ -134,6 +140,12 @@ private:
   bool awaitingToggleKeyCapture_{false};
   bool openToggleKeyPopup_{false};
   bool wantTextInput_{false};
+  bool hideMessageQueued_{false};
+  VisibilityState visibilityState_{VisibilityState::Closed};
+  float windowAlpha_{0.0f};
+  float pendingSmoothWheelDelta_{0.0f};
+  ImGuiID smoothScrollWindowId_{0};
+  float smoothScrollTargetY_{0.0f};
   std::string settingsDirectory_;
   std::string imguiIniPath_;
   std::string userSettingsPath_;
