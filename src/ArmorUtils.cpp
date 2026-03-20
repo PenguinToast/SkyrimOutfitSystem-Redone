@@ -125,4 +125,15 @@ std::string GetFormIdentifier(const RE::TESForm *a_form) {
 
   return plugin + "|" + FormatFormID(a_form->GetLocalFormID());
 }
+
+std::string GetReplacementIdentifier(const RE::TESObjectARMO *a_armor,
+                                     const RE::TESObjectARMA *a_armorAddon) {
+  const auto armorIdentifier = GetFormIdentifier(a_armor);
+  const auto armorAddonIdentifier = GetFormIdentifier(a_armorAddon);
+  if (armorIdentifier.empty() || armorAddonIdentifier.empty()) {
+    return {};
+  }
+
+  return armorIdentifier + "|" + armorAddonIdentifier;
+}
 } // namespace sosng::armor

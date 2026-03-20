@@ -41,7 +41,8 @@ auto BuildDavVariantJson(
         continue;
       }
 
-      const auto identifier = sosng::armor::GetFormIdentifier(overrideAddon);
+      const auto identifier =
+          sosng::armor::GetReplacementIdentifier(overrideArmor, overrideAddon);
       if (identifier.empty()) {
         continue;
       }
