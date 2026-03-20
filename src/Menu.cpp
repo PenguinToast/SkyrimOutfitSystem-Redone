@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <unordered_map>
 
 namespace {
 constexpr auto kSettingsDirectory = "Data/SKSE/Plugins/SkyrimOutfitSystemNG";
@@ -24,6 +25,28 @@ constexpr char kVariantItemPayloadType[] = "SOSNG_VARIANT_ITEM";
 enum class GearColumn : ImGuiID { Name = 1, Plugin, Slot };
 
 enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Tags, Pieces };
+
+struct ActiveWorkbenchVisual {
+  std::string widgetId;
+  std::string description;
+  std::uint64_t slotMask{0};
+  int rowIndex{-1};
+};
+
+struct OverrideConflictInfo {
+  std::vector<std::string> targetWidgetIds;
+  std::vector<std::string> targetDescriptions;
+};
+
+std::string DescribeActiveWorkbenchVisual(
+    const sosng::workbench::VariantWorkbenchRow &a_row,
+    const sosng::workbench::EquipmentWidgetItem &a_item, bool a_isOverride) {
+  if (a_isOverride) {
+    return a_item.name + " override on " + a_row.equipped.name;
+  }
+
+  return a_row.equipped.name + " (equipped)";
+}
 
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
@@ -643,7 +666,7 @@ bool Menu::DrawEquipmentInfoWidget(const char *a_id,
                                    bool a_allowDrag,
                                    DragSourceKind a_sourceKind,
                                    bool a_showDeleteButton, int a_rowIndex,
-                                   int a_itemIndex) {
+                                   int a_itemIndex, bool a_conflict) {
   ImGui::PushID(a_id);
 
   constexpr float paddingX = 10.0f;
@@ -663,14 +686,21 @@ bool Menu::DrawEquipmentInfoWidget(const char *a_id,
   auto *drawList = ImGui::GetWindowDrawList();
 
   ImU32 fillColor = IM_COL32(28, 33, 41, 242);
+  ImU32 borderColor = IM_COL32(85, 103, 122, 255);
+  if (a_conflict) {
+    fillColor = IM_COL32(76, 24, 24, 242);
+    borderColor = IM_COL32(192, 84, 84, 255);
+  }
   if (active) {
-    fillColor = IM_COL32(45, 63, 86, 255);
+    fillColor =
+        a_conflict ? IM_COL32(112, 36, 36, 255) : IM_COL32(45, 63, 86, 255);
   } else if (hovered) {
-    fillColor = IM_COL32(37, 47, 60, 250);
+    fillColor =
+        a_conflict ? IM_COL32(94, 32, 32, 250) : IM_COL32(37, 47, 60, 250);
   }
 
   drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);
-  drawList->AddRect(rectMin, rectMax, IM_COL32(85, 103, 122, 255), 8.0f);
+  drawList->AddRect(rectMin, rectMax, borderColor, 8.0f);
 
   const auto namePos = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY);
   const auto slotPos =
@@ -784,6 +814,64 @@ void Menu::DrawVariantWorkbenchPane() {
     return;
   }
 
+  std::vector<ActiveWorkbenchVisual> activeVisuals;
+  activeVisuals.reserve(rows.size() * 2);
+  for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
+    const auto &row = rows[static_cast<std::size_t>(rowIndex)];
+    if (!row.isEquipped) {
+      continue;
+    }
+
+    if (!row.overrides.empty()) {
+      for (int overrideIndex = 0;
+           overrideIndex < static_cast<int>(row.overrides.size());
+           ++overrideIndex) {
+        const auto &item =
+            row.overrides[static_cast<std::size_t>(overrideIndex)];
+        activeVisuals.push_back(
+            {.widgetId = "override:" + std::to_string(rowIndex) + ":" +
+                         std::to_string(overrideIndex),
+             .description = DescribeActiveWorkbenchVisual(row, item, true),
+             .slotMask = item.slotMask,
+             .rowIndex = rowIndex});
+      }
+    } else if (!row.hideEquipped) {
+      activeVisuals.push_back({.widgetId = row.key,
+                               .description = DescribeActiveWorkbenchVisual(
+                                   row, row.equipped, false),
+                               .slotMask = row.equipped.slotMask,
+                               .rowIndex = rowIndex});
+    }
+  }
+
+  std::unordered_map<std::string, OverrideConflictInfo> overrideConflicts;
+  overrideConflicts.reserve(rows.size() * 2);
+  for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
+    const auto &row = rows[static_cast<std::size_t>(rowIndex)];
+    for (int overrideIndex = 0;
+         overrideIndex < static_cast<int>(row.overrides.size());
+         ++overrideIndex) {
+      const auto &item = row.overrides[static_cast<std::size_t>(overrideIndex)];
+      OverrideConflictInfo info{};
+      for (const auto &activeVisual : activeVisuals) {
+        if (activeVisual.rowIndex == rowIndex ||
+            (activeVisual.slotMask & item.slotMask) == 0) {
+          continue;
+        }
+
+        info.targetWidgetIds.push_back(activeVisual.widgetId);
+        info.targetDescriptions.push_back(activeVisual.description + " [" +
+                                          item.slotText + "]");
+      }
+
+      if (!info.targetWidgetIds.empty()) {
+        overrideConflicts.emplace("override:" + std::to_string(rowIndex) + ":" +
+                                      std::to_string(overrideIndex),
+                                  std::move(info));
+      }
+    }
+  }
+
   constexpr float deletePaneHeight = 86.0f;
   const auto tableHeight =
       (std::max)(0.0f, ImGui::GetContentRegionAvail().y - deletePaneHeight);
@@ -824,6 +912,9 @@ void Menu::DrawVariantWorkbenchPane() {
       bool acceptedRowInsertAfter = false;
       int hoveredRowReorderIndex = -1;
       bool hoveredRowInsertAfter = false;
+      std::unordered_map<std::string, ImRect> widgetRects;
+      widgetRects.reserve(rows.size() * 3);
+      std::string hoveredConflictWidgetId;
       std::vector<float> rowTopY;
       std::vector<float> rowBottomY;
       rowTopY.reserve(rows.size());
@@ -849,6 +940,9 @@ void Menu::DrawVariantWorkbenchPane() {
             rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
             rows[static_cast<std::size_t>(rowIndex)].equipped, true,
             DragSourceKind::Row, false, rowIndex);
+        widgetRects.insert_or_assign(
+            rows[static_cast<std::size_t>(rowIndex)].key,
+            ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
         const auto *table = ImGui::GetCurrentTable();
         if (table) {
           const ImRect leftCellRect = ImGui::TableGetCellBgRect(table, 0);
@@ -914,9 +1008,26 @@ void Menu::DrawVariantWorkbenchPane() {
                     rows[static_cast<std::size_t>(rowIndex)]
                         .overrides[static_cast<std::size_t>(overrideIndex)],
                     true, DragSourceKind::Override, true, rowIndex,
-                    overrideIndex)) {
+                    overrideIndex, overrideConflicts.contains(widgetId))) {
               workbench_.DeleteOverride(rowIndex, overrideIndex);
               break;
+            }
+            widgetRects.insert_or_assign(
+                widgetId,
+                ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
+            if (overrideConflicts.contains(widgetId) &&
+                ImGui::IsItemHovered()) {
+              hoveredConflictWidgetId = widgetId;
+              if (ImGui::BeginTooltip()) {
+                ImGui::TextWrapped("This override shares equipment slots with "
+                                   "currently active visuals.");
+                ImGui::Separator();
+                for (const auto &description :
+                     overrideConflicts.at(widgetId).targetDescriptions) {
+                  ImGui::BulletText("%s", description.c_str());
+                }
+                ImGui::EndTooltip();
+              }
             }
           }
         }
@@ -969,6 +1080,22 @@ void Menu::DrawVariantWorkbenchPane() {
         drawList->AddLine(ImVec2(insertionLineX1, insertionLineY),
                           ImVec2(insertionLineX2, insertionLineY),
                           IM_COL32(116, 189, 255, 255), 2.0f);
+      }
+
+      if (!hoveredConflictWidgetId.empty()) {
+        auto *drawList = ImGui::GetWindowDrawList();
+        if (const auto conflictIt =
+                overrideConflicts.find(hoveredConflictWidgetId);
+            conflictIt != overrideConflicts.end()) {
+          for (const auto &targetWidgetId :
+               conflictIt->second.targetWidgetIds) {
+            if (const auto rectIt = widgetRects.find(targetWidgetId);
+                rectIt != widgetRects.end()) {
+              drawList->AddRect(rectIt->second.Min, rectIt->second.Max,
+                                IM_COL32(255, 204, 96, 255), 8.0f, 0, 3.0f);
+            }
+          }
+        }
       }
 
       ImGui::EndTable();
