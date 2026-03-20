@@ -8,6 +8,9 @@
 #include <unordered_set>
 
 namespace {
+constexpr std::uint32_t kSerializationType = 'ROWS';
+constexpr std::uint32_t kSerializationVersion = 2;
+
 std::string BuildDavVariantName(const RE::TESObjectARMO *a_sourceArmor) {
   return "SOSNG|" + sosng::armor::GetFormIdentifier(a_sourceArmor);
 }
@@ -90,6 +93,7 @@ auto BuildDavVariantJson(
       {"replaceByForm", replaceByForm}};
   return root.dump();
 }
+
 } // namespace
 
 namespace sosng::workbench {
@@ -482,5 +486,137 @@ void VariantWorkbench::SyncDynamicArmorVariants() {
       dav->RefreshActor(player);
     }
   }
+}
+
+void VariantWorkbench::Serialize(SKSE::SerializationInterface *a_skse) const {
+  nlohmann::json root;
+  root["rows"] = nlohmann::json::array();
+
+  for (const auto &row : rows_) {
+    if (row.overrides.empty() && !row.hideEquipped) {
+      continue;
+    }
+
+    nlohmann::json serializedRow;
+    serializedRow["equipped"] =
+        armor::GetFormIdentifier(RE::TESForm::LookupByID(row.equipped.formID));
+    serializedRow["hideEquipped"] = row.hideEquipped;
+    serializedRow["overrides"] = nlohmann::json::array();
+    for (const auto &overrideItem : row.overrides) {
+      if (const auto *overrideForm =
+              RE::TESForm::LookupByID(overrideItem.formID)) {
+        serializedRow["overrides"].push_back(
+            armor::GetFormIdentifier(overrideForm));
+      }
+    }
+
+    root["rows"].push_back(std::move(serializedRow));
+  }
+
+  const auto payload = root.dump();
+  a_skse->WriteRecord(kSerializationType, kSerializationVersion, payload.data(),
+                      static_cast<std::uint32_t>(payload.size()));
+}
+
+void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
+  Revert();
+
+  std::uint32_t type = 0;
+  std::uint32_t version = 0;
+  std::uint32_t length = 0;
+  if (!a_skse->GetNextRecordInfo(type, version, length)) {
+    return;
+  }
+
+  if (type != kSerializationType) {
+    return;
+  }
+
+  if (version != kSerializationVersion) {
+    logger::warn("Skipping SOSNG serialized rows from unsupported version {}",
+                 version);
+    return;
+  }
+
+  std::string payload(length, '\0');
+  if (!a_skse->ReadRecordData(payload.data(), length)) {
+    logger::error("Failed to read SOSNG serialized workbench payload");
+    return;
+  }
+
+  const auto root = nlohmann::json::parse(payload, nullptr, false, true);
+  if (root.is_discarded() || !root.is_object() || !root["rows"].is_array()) {
+    logger::error("Failed to parse SOSNG serialized workbench payload");
+    return;
+  }
+
+  for (const auto &serializedRow : root["rows"]) {
+    if (!serializedRow.is_object()) {
+      continue;
+    }
+
+    const auto *equippedForm = armor::LookupByIdentifier<RE::TESObjectARMO>(
+        serializedRow.value("equipped", std::string{}));
+    EquipmentWidgetItem equipped{};
+    if (!equippedForm ||
+        !BuildCatalogItem(equippedForm->GetFormID(), equipped)) {
+      continue;
+    }
+
+    VariantWorkbenchRow row{};
+    row.key = "armor:" + armor::FormatFormID(equippedForm->GetFormID());
+    row.equipped = std::move(equipped);
+    row.equipped.key = row.key;
+    row.hideEquipped = serializedRow.value("hideEquipped", false);
+
+    std::unordered_set<RE::FormID> seenOverrideForms;
+    if (const auto &serializedOverrides = serializedRow["overrides"];
+        serializedOverrides.is_array()) {
+      for (const auto &overrideValue : serializedOverrides) {
+        if (!overrideValue.is_string()) {
+          continue;
+        }
+
+        const auto *overrideForm = armor::LookupByIdentifier<RE::TESObjectARMO>(
+            overrideValue.get<std::string>());
+        EquipmentWidgetItem overrideItem{};
+        if (!overrideForm ||
+            !BuildCatalogItem(overrideForm->GetFormID(), overrideItem) ||
+            !seenOverrideForms.insert(overrideForm->GetFormID()).second) {
+          continue;
+        }
+
+        row.overrides.push_back(std::move(overrideItem));
+      }
+    }
+
+    rows_.push_back(std::move(row));
+    rowOrder_.push_back(rows_.back().key);
+  }
+
+  SyncDynamicArmorVariants();
+}
+
+void VariantWorkbench::Revert() {
+  using integrations::DynamicArmorVariantsClient;
+
+  auto *dav = DynamicArmorVariantsClient::Get();
+  if (!dav) {
+    DynamicArmorVariantsClient::Refresh();
+    dav = DynamicArmorVariantsClient::Get();
+  }
+
+  if (dav) {
+    for (const auto &[variantName, _] : activeDavVariants_) {
+      if (!dav->DeleteVariant(variantName.c_str())) {
+        logger::warn("Failed to delete DAV variant {} during SOSNG revert",
+                     variantName);
+      }
+    }
+  }
+
+  rows_.clear();
+  rowOrder_.clear();
+  activeDavVariants_.clear();
 }
 } // namespace sosng::workbench

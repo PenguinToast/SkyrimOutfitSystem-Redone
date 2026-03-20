@@ -21,6 +21,9 @@ public:
   void Toggle();
   [[nodiscard]] bool IsEnabled() const { return enabled_; }
   [[nodiscard]] bool IsInitialized() const { return initialized_; }
+  [[nodiscard]] workbench::VariantWorkbench &GetWorkbench() {
+    return workbench_;
+  }
 
 private:
   enum class DragSourceKind : std::uint32_t {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <RE/Skyrim.h>
+#include <SKSE/SKSE.h>
 
 #include <string>
 #include <unordered_map>
@@ -42,6 +43,9 @@ public:
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
   void SyncDynamicArmorVariants();
+  void Serialize(SKSE::SerializationInterface *a_skse) const;
+  void Deserialize(SKSE::SerializationInterface *a_skse);
+  void Revert();
 
   [[nodiscard]] const std::vector<VariantWorkbenchRow> &GetRows() const {
     return rows_;

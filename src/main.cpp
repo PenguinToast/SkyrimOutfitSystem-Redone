@@ -1,6 +1,7 @@
 #include "EquipmentCatalog.h"
 #include "Hooks.h"
 #include "InputManager.h"
+#include "Serialization.h"
 #include "integrations/DynamicArmorVariantsClient.h"
 
 static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
@@ -38,6 +39,13 @@ SKSEPlugin_Load(const SKSE::LoadInterface *a_skse) {
   SKSE::AllocTrampoline(1 << 10);
 
   messaging->RegisterListener("SKSE", SKSEMessageHandler);
+
+  if (auto *serialization = SKSE::GetSerializationInterface()) {
+    serialization->SetUniqueID(sosng::serialization::kID);
+    serialization->SetSaveCallback(&sosng::serialization::SaveCallback);
+    serialization->SetLoadCallback(&sosng::serialization::LoadCallback);
+    serialization->SetRevertCallback(&sosng::serialization::RevertCallback);
+  }
 
   logger::info("Skyrim Outfit System NG loaded");
   return true;
