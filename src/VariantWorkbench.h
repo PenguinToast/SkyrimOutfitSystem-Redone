@@ -59,6 +59,7 @@ private:
   [[nodiscard]] int
   FindBestCatalogTargetRowIndex(const EquipmentWidgetItem &a_item,
                                 bool a_requireAcceptable) const;
+  void RebuildRowOrder();
 
   std::vector<VariantWorkbenchRow> rows_;
   std::vector<std::string> rowOrder_;

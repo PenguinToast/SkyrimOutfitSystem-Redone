@@ -12,6 +12,17 @@ constexpr std::uint32_t kSerializationType = 'ROWS';
 constexpr std::uint32_t kSerializationVersion = 2;
 constexpr auto kPreviewVariantName = "SOSNG|PreviewSelected";
 
+auto GetDynamicArmorVariantsClient()
+    -> DynamicArmorVariantsAPI::IDynamicArmorVariantsInterface001 * {
+  auto *dav = sosng::integrations::DynamicArmorVariantsClient::Get();
+  if (dav) {
+    return dav;
+  }
+
+  sosng::integrations::DynamicArmorVariantsClient::Refresh();
+  return sosng::integrations::DynamicArmorVariantsClient::Get();
+}
+
 std::string BuildDavVariantName(const RE::TESObjectARMO *a_sourceArmor) {
   return "SOSNG|" + sosng::armor::GetFormIdentifier(a_sourceArmor);
 }
@@ -98,6 +109,14 @@ auto BuildDavVariantJson(
 } // namespace
 
 namespace sosng::workbench {
+void VariantWorkbench::RebuildRowOrder() {
+  rowOrder_.clear();
+  rowOrder_.reserve(rows_.size());
+  for (const auto &row : rows_) {
+    rowOrder_.push_back(row.key);
+  }
+}
+
 int VariantWorkbench::FindBestCatalogTargetRowIndex(
     const EquipmentWidgetItem &a_item, bool a_requireAcceptable) const {
   int fallbackRowIndex = -1;
@@ -357,18 +376,12 @@ bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
 }
 
 void VariantWorkbench::ClearPreview() {
-  using integrations::DynamicArmorVariantsClient;
-
   if (previewFormID_ == 0 && previewTargetRowKey_.empty() &&
       previewVariantJson_.empty()) {
     return;
   }
 
-  auto *dav = DynamicArmorVariantsClient::Get();
-  if (!dav) {
-    DynamicArmorVariantsClient::Refresh();
-    dav = DynamicArmorVariantsClient::Get();
-  }
+  auto *dav = GetDynamicArmorVariantsClient();
 
   if (dav) {
     if (auto *player = RE::PlayerCharacter::GetSingleton()) {
@@ -433,11 +446,7 @@ bool VariantWorkbench::DeleteRow(int a_rowIndex) {
 
   rows_.erase(rows_.begin() + a_rowIndex);
 
-  rowOrder_.clear();
-  rowOrder_.reserve(rows_.size());
-  for (const auto &row : rows_) {
-    rowOrder_.push_back(row.key);
-  }
+  RebuildRowOrder();
 
   return true;
 }
@@ -480,11 +489,7 @@ bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
   insertIndex = std::clamp(insertIndex, 0, static_cast<int>(rows_.size()));
   rows_.insert(rows_.begin() + insertIndex, std::move(row));
 
-  rowOrder_.clear();
-  rowOrder_.reserve(rows_.size());
-  for (const auto &existingRow : rows_) {
-    rowOrder_.push_back(existingRow.key);
-  }
+  RebuildRowOrder();
 
   return true;
 }
@@ -514,19 +519,13 @@ bool VariantWorkbench::ApplyRowReorder(int a_sourceRowIndex,
 
   rows_.insert(rows_.begin() + insertIndex, std::move(movedRow));
 
-  rowOrder_.clear();
-  rowOrder_.reserve(rows_.size());
-  for (const auto &row : rows_) {
-    rowOrder_.push_back(row.key);
-  }
+  RebuildRowOrder();
 
   return true;
 }
 
 void VariantWorkbench::SyncDynamicArmorVariants() {
-  using integrations::DynamicArmorVariantsClient;
-
-  auto *dav = DynamicArmorVariantsClient::Get();
+  auto *dav = GetDynamicArmorVariantsClient();
   if (!dav || !dav->IsReady()) {
     return;
   }
@@ -735,15 +734,9 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
 }
 
 void VariantWorkbench::Revert() {
-  using integrations::DynamicArmorVariantsClient;
-
   ClearPreview();
 
-  auto *dav = DynamicArmorVariantsClient::Get();
-  if (!dav) {
-    DynamicArmorVariantsClient::Refresh();
-    dav = DynamicArmorVariantsClient::Get();
-  }
+  auto *dav = GetDynamicArmorVariantsClient();
 
   if (dav) {
     for (const auto &[variantName, _] : activeDavVariants_) {
@@ -755,7 +748,7 @@ void VariantWorkbench::Revert() {
   }
 
   rows_.clear();
-  rowOrder_.clear();
+  RebuildRowOrder();
   activeDavVariants_.clear();
 }
 } // namespace sosng::workbench
