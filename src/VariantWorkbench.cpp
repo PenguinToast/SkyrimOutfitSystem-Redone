@@ -249,6 +249,33 @@ bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
   return true;
 }
 
+bool VariantWorkbench::AddCatalogOverrideToBestRow(RE::FormID a_formID) {
+  EquipmentWidgetItem item{};
+  if (!BuildCatalogItem(a_formID, item)) {
+    return false;
+  }
+
+  int fallbackRowIndex = -1;
+  for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size());
+       ++rowIndex) {
+    const auto &row = rows_[static_cast<std::size_t>(rowIndex)];
+    if (!row.isEquipped || !CanAcceptOverride(rowIndex, item)) {
+      continue;
+    }
+
+    if ((row.equipped.slotMask & item.slotMask) != 0) {
+      return AddCatalogOverride(rowIndex, a_formID);
+    }
+
+    if (fallbackRowIndex < 0) {
+      fallbackRowIndex = rowIndex;
+    }
+  }
+
+  return fallbackRowIndex >= 0 ? AddCatalogOverride(fallbackRowIndex, a_formID)
+                               : false;
+}
+
 bool VariantWorkbench::MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                                     int a_targetRowIndex) {
   if (a_sourceRowIndex < 0 ||

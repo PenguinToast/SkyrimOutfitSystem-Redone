@@ -648,6 +648,10 @@ void Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::TableSetColumnIndex(0);
         DrawEquipmentInfoWidget(item.key.c_str(), item, true,
                                 DragSourceKind::Catalog);
+        if (ImGui::IsItemHovered() &&
+            ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+          workbench_.AddCatalogOverrideToBestRow(item.formID);
+        }
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(entry.plugin.data());

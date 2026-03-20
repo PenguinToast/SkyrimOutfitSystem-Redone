@@ -33,6 +33,7 @@ public:
                                        int a_sourceRowIndex = -1,
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
+  bool AddCatalogOverrideToBestRow(RE::FormID a_formID);
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
   bool DeleteOverride(int a_rowIndex, int a_itemIndex);
