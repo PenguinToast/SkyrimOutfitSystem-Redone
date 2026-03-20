@@ -325,96 +325,100 @@ void Menu::DrawWindow() {
   ImGui::TextUnformatted("Vanity outfit browser");
   ImGui::SameLine();
   ImGui::TextDisabled("| F3 toggles visibility");
+  const auto optionsButtonWidth = ImGui::CalcTextSize("Options").x +
+                                  (ImGui::GetStyle().FramePadding.x * 2.0f);
+  const auto browserButtonWidth = ImGui::CalcTextSize("Browser").x +
+                                  (ImGui::GetStyle().FramePadding.x * 2.0f);
+  const auto buttonsWidth =
+      browserButtonWidth + optionsButtonWidth + ImGui::GetStyle().ItemSpacing.x;
+  const auto buttonStartX = ImGui::GetWindowContentRegionMax().x - buttonsWidth;
+  if (buttonStartX > ImGui::GetCursorPosX()) {
+    ImGui::SameLine(buttonStartX);
+  } else {
+    ImGui::SameLine();
+  }
+  if (ImGui::Selectable("Browser", activeTab_ != BrowserTab::Options, 0,
+                        ImVec2(browserButtonWidth, 0.0f)) &&
+      activeTab_ == BrowserTab::Options) {
+    activeTab_ = BrowserTab::Gear;
+  }
+  ImGui::SameLine();
+  if (ImGui::Selectable("Options", activeTab_ == BrowserTab::Options, 0,
+                        ImVec2(optionsButtonWidth, 0.0f))) {
+    activeTab_ = BrowserTab::Options;
+  }
   ImGui::Separator();
 
-  if (ImGui::BeginTabBar("##window-tabs")) {
-    const bool browserSelected = activeTab_ != BrowserTab::Options;
-    if (ImGui::BeginTabItem("Browser", nullptr,
-                            browserSelected ? ImGuiTabItemFlags_SetSelected
-                                            : 0)) {
-      if (activeTab_ == BrowserTab::Options) {
+  if (activeTab_ == BrowserTab::Options) {
+    DrawOptionsTab();
+  } else {
+    workbench_.SyncRowsFromPlayer();
+
+    if (ImGui::BeginTabBar("##catalog-tabs")) {
+      if (ImGui::BeginTabItem("Gear")) {
         activeTab_ = BrowserTab::Gear;
-      }
-      workbench_.SyncRowsFromPlayer();
-
-      if (ImGui::BeginTabBar("##catalog-tabs")) {
-        if (ImGui::BeginTabItem("Gear")) {
-          activeTab_ = BrowserTab::Gear;
-          ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Outfits")) {
-          activeTab_ = BrowserTab::Outfits;
-          ImGui::EndTabItem();
-        }
-
-        ImGui::EndTabBar();
+        ImGui::EndTabItem();
       }
 
-      ImGui::Separator();
-      DrawCatalogFilters();
-      ImGui::Spacing();
-      if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
-        if (!previewSelected_) {
-          workbench_.ClearPreview();
-        } else if (selectedCatalogFormID_ != 0) {
-          workbench_.ApplyCatalogPreview(selectedCatalogFormID_);
-        }
-      }
-      ImGui::Spacing();
-
-      if (ImGui::BeginTable("##browser-layout", 2,
-                            ImGuiTableFlags_Resizable |
-                                ImGuiTableFlags_SizingStretchProp,
-                            ImVec2(0.0f, ImGui::GetContentRegionAvail().y))) {
-        ImGui::TableSetupColumn("Catalog", ImGuiTableColumnFlags_WidthStretch,
-                                1.20f);
-        ImGui::TableSetupColumn("Variants", ImGuiTableColumnFlags_WidthStretch,
-                                0.95f);
-        ImGui::TableNextRow();
-
-        ImGui::TableSetColumnIndex(0);
-        if (ImGui::BeginChild("##catalog-pane", ImVec2(0.0f, 0.0f),
-                              ImGuiChildFlags_Borders)) {
-          bool catalogRowClicked = false;
-          if (activeTab_ == BrowserTab::Gear) {
-            catalogRowClicked = DrawGearTab();
-          } else {
-            catalogRowClicked = DrawOutfitTab();
-          }
-
-          if (selectedCatalogFormID_ != 0 &&
-              ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-              !catalogRowClicked) {
-            ClearCatalogSelection();
-          }
-        }
-        ImGui::EndChild();
-
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::BeginChild("##variant-pane", ImVec2(0.0f, 0.0f),
-                              ImGuiChildFlags_Borders)) {
-          DrawVariantWorkbenchPane();
-        }
-        ImGui::EndChild();
-
-        ImGui::EndTable();
+      if (ImGui::BeginTabItem("Outfits")) {
+        activeTab_ = BrowserTab::Outfits;
+        ImGui::EndTabItem();
       }
 
-      workbench_.SyncDynamicArmorVariants();
-      ImGui::EndTabItem();
+      ImGui::EndTabBar();
     }
 
-    if (ImGui::BeginTabItem("Options", nullptr,
-                            activeTab_ == BrowserTab::Options
-                                ? ImGuiTabItemFlags_SetSelected
-                                : 0)) {
-      activeTab_ = BrowserTab::Options;
-      DrawOptionsTab();
-      ImGui::EndTabItem();
+    ImGui::Separator();
+    DrawCatalogFilters();
+    ImGui::Spacing();
+    if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
+      if (!previewSelected_) {
+        workbench_.ClearPreview();
+      } else if (selectedCatalogFormID_ != 0) {
+        workbench_.ApplyCatalogPreview(selectedCatalogFormID_);
+      }
+    }
+    ImGui::Spacing();
+
+    if (ImGui::BeginTable("##browser-layout", 2,
+                          ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_SizingStretchProp,
+                          ImVec2(0.0f, ImGui::GetContentRegionAvail().y))) {
+      ImGui::TableSetupColumn("Catalog", ImGuiTableColumnFlags_WidthStretch,
+                              1.20f);
+      ImGui::TableSetupColumn("Variants", ImGuiTableColumnFlags_WidthStretch,
+                              0.95f);
+      ImGui::TableNextRow();
+
+      ImGui::TableSetColumnIndex(0);
+      if (ImGui::BeginChild("##catalog-pane", ImVec2(0.0f, 0.0f),
+                            ImGuiChildFlags_Borders)) {
+        bool catalogRowClicked = false;
+        if (activeTab_ == BrowserTab::Gear) {
+          catalogRowClicked = DrawGearTab();
+        } else {
+          catalogRowClicked = DrawOutfitTab();
+        }
+
+        if (selectedCatalogFormID_ != 0 &&
+            ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+            !catalogRowClicked) {
+          ClearCatalogSelection();
+        }
+      }
+      ImGui::EndChild();
+
+      ImGui::TableSetColumnIndex(1);
+      if (ImGui::BeginChild("##variant-pane", ImVec2(0.0f, 0.0f),
+                            ImGuiChildFlags_Borders)) {
+        DrawVariantWorkbenchPane();
+      }
+      ImGui::EndChild();
+
+      ImGui::EndTable();
     }
 
-    ImGui::EndTabBar();
+    workbench_.SyncDynamicArmorVariants();
   }
 
   ImGui::End();
