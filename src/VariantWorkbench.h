@@ -28,12 +28,13 @@ class VariantWorkbench {
 public:
   void SyncRowsFromPlayer();
   bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
+  [[nodiscard]] bool IsPreviewingForm(RE::FormID a_formID) const;
   [[nodiscard]] bool CanAcceptOverride(int a_targetRowIndex,
                                        const EquipmentWidgetItem &a_item,
                                        int a_sourceRowIndex = -1,
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
-  bool AddCatalogOverrideToBestRow(RE::FormID a_formID);
+  bool AddCatalogSelectionToWorkbench(RE::FormID a_formID);
   bool ApplyCatalogPreview(RE::FormID a_formID);
   void ClearPreview();
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
@@ -58,6 +59,23 @@ public:
   [[nodiscard]] std::size_t GetRowCount() const { return rows_.size(); }
 
 private:
+  struct PlannedCatalogAssignment {
+    int rowIndex{-1};
+    RE::FormID armorFormID{0};
+  };
+
+  [[nodiscard]] bool
+  ResolveCatalogArmors(RE::FormID a_formID,
+                       std::vector<const RE::TESObjectARMO *> &a_armors) const;
+  [[nodiscard]] int FindBestCatalogTargetRowIndex(
+      const EquipmentWidgetItem &a_item, bool a_requireAcceptable,
+      const std::vector<PlannedCatalogAssignment> *a_pendingAssignments) const;
+  [[nodiscard]] bool CanAcceptOverrideWithPendingAssignments(
+      int a_targetRowIndex, const EquipmentWidgetItem &a_item,
+      const std::vector<PlannedCatalogAssignment> &a_pendingAssignments) const;
+  [[nodiscard]] bool PlanCatalogAssignments(
+      RE::FormID a_formID,
+      std::vector<PlannedCatalogAssignment> &a_assignments) const;
   [[nodiscard]] int
   FindBestCatalogTargetRowIndex(const EquipmentWidgetItem &a_item,
                                 bool a_requireAcceptable) const;
@@ -67,7 +85,6 @@ private:
   std::vector<std::string> rowOrder_;
   std::unordered_map<std::string, std::string> activeDavVariants_;
   RE::FormID previewFormID_{0};
-  std::string previewTargetRowKey_;
-  std::string previewVariantJson_;
+  std::unordered_map<std::string, std::string> previewDavVariants_;
 };
 } // namespace sosng::workbench

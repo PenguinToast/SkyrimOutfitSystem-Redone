@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <iterator>
+#include <windows.h>
 
 namespace {
 using BipedSlot = RE::BIPED_MODEL::BipedObjectSlot;
@@ -70,6 +71,15 @@ std::string FormatFormID(RE::FormID a_formID) {
   return buffer;
 }
 
+using GetPo3EditorIDFn = const char *(*)(std::uint32_t);
+
+std::string GetPo3EditorID(RE::FormID a_formID) {
+  static auto *tweaks = GetModuleHandleA("po3_Tweaks");
+  static auto *function = reinterpret_cast<GetPo3EditorIDFn>(
+      tweaks ? GetProcAddress(tweaks, "GetFormEditorID") : nullptr);
+  return function ? CopyCString(function(a_formID)) : std::string{};
+}
+
 std::string GetPluginName(const RE::TESForm *a_form) {
   if (!a_form) {
     return "Unknown";
@@ -89,7 +99,16 @@ std::string GetPluginName(const RE::TESForm *a_form) {
 }
 
 std::string GetEditorID(const RE::TESForm *a_form) {
-  return a_form ? CopyCString(a_form->GetFormEditorID()) : std::string{};
+  if (!a_form) {
+    return {};
+  }
+
+  auto editorID = CopyCString(a_form->GetFormEditorID());
+  if (!editorID.empty()) {
+    return editorID;
+  }
+
+  return GetPo3EditorID(a_form->GetFormID());
 }
 
 std::string GetName(const RE::TESForm *a_form) {

@@ -9,7 +9,6 @@
 namespace {
 constexpr std::uint32_t kSerializationType = 'ROWS';
 constexpr std::uint32_t kSerializationVersion = 2;
-constexpr auto kPreviewVariantName = "SOSNG|PreviewSelected";
 
 auto GetDynamicArmorVariantsClient()
     -> DynamicArmorVariantsAPI::IDynamicArmorVariantsInterface001 * {
@@ -24,6 +23,10 @@ auto GetDynamicArmorVariantsClient()
 
 std::string BuildDavVariantName(const RE::TESObjectARMO *a_sourceArmor) {
   return "SOSNG|" + sosng::armor::GetFormIdentifier(a_sourceArmor);
+}
+
+std::string BuildPreviewVariantName(const std::string &a_rowKey) {
+  return "SOSNG|PreviewSelected|" + a_rowKey;
 }
 
 auto BuildDavConditionsJson() -> std::string {
@@ -108,38 +111,68 @@ auto BuildDavVariantJson(
 
 namespace sosng::workbench {
 bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
-  EquipmentWidgetItem item{};
-  if (!BuildCatalogItem(a_formID, item)) {
+  std::vector<PlannedCatalogAssignment> assignments;
+  if (!PlanCatalogAssignments(a_formID, assignments)) {
     ClearPreview();
     return false;
   }
 
-  const auto targetRowIndex = FindBestCatalogTargetRowIndex(item, false);
-  if (targetRowIndex < 0) {
+  std::unordered_map<std::string, std::vector<const RE::TESObjectARMO *>>
+      previewOverridesByRow;
+  previewOverridesByRow.reserve(assignments.size());
+
+  for (const auto &assignment : assignments) {
+    const auto &targetRow =
+        rows_[static_cast<std::size_t>(assignment.rowIndex)];
+    const auto *overrideArmor =
+        RE::TESForm::LookupByID<RE::TESObjectARMO>(assignment.armorFormID);
+    if (!overrideArmor) {
+      continue;
+    }
+
+    previewOverridesByRow[targetRow.key].push_back(overrideArmor);
+  }
+
+  if (previewOverridesByRow.empty()) {
     ClearPreview();
     return false;
   }
 
-  const auto &targetRow = rows_[static_cast<std::size_t>(targetRowIndex)];
-  const auto *sourceArmor =
-      RE::TESForm::LookupByID<RE::TESObjectARMO>(targetRow.equipped.formID);
-  const auto *overrideArmor =
-      RE::TESForm::LookupByID<RE::TESObjectARMO>(a_formID);
-  if (!sourceArmor || !overrideArmor) {
+  std::unordered_map<std::string, std::string> desiredPreviewVariants;
+  desiredPreviewVariants.reserve(previewOverridesByRow.size());
+
+  for (const auto &[rowKey, overrideArmors] : previewOverridesByRow) {
+    const auto rowIt =
+        std::ranges::find(rows_, rowKey, [](const VariantWorkbenchRow &a_row) {
+          return a_row.key;
+        });
+    if (rowIt == rows_.end()) {
+      continue;
+    }
+
+    const auto *sourceArmor =
+        RE::TESForm::LookupByID<RE::TESObjectARMO>(rowIt->equipped.formID);
+    if (!sourceArmor) {
+      continue;
+    }
+
+    const auto variantJson =
+        BuildDavVariantJson(sourceArmor, overrideArmors, false);
+    if (variantJson.empty()) {
+      continue;
+    }
+
+    desiredPreviewVariants.emplace(BuildPreviewVariantName(rowKey),
+                                   variantJson);
+  }
+
+  if (desiredPreviewVariants.empty()) {
     ClearPreview();
     return false;
   }
 
-  std::vector<const RE::TESObjectARMO *> previewOverrides{overrideArmor};
-  const auto variantJson =
-      BuildDavVariantJson(sourceArmor, previewOverrides, false);
-  if (variantJson.empty()) {
-    ClearPreview();
-    return false;
-  }
-
-  if (previewFormID_ == a_formID && previewTargetRowKey_ == targetRow.key &&
-      previewVariantJson_ == variantJson) {
+  if (previewFormID_ == a_formID &&
+      previewDavVariants_ == desiredPreviewVariants) {
     return true;
   }
 
@@ -157,26 +190,41 @@ bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
 
   ClearPreview();
 
-  if (!dav->RegisterVariantJson(kPreviewVariantName, variantJson.c_str())) {
-    logger::warn("Failed to register SOSNG preview variant");
-    return false;
-  }
+  std::unordered_map<std::string, std::string> appliedPreviewVariants;
+  appliedPreviewVariants.reserve(desiredPreviewVariants.size());
+  for (const auto &[variantName, variantJson] : desiredPreviewVariants) {
+    if (!dav->RegisterVariantJson(variantName.c_str(), variantJson.c_str())) {
+      logger::warn("Failed to register SOSNG preview variant {}", variantName);
+      for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
+        dav->RemoveVariantOverride(player, appliedVariantName.c_str());
+        dav->DeleteVariant(appliedVariantName.c_str());
+      }
+      ClearPreview();
+      return false;
+    }
 
-  if (!dav->ApplyVariantOverride(player, kPreviewVariantName)) {
-    logger::warn("Failed to apply SOSNG preview variant override");
-    dav->DeleteVariant(kPreviewVariantName);
-    return false;
+    if (!dav->ApplyVariantOverride(player, variantName.c_str())) {
+      logger::warn("Failed to apply SOSNG preview variant override {}",
+                   variantName);
+      dav->DeleteVariant(variantName.c_str());
+      for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
+        dav->RemoveVariantOverride(player, appliedVariantName.c_str());
+        dav->DeleteVariant(appliedVariantName.c_str());
+      }
+      ClearPreview();
+      return false;
+    }
+
+    appliedPreviewVariants.emplace(variantName, variantJson);
   }
 
   previewFormID_ = a_formID;
-  previewTargetRowKey_ = targetRow.key;
-  previewVariantJson_ = variantJson;
+  previewDavVariants_ = std::move(desiredPreviewVariants);
   return true;
 }
 
 void VariantWorkbench::ClearPreview() {
-  if (previewFormID_ == 0 && previewTargetRowKey_.empty() &&
-      previewVariantJson_.empty()) {
+  if (previewFormID_ == 0 && previewDavVariants_.empty()) {
     return;
   }
 
@@ -184,18 +232,22 @@ void VariantWorkbench::ClearPreview() {
 
   if (dav) {
     if (auto *player = RE::PlayerCharacter::GetSingleton()) {
-      if (!dav->RemoveVariantOverride(player, kPreviewVariantName)) {
-        logger::warn("Failed to remove SOSNG preview variant override");
+      for (const auto &[variantName, _] : previewDavVariants_) {
+        if (!dav->RemoveVariantOverride(player, variantName.c_str())) {
+          logger::warn("Failed to remove SOSNG preview variant override {}",
+                       variantName);
+        }
       }
     }
-    if (!dav->DeleteVariant(kPreviewVariantName)) {
-      logger::warn("Failed to delete SOSNG preview variant");
+    for (const auto &[variantName, _] : previewDavVariants_) {
+      if (!dav->DeleteVariant(variantName.c_str())) {
+        logger::warn("Failed to delete SOSNG preview variant {}", variantName);
+      }
     }
   }
 
   previewFormID_ = 0;
-  previewTargetRowKey_.clear();
-  previewVariantJson_.clear();
+  previewDavVariants_.clear();
 }
 
 void VariantWorkbench::SyncDynamicArmorVariants() {

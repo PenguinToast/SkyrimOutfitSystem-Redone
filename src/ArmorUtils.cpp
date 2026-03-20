@@ -1,6 +1,7 @@
 #include "ArmorUtils.h"
 
 #include <cstdio>
+#include <windows.h>
 
 namespace {
 using BipedSlot = RE::BGSBipedObjectForm::BipedObjectSlot;
@@ -46,6 +47,15 @@ std::string CopyCString(const char *a_text) {
   }
   return a_text;
 }
+
+using GetPo3EditorIDFn = const char *(*)(std::uint32_t);
+
+std::string GetPo3EditorID(RE::FormID a_formID) {
+  static auto *tweaks = GetModuleHandleA("po3_Tweaks");
+  static auto *function = reinterpret_cast<GetPo3EditorIDFn>(
+      tweaks ? GetProcAddress(tweaks, "GetFormEditorID") : nullptr);
+  return function ? CopyCString(function(a_formID)) : std::string{};
+}
 } // namespace
 
 namespace sosng::armor {
@@ -66,6 +76,9 @@ std::string GetDisplayName(const RE::TESForm *a_form) {
   }
 
   auto editorID = CopyCString(a_form->GetFormEditorID());
+  if (editorID.empty()) {
+    editorID = GetPo3EditorID(a_form->GetFormID());
+  }
   if (!editorID.empty()) {
     return editorID;
   }

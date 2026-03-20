@@ -20,7 +20,7 @@ constexpr int kMaxFontSizePixels = 28;
 
 enum class GearColumn : ImGuiID { Name = 1, Plugin, Slot };
 
-enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Tags, Pieces };
+enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Pieces };
 
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
@@ -47,6 +47,41 @@ int CompareText(std::string_view a_left, std::string_view a_right) {
     return 1;
   }
   return 0;
+}
+
+std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
+  if (a_text.empty() || a_width <= 0.0f) {
+    return {};
+  }
+
+  if (ImGui::CalcTextSize(a_text.data(), a_text.data() + a_text.size()).x <=
+      a_width) {
+    return std::string(a_text);
+  }
+
+  constexpr std::string_view ellipsis = "...";
+  const auto ellipsisWidth =
+      ImGui::CalcTextSize(ellipsis.data(), ellipsis.data() + ellipsis.size()).x;
+  if (ellipsisWidth >= a_width) {
+    return std::string(ellipsis);
+  }
+
+  std::string truncated;
+  truncated.reserve(a_text.size());
+  for (char character : a_text) {
+    truncated.push_back(character);
+    const auto currentWidth =
+        ImGui::CalcTextSize(truncated.data(),
+                            truncated.data() + truncated.size())
+            .x;
+    if ((currentWidth + ellipsisWidth) > a_width) {
+      truncated.pop_back();
+      break;
+    }
+  }
+
+  truncated.append(ellipsis);
+  return truncated;
 }
 
 } // namespace
@@ -319,6 +354,14 @@ void Menu::DrawWindow() {
       ImGui::Separator();
       DrawCatalogFilters();
       ImGui::Spacing();
+      if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
+        if (!previewSelected_) {
+          workbench_.ClearPreview();
+        } else if (selectedCatalogFormID_ != 0) {
+          workbench_.ApplyCatalogPreview(selectedCatalogFormID_);
+        }
+      }
+      ImGui::Spacing();
 
       if (ImGui::BeginTable("##browser-layout", 2,
                             ImGuiTableFlags_Resizable |
@@ -333,10 +376,17 @@ void Menu::DrawWindow() {
         ImGui::TableSetColumnIndex(0);
         if (ImGui::BeginChild("##catalog-pane", ImVec2(0.0f, 0.0f),
                               ImGuiChildFlags_Borders)) {
+          bool catalogRowClicked = false;
           if (activeTab_ == BrowserTab::Gear) {
-            DrawGearTab();
+            catalogRowClicked = DrawGearTab();
           } else {
-            DrawOutfitTab();
+            catalogRowClicked = DrawOutfitTab();
+          }
+
+          if (selectedCatalogFormID_ != 0 &&
+              ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+              !catalogRowClicked) {
+            ClearCatalogSelection();
           }
         }
         ImGui::EndChild();
@@ -548,12 +598,8 @@ void Menu::SortOutfitRows(std::vector<const OutfitEntry *> &a_rows,
     case OutfitColumn::Plugin:
       compare = CompareText(a_left->plugin, a_right->plugin);
       break;
-    case OutfitColumn::Tags:
-      compare = CompareText(a_left->tagsText, a_right->tagsText);
-      break;
     case OutfitColumn::Pieces:
-      compare = static_cast<int>(a_left->pieces.size()) -
-                static_cast<int>(a_right->pieces.size());
+      compare = CompareText(a_left->piecesText, a_right->piecesText);
       break;
     case OutfitColumn::Name:
     default:
@@ -725,26 +771,12 @@ void Menu::DrawCatalogFilters() {
   }
 }
 
-void Menu::DrawGearTab() {
+bool Menu::DrawGearTab() {
   auto rows = BuildFilteredGear();
-  ImGui::Spacing();
-  if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
-    if (!previewSelected_) {
-      workbench_.ClearPreview();
-    } else if (selectedCatalogFormID_ != 0) {
-      workbench_.ApplyCatalogPreview(selectedCatalogFormID_);
-    }
-  }
-  ImGui::SameLine();
   ImGui::Text("Results: %zu", rows.size());
   ImGui::SameLine();
   ImGui::Text("| Equipped rows: %zu", workbench_.GetRowCount());
-
-  const bool catalogRowClicked = DrawGearCatalogTable(rows);
-  if (selectedCatalogFormID_ != 0 &&
-      ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !catalogRowClicked) {
-    ClearCatalogSelection();
-  }
+  return DrawGearCatalogTable(rows);
 }
 
 bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
@@ -788,7 +820,9 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
-        const bool selected = selectedCatalogFormID_ == item.formID;
+        const bool selected =
+            selectedCatalogFormID_ == item.formID &&
+            (!previewSelected_ || workbench_.IsPreviewingForm(item.formID));
         const bool clicked = ImGui::Selectable(
             ("##catalog-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
             ImGuiSelectableFlags_SpanAllColumns |
@@ -827,7 +861,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
 
         if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           rowClicked = true;
-          workbench_.AddCatalogOverrideToBestRow(item.formID);
+          workbench_.AddCatalogSelectionToWorkbench(item.formID);
         }
       }
     }
@@ -838,13 +872,13 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
   return rowClicked;
 }
 
-void Menu::DrawOutfitTab() {
-  ClearCatalogSelection();
+bool Menu::DrawOutfitTab() {
   auto rows = BuildFilteredOutfits();
   ImGui::Text("Results: %zu", rows.size());
+  bool rowClicked = false;
 
   const auto tableHeight = ImGui::GetContentRegionAvail().y;
-  if (ImGui::BeginTable("##outfit-table", 4,
+  if (ImGui::BeginTable("##outfit-table", 3,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable |
                             ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY,
@@ -853,8 +887,6 @@ void Menu::DrawOutfitTab() {
                             static_cast<ImGuiID>(OutfitColumn::Name));
     ImGui::TableSetupColumn("Plugin", ImGuiTableColumnFlags_None, 0.0f,
                             static_cast<ImGuiID>(OutfitColumn::Plugin));
-    ImGui::TableSetupColumn("Tags", ImGuiTableColumnFlags_None, 0.0f,
-                            static_cast<ImGuiID>(OutfitColumn::Tags));
     ImGui::TableSetupColumn("Pieces",
                             ImGuiTableColumnFlags_PreferSortDescending, 0.0f,
                             static_cast<ImGuiID>(OutfitColumn::Pieces));
@@ -872,24 +904,72 @@ void Menu::DrawOutfitTab() {
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
+        const auto rowContentPos = ImGui::GetCursorScreenPos();
+        const auto rowHeight = ImGui::GetTextLineHeightWithSpacing();
+        ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+        const bool selected =
+            selectedCatalogFormID_ == outfit.formID &&
+            (!previewSelected_ || workbench_.IsPreviewingForm(outfit.formID));
+        const bool clicked = ImGui::Selectable(
+            ("##outfit-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
+            ImGuiSelectableFlags_SpanAllColumns |
+                ImGuiSelectableFlags_AllowOverlap |
+                ImGuiSelectableFlags_AllowDoubleClick,
+            ImVec2(0.0f, rowHeight));
+        const bool rowHovered = ImGui::IsItemHovered();
+        ImGui::PopStyleColor(3);
+        ImGui::SetCursorScreenPos(rowContentPos);
+
+        if (selected) {
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                 IM_COL32(54, 84, 118, 132));
+        } else if (rowHovered) {
+          ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
+                                 IM_COL32(44, 58, 73, 112));
+        }
+
+        if (clicked) {
+          rowClicked = true;
+          selectedCatalogFormID_ = outfit.formID;
+          if (previewSelected_) {
+            workbench_.ApplyCatalogPreview(outfit.formID);
+          } else {
+            workbench_.ClearPreview();
+          }
+        }
+
+        if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+          rowClicked = true;
+          workbench_.AddCatalogSelectionToWorkbench(outfit.formID);
+        }
+
         ImGui::TextUnformatted(outfit.name.data());
-        ImGui::TextDisabled("%s", outfit.editorID.data());
-        ImGui::TextWrapped("%s", outfit.summary.data());
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(outfit.plugin.data());
 
         ImGui::TableSetColumnIndex(2);
-        ImGui::TextWrapped("%s", outfit.tagsText.c_str());
-
-        ImGui::TableSetColumnIndex(3);
-        ImGui::Text("%zu", outfit.pieces.size());
-        ImGui::TextDisabled("%s", outfit.piecesText.c_str());
+        {
+          const auto availableWidth = ImGui::GetContentRegionAvail().x;
+          const auto displayText =
+              TruncateTextToWidth(outfit.piecesText, availableWidth);
+          ImGui::TextUnformatted(displayText.c_str());
+          if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort) &&
+              displayText != outfit.piecesText) {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted(outfit.piecesText.c_str());
+            ImGui::EndTooltip();
+          }
+        }
       }
     }
 
     ImGui::EndTable();
   }
+
+  return rowClicked;
 }
 
 void Menu::DrawOptionsTab() {

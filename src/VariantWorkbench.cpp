@@ -6,6 +6,60 @@
 #include <unordered_set>
 
 namespace sosng::workbench {
+bool VariantWorkbench::ResolveCatalogArmors(
+    RE::FormID a_formID,
+    std::vector<const RE::TESObjectARMO *> &a_armors) const {
+  a_armors.clear();
+
+  const auto *form = RE::TESForm::LookupByID(a_formID);
+  if (!form) {
+    return false;
+  }
+
+  if (const auto *armor = form->As<RE::TESObjectARMO>()) {
+    a_armors.push_back(armor);
+    return true;
+  }
+
+  const auto *outfit = form->As<RE::BGSOutfit>();
+  if (!outfit) {
+    return false;
+  }
+
+  std::unordered_set<RE::FormID> seenForms;
+  outfit->ForEachItem([&](RE::TESForm *a_item) {
+    const auto *armor = a_item ? a_item->As<RE::TESObjectARMO>() : nullptr;
+    if (!armor) {
+      return RE::BSContainer::ForEachResult::kContinue;
+    }
+
+    const auto formID = armor->GetFormID();
+    if (seenForms.insert(formID).second) {
+      a_armors.push_back(armor);
+    }
+    return RE::BSContainer::ForEachResult::kContinue;
+  });
+
+  return !a_armors.empty();
+}
+
+bool VariantWorkbench::CanAcceptOverrideWithPendingAssignments(
+    int a_targetRowIndex, const EquipmentWidgetItem &a_item,
+    const std::vector<PlannedCatalogAssignment> &a_pendingAssignments) const {
+  if (!CanAcceptOverride(a_targetRowIndex, a_item)) {
+    return false;
+  }
+
+  for (const auto &assignment : a_pendingAssignments) {
+    if (assignment.rowIndex == a_targetRowIndex &&
+        assignment.armorFormID == a_item.formID) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 void VariantWorkbench::RebuildRowOrder() {
   rowOrder_.clear();
   rowOrder_.reserve(rows_.size());
@@ -15,7 +69,8 @@ void VariantWorkbench::RebuildRowOrder() {
 }
 
 int VariantWorkbench::FindBestCatalogTargetRowIndex(
-    const EquipmentWidgetItem &a_item, bool a_requireAcceptable) const {
+    const EquipmentWidgetItem &a_item, bool a_requireAcceptable,
+    const std::vector<PlannedCatalogAssignment> *a_pendingAssignments) const {
   int fallbackRowIndex = -1;
   for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size());
        ++rowIndex) {
@@ -24,7 +79,11 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
       continue;
     }
 
-    if (a_requireAcceptable && !CanAcceptOverride(rowIndex, a_item)) {
+    if (a_requireAcceptable &&
+        ((a_pendingAssignments &&
+          !CanAcceptOverrideWithPendingAssignments(rowIndex, a_item,
+                                                   *a_pendingAssignments)) ||
+         (!a_pendingAssignments && !CanAcceptOverride(rowIndex, a_item)))) {
       continue;
     }
 
@@ -38,6 +97,39 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
   }
 
   return fallbackRowIndex;
+}
+
+int VariantWorkbench::FindBestCatalogTargetRowIndex(
+    const EquipmentWidgetItem &a_item, bool a_requireAcceptable) const {
+  return FindBestCatalogTargetRowIndex(a_item, a_requireAcceptable, nullptr);
+}
+
+bool VariantWorkbench::PlanCatalogAssignments(
+    RE::FormID a_formID,
+    std::vector<PlannedCatalogAssignment> &a_assignments) const {
+  a_assignments.clear();
+
+  std::vector<const RE::TESObjectARMO *> armors;
+  if (!ResolveCatalogArmors(a_formID, armors)) {
+    return false;
+  }
+
+  for (const auto *armor : armors) {
+    EquipmentWidgetItem item{};
+    if (!armor || !BuildCatalogItem(armor->GetFormID(), item)) {
+      continue;
+    }
+
+    const auto rowIndex =
+        FindBestCatalogTargetRowIndex(item, true, &a_assignments);
+    if (rowIndex < 0) {
+      continue;
+    }
+
+    a_assignments.push_back({rowIndex, armor->GetFormID()});
+  }
+
+  return !a_assignments.empty();
 }
 
 void VariantWorkbench::SyncRowsFromPlayer() {
@@ -147,6 +239,10 @@ bool VariantWorkbench::BuildCatalogItem(RE::FormID a_formID,
   return false;
 }
 
+bool VariantWorkbench::IsPreviewingForm(RE::FormID a_formID) const {
+  return previewFormID_ == a_formID && !previewDavVariants_.empty();
+}
+
 bool VariantWorkbench::CanAcceptOverride(int a_targetRowIndex,
                                          const EquipmentWidgetItem &a_item,
                                          int a_sourceRowIndex,
@@ -193,15 +289,18 @@ bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
   return true;
 }
 
-bool VariantWorkbench::AddCatalogOverrideToBestRow(RE::FormID a_formID) {
-  EquipmentWidgetItem item{};
-  if (!BuildCatalogItem(a_formID, item)) {
+bool VariantWorkbench::AddCatalogSelectionToWorkbench(RE::FormID a_formID) {
+  std::vector<PlannedCatalogAssignment> assignments;
+  if (!PlanCatalogAssignments(a_formID, assignments)) {
     return false;
   }
 
-  const auto targetRowIndex = FindBestCatalogTargetRowIndex(item, true);
-  return targetRowIndex >= 0 ? AddCatalogOverride(targetRowIndex, a_formID)
-                             : false;
+  bool addedAny = false;
+  for (const auto &assignment : assignments) {
+    addedAny |= AddCatalogOverride(assignment.rowIndex, assignment.armorFormID);
+  }
+
+  return addedAny;
 }
 
 bool VariantWorkbench::MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,

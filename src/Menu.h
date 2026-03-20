@@ -49,11 +49,11 @@ private:
   void RebuildFontAtlas();
   void DrawWindow();
   void DrawCatalogFilters();
-  void DrawGearTab();
+  [[nodiscard]] bool DrawGearTab();
   [[nodiscard]] bool
   DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);
   void DrawVariantWorkbenchPane();
-  void DrawOutfitTab();
+  [[nodiscard]] bool DrawOutfitTab();
   void DrawOptionsTab();
   bool DrawSearchableStringCombo(const char *a_label, const char *a_allLabel,
                                  const std::vector<std::string> &a_options,
