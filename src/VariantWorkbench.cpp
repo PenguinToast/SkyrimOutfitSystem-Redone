@@ -22,7 +22,8 @@ auto BuildDavVariantJson(
     const std::vector<const RE::TESObjectARMO *> &a_overrideArmors)
     -> std::string {
   nlohmann::json replaceByForm = nlohmann::json::object();
-  std::vector<std::pair<std::uint64_t, std::string>> overrideAddons;
+  std::vector<std::string> replacements;
+  std::unordered_set<std::string> replacementSet;
   std::string displayName;
 
   for (const auto *overrideArmor : a_overrideArmors) {
@@ -45,39 +46,36 @@ auto BuildDavVariantJson(
         continue;
       }
 
-      overrideAddons.emplace_back(
-          overrideAddon->bipedModelData.bipedObjectSlots.underlying(),
-          identifier);
+      if (replacementSet.insert(identifier).second) {
+        replacements.push_back(identifier);
+      }
     }
   }
 
-  const RE::TESObjectARMA *sourceAddon = nullptr;
-  for (const auto *candidate : a_sourceArmor->armorAddons) {
-    if (candidate) {
-      sourceAddon = candidate;
-      break;
-    }
+  if (replacements.empty()) {
+    return {};
   }
 
-  if (sourceAddon) {
+  bool assignedPrimarySourceAddon = false;
+  for (const auto *sourceAddon : a_sourceArmor->armorAddons) {
+    if (!sourceAddon) {
+      continue;
+    }
+
     const auto sourceIdentifier = sosng::armor::GetFormIdentifier(sourceAddon);
-    if (!sourceIdentifier.empty()) {
-      std::vector<std::string> replacements;
-      std::unordered_set<std::string> replacementSet;
+    if (sourceIdentifier.empty()) {
+      continue;
+    }
 
-      for (const auto &[_, identifier] : overrideAddons) {
-        if (replacementSet.insert(identifier).second) {
-          replacements.push_back(identifier);
-        }
+    if (!assignedPrimarySourceAddon) {
+      assignedPrimarySourceAddon = true;
+      if (replacements.size() == 1) {
+        replaceByForm[sourceIdentifier] = replacements.front();
+      } else {
+        replaceByForm[sourceIdentifier] = replacements;
       }
-
-      if (!replacements.empty()) {
-        if (replacements.size() == 1) {
-          replaceByForm[sourceIdentifier] = replacements.front();
-        } else {
-          replaceByForm[sourceIdentifier] = replacements;
-        }
-      }
+    } else {
+      replaceByForm[sourceIdentifier] = nlohmann::json::array();
     }
   }
 
