@@ -9,6 +9,8 @@ struct ID3D11Device;
 struct ID3D11DeviceContext;
 
 namespace sosng {
+class MenuHost;
+
 class Menu {
 public:
   static Menu *GetSingleton();
@@ -21,6 +23,7 @@ public:
   void Toggle();
   [[nodiscard]] bool IsEnabled() const { return enabled_; }
   [[nodiscard]] bool IsInitialized() const { return initialized_; }
+  [[nodiscard]] bool PauseGameWhenOpen() const { return pauseGameWhenOpen_; }
   [[nodiscard]] workbench::VariantWorkbench &GetWorkbench() {
     return workbench_;
   }
@@ -42,11 +45,14 @@ private:
   enum class BrowserTab { Gear, Outfits, Options };
 
   Menu() = default;
+  friend class MenuHost;
 
   void ApplyStyle();
   void LoadUserSettings();
   void SaveUserSettings() const;
   void RebuildFontAtlas();
+  void OnMenuShow();
+  void OnMenuHide();
   void DrawWindow();
   void DrawCatalogFilters();
   [[nodiscard]] bool DrawGearTab();
@@ -98,6 +104,7 @@ private:
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
   bool pendingFontAtlasRebuild_{false};
+  bool pauseGameWhenOpen_{false};
   bool previewSelected_{true};
   RE::FormID selectedCatalogFormID_{0};
   std::string settingsDirectory_;

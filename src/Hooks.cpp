@@ -2,6 +2,7 @@
 
 #include "InputManager.h"
 #include "Menu.h"
+#include "MenuHost.h"
 
 namespace {
 static void
@@ -38,6 +39,7 @@ struct D3DInitHook {
         reinterpret_cast<ID3D11Device *>(renderer->GetRuntimeData().forwarder);
 
     Menu::GetSingleton()->Init(swapChain, device, context);
+    MenuHost::RegisterMenu();
   }
 
   static inline REL::Relocation<decltype(thunk)> func;
@@ -46,7 +48,7 @@ struct D3DInitHook {
 struct PresentHook {
   static void thunk(std::uint32_t a_argument) {
     func(a_argument);
-    Menu::GetSingleton()->Draw();
+    InputManager::GetSingleton()->ProcessInputEvents();
   }
 
   static inline REL::Relocation<decltype(thunk)> func;

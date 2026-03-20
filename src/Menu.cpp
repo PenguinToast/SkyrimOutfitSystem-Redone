@@ -1,6 +1,7 @@
 #include "Menu.h"
 
 #include "InputManager.h"
+#include "MenuHost.h"
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 
@@ -152,6 +153,7 @@ void Menu::LoadUserSettings() {
     fontSizePixels_ = std::clamp(json.value("fontSizePx", fontSizePixels_),
                                  kMinFontSizePixels, kMaxFontSizePixels);
     pendingFontSizePixels_ = fontSizePixels_;
+    pauseGameWhenOpen_ = json.value("pauseGameWhileOpen", pauseGameWhenOpen_);
   } catch (const std::exception &exception) {
     logger::warn("Failed to parse user settings from {}: {}", userSettingsPath_,
                  exception.what());
@@ -173,7 +175,8 @@ void Menu::SaveUserSettings() const {
     return;
   }
 
-  const nlohmann::json json = {{"fontSizePx", fontSizePixels_}};
+  const nlohmann::json json = {{"fontSizePx", fontSizePixels_},
+                               {"pauseGameWhileOpen", pauseGameWhenOpen_}};
 
   output << json.dump(2) << '\n';
 }
@@ -244,13 +247,38 @@ void Menu::Open() {
     return;
   }
 
-  auto &io = ImGui::GetIO();
-  io.MouseDrawCursor = true;
-  io.ClearInputKeys();
-  enabled_ = true;
+  if (auto *messageQueue = RE::UIMessageQueue::GetSingleton();
+      messageQueue != nullptr) {
+    messageQueue->AddMessage(MenuHost::MENU_NAME, RE::UI_MESSAGE_TYPE::kShow,
+                             nullptr);
+  }
 }
 
 void Menu::Close() {
+  if (!initialized_) {
+    return;
+  }
+
+  if (auto *messageQueue = RE::UIMessageQueue::GetSingleton();
+      messageQueue != nullptr) {
+    messageQueue->AddMessage(MenuHost::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide,
+                             nullptr);
+  }
+}
+
+void Menu::OnMenuShow() {
+  if (!initialized_) {
+    return;
+  }
+
+  auto &io = ImGui::GetIO();
+  io.MouseDrawCursor = true;
+  io.ClearInputKeys();
+  io.ClearEventsQueue();
+  enabled_ = true;
+}
+
+void Menu::OnMenuHide() {
   if (!initialized_) {
     return;
   }
@@ -260,6 +288,7 @@ void Menu::Close() {
   auto &io = ImGui::GetIO();
   io.MouseDrawCursor = false;
   io.ClearInputKeys();
+  io.ClearEventsQueue();
   if (io.IniFilename) {
     ImGui::SaveIniSettingsToDisk(io.IniFilename);
   }
@@ -281,8 +310,6 @@ void Menu::ClearCatalogSelection() {
 }
 
 void Menu::Draw() {
-  InputManager::GetSingleton()->ProcessInputEvents();
-
   if (!initialized_ || !enabled_) {
     return;
   }
@@ -1013,6 +1040,17 @@ void Menu::DrawOptionsTab() {
         pendingFontSizePixels_ = fontSizePixels_;
         SaveUserSettings();
         pendingFontAtlasRebuild_ = true;
+      }
+
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::TextUnformatted("Pause Game While Open");
+
+      ImGui::TableSetColumnIndex(1);
+      bool pauseGameWhenOpen = pauseGameWhenOpen_;
+      if (ImGui::Checkbox("##pause-game-while-open", &pauseGameWhenOpen)) {
+        pauseGameWhenOpen_ = pauseGameWhenOpen;
+        SaveUserSettings();
       }
 
       ImGui::EndTable();
