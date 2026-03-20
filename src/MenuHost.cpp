@@ -25,7 +25,7 @@ struct GFxToImGuiKey {
   ImGuiKey imguiKey;
 };
 
-constexpr std::array<GFxToImGuiKey, 31> kGFxKeyTable{{
+constexpr std::array<GFxToImGuiKey, 32> kGFxKeyTable{{
     {RE::GFxKey::kAlt, ImGuiMod_Alt},
     {RE::GFxKey::kControl, ImGuiMod_Ctrl},
     {RE::GFxKey::kShift, ImGuiMod_Shift},
@@ -41,6 +41,7 @@ constexpr std::array<GFxToImGuiKey, 31> kGFxKeyTable{{
     {RE::GFxKey::kQuote, ImGuiKey_Apostrophe},
     {RE::GFxKey::kBracketLeft, ImGuiKey_LeftBracket},
     {RE::GFxKey::kBracketRight, ImGuiKey_RightBracket},
+    {RE::GFxKey::kTab, ImGuiKey_Tab},
     {RE::GFxKey::kReturn, ImGuiKey_Enter},
     {RE::GFxKey::kEqual, ImGuiKey_Equal},
     {RE::GFxKey::kMinus, ImGuiKey_Minus},
