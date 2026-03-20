@@ -363,6 +363,28 @@ bool VariantWorkbench::SetHideEquipped(int a_rowIndex, bool a_hideEquipped) {
   return true;
 }
 
+bool VariantWorkbench::ResetEquippedRows() {
+  bool changed = false;
+  for (auto &row : rows_) {
+    if (!row.isEquipped) {
+      continue;
+    }
+
+    if (!row.overrides.empty()) {
+      row.overrides.clear();
+      changed = true;
+    }
+    if (row.hideEquipped) {
+      row.hideEquipped = false;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+void VariantWorkbench::ResetAllRows() { Revert(); }
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
                                         int a_targetRowIndex,

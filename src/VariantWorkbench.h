@@ -43,6 +43,8 @@ public:
   bool DeleteOverride(int a_rowIndex, int a_itemIndex);
   bool DeleteRow(int a_rowIndex);
   bool SetHideEquipped(int a_rowIndex, bool a_hideEquipped);
+  bool ResetEquippedRows();
+  void ResetAllRows();
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   bool InsertCatalogRow(RE::FormID a_formID, int a_targetRowIndex,
                         bool a_insertAfter);
