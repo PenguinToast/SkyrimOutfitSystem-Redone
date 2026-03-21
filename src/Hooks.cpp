@@ -9,6 +9,8 @@ static void
 hk_PollInputDevices(RE::BSTEventSource<RE::InputEvent *> *a_dispatcher,
                     RE::InputEvent **a_events);
 static inline REL::Relocation<decltype(hk_PollInputDevices)> g_inputHandler;
+static inline REL::Relocation<uintptr_t> g_registerClass{
+    REL::VariantID(75591, 77226, 0xDC4B90)};
 
 void hk_PollInputDevices(RE::BSTEventSource<RE::InputEvent *> *a_dispatcher,
                          RE::InputEvent **a_events) {
@@ -18,6 +20,45 @@ void hk_PollInputDevices(RE::BSTEventSource<RE::InputEvent *> *a_dispatcher,
 
   g_inputHandler(a_dispatcher, a_events);
 }
+
+struct WndProcHook {
+  static LRESULT thunk(HWND a_hwnd, UINT a_msg, WPARAM a_wParam,
+                       LPARAM a_lParam) {
+    switch (a_msg) {
+    case WM_ACTIVATE: {
+      const auto activationType = LOWORD(a_wParam);
+      if (activationType != WA_INACTIVE) {
+        sosr::InputManager::GetSingleton()->Flush();
+        sosr::InputManager::GetSingleton()->OnFocusChange(true);
+      }
+      break;
+    }
+    case WM_SETFOCUS:
+      sosr::InputManager::GetSingleton()->Flush();
+      sosr::InputManager::GetSingleton()->OnFocusChange(true);
+      break;
+    case WM_KILLFOCUS:
+      sosr::InputManager::GetSingleton()->OnFocusChange(false);
+      break;
+    default:
+      break;
+    }
+
+    return func(a_hwnd, a_msg, a_wParam, a_lParam);
+  }
+
+  static inline REL::Relocation<decltype(thunk)> func;
+};
+
+struct RegisterClassAHook {
+  static ATOM thunk(WNDCLASSA *a_wndClass) {
+    WndProcHook::func = reinterpret_cast<uintptr_t>(a_wndClass->lpfnWndProc);
+    a_wndClass->lpfnWndProc = &WndProcHook::thunk;
+    return func(a_wndClass);
+  }
+
+  static inline REL::Relocation<decltype(thunk)> func;
+};
 } // namespace
 
 namespace sosr::hooks {
@@ -57,6 +98,13 @@ void Install() {
       trampoline.write_call<5>(REL::RelocationID(67315, 68617).address() +
                                    REL::Relocate(0x7B, 0x7B, 0x81),
                                hk_PollInputDevices);
+
+  logger::info("Hooking RegisterClassA");
+  RegisterClassAHook::func =
+      *reinterpret_cast<uintptr_t *>(trampoline.write_call<6>(
+          g_registerClass.address() +
+              REL::VariantOffset(0x8E, 0x15C, 0x99).offset(),
+          RegisterClassAHook::thunk));
 
   logger::info("Hooking BSGraphics::Renderer::InitD3D");
   D3DInitHook::func = trampoline.write_call<5>(
