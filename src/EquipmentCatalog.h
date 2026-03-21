@@ -1,10 +1,20 @@
 #pragma once
 
+#include <unordered_map>
+
 namespace sosr {
 struct CatalogCollectionItemNode {
   std::string name;
   std::string slots;
   std::vector<CatalogCollectionItemNode> children;
+};
+
+struct ResolvedReferenceCollection {
+  std::vector<RE::FormID> armorFormIDs;
+  std::vector<CatalogCollectionItemNode> itemTree;
+  std::vector<std::string> pieces;
+  std::vector<std::string> slots;
+  std::vector<std::string> tags;
 };
 
 struct GearEntry {
@@ -69,6 +79,11 @@ public:
     return outfits_;
   }
   [[nodiscard]] const std::vector<KitEntry> &GetKits() const { return kits_; }
+  [[nodiscard]] const OutfitEntry *FindOutfit(RE::FormID a_formID) const;
+  [[nodiscard]] std::vector<RE::FormID>
+  ResolveArmorFormIDs(RE::FormID a_formID) const;
+  [[nodiscard]] std::vector<RE::FormID>
+  ResolveArmorFormIDs(const std::vector<RE::FormID> &a_formIDs) const;
 
   [[nodiscard]] const std::vector<std::string> &GetGearPlugins() const {
     return gearPlugins_;
@@ -97,6 +112,9 @@ private:
   std::vector<std::string> gearSlots_;
   std::vector<std::string> outfitPlugins_;
   std::vector<std::string> kitCollections_;
+  std::unordered_map<RE::FormID, ResolvedReferenceCollection>
+      leveledListCache_;
+  std::unordered_map<RE::FormID, std::size_t> outfitIndexByFormID_;
   std::string source_;
   std::string revision_;
 };

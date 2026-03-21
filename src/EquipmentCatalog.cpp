@@ -290,6 +290,101 @@ struct KitDescription {
   bool hasMissingItems{false};
 };
 
+void AppendCachedLeveledListDescription(
+    const sosr::ResolvedReferenceCollection &a_cache,
+    OutfitDescription &a_description,
+    std::unordered_set<RE::FormID> &a_seenArmor) {
+  a_description.pieces.insert(a_description.pieces.end(), a_cache.pieces.begin(),
+                              a_cache.pieces.end());
+  a_description.slots.insert(a_description.slots.end(), a_cache.slots.begin(),
+                             a_cache.slots.end());
+  a_description.tags.insert(a_description.tags.end(), a_cache.tags.begin(),
+                            a_cache.tags.end());
+  for (const auto formID : a_cache.armorFormIDs) {
+    if (a_seenArmor.insert(formID).second) {
+      a_description.armorFormIDs.push_back(formID);
+      ++a_description.armorCount;
+    }
+  }
+}
+
+auto GetOrBuildLeveledListCache(
+    const RE::FormID a_formID, const RE::TESLeveledList *a_list,
+    std::unordered_map<RE::FormID, sosr::ResolvedReferenceCollection> &a_cache,
+    std::unordered_set<RE::FormID> &a_activeLeveledLists)
+    -> const sosr::ResolvedReferenceCollection & {
+  const auto cacheIt = a_cache.find(a_formID);
+  if (cacheIt != a_cache.end()) {
+    return cacheIt->second;
+  }
+
+  sosr::ResolvedReferenceCollection built;
+  if (!a_activeLeveledLists.insert(a_formID).second) {
+    return a_cache.emplace(a_formID, std::move(built)).first->second;
+  }
+
+  std::unordered_set<RE::FormID> seenArmorForms;
+  for (const auto &entry : a_list->entries) {
+    const auto *form = entry.form;
+    if (!form || form->IsDeleted() || form->IsIgnored()) {
+      continue;
+    }
+
+    if (const auto *armor = form->As<RE::TESObjectARMO>()) {
+      built.itemTree.push_back(
+          {.name = GetDisplayName(armor), .slots = JoinStrings(GetArmorSlots(armor))});
+      built.pieces.push_back(GetDisplayName(armor));
+
+      if (seenArmorForms.insert(armor->GetFormID()).second) {
+        built.armorFormIDs.push_back(armor->GetFormID());
+        built.tags.emplace_back("Armor");
+        built.tags.push_back(GetArmorCategory(armor));
+
+        auto slots = GetArmorSlots(armor);
+        built.slots.insert(built.slots.end(), slots.begin(), slots.end());
+        built.tags.insert(built.tags.end(),
+                          std::make_move_iterator(slots.begin()),
+                          std::make_move_iterator(slots.end()));
+      }
+      continue;
+    }
+
+    if (form->GetFormType() == RE::FormType::LeveledItem) {
+      const auto *nestedList = form->As<RE::TESLeveledList>();
+      if (!nestedList) {
+        continue;
+      }
+
+      const auto &nestedCache =
+          GetOrBuildLeveledListCache(form->GetFormID(), nestedList, a_cache,
+                                     a_activeLeveledLists);
+      built.itemTree.push_back(
+          {.name = GetDisplayName(form), .children = nestedCache.itemTree});
+      built.pieces.insert(built.pieces.end(), nestedCache.pieces.begin(),
+                          nestedCache.pieces.end());
+      built.slots.insert(built.slots.end(), nestedCache.slots.begin(),
+                         nestedCache.slots.end());
+      built.tags.insert(built.tags.end(), nestedCache.tags.begin(),
+                        nestedCache.tags.end());
+      for (const auto formID : nestedCache.armorFormIDs) {
+        if (seenArmorForms.insert(formID).second) {
+          built.armorFormIDs.push_back(formID);
+        }
+      }
+      continue;
+    }
+
+    built.itemTree.push_back({.name = GetDisplayName(form)});
+    built.pieces.push_back(GetDisplayName(form));
+  }
+
+  a_activeLeveledLists.erase(a_formID);
+  SortUniqueStrings(built.pieces);
+  SortUniqueStrings(built.slots);
+  SortUniqueStrings(built.tags);
+  return a_cache.emplace(a_formID, std::move(built)).first->second;
+}
+
 void AccumulateArmorDescription(const RE::TESObjectARMO *a_armor,
                                 OutfitDescription &a_description,
                                 std::unordered_set<RE::FormID> &a_seenArmor) {
@@ -319,7 +414,9 @@ void AccumulateArmorDescription(const RE::TESObjectARMO *a_armor,
 auto BuildOutfitItemNode(
     const RE::TESForm *a_item, OutfitDescription &a_description,
     std::unordered_set<RE::FormID> &a_seenArmor,
-    std::unordered_set<RE::FormID> &a_activeLeveledLists)
+    std::unordered_set<RE::FormID> &a_activeLeveledLists,
+    std::unordered_map<RE::FormID, sosr::ResolvedReferenceCollection>
+        &a_leveledListCache)
     -> std::optional<sosr::CatalogCollectionItemNode> {
   if (!a_item || a_item->IsDeleted() || a_item->IsIgnored()) {
     return std::nullopt;
@@ -337,28 +434,22 @@ auto BuildOutfitItemNode(
       return std::nullopt;
     }
 
-    sosr::CatalogCollectionItemNode node{.name = GetDisplayName(a_item)};
-    if (!a_activeLeveledLists.insert(a_item->GetFormID()).second) {
-      return node;
-    }
-
-    for (const auto &entry : list->entries) {
-      if (const auto child = BuildOutfitItemNode(entry.form, a_description,
-                                                 a_seenArmor,
-                                                 a_activeLeveledLists)) {
-        node.children.push_back(*child);
-      }
-    }
-
-    a_activeLeveledLists.erase(a_item->GetFormID());
-    return node;
+    const auto &cache =
+        GetOrBuildLeveledListCache(a_item->GetFormID(), list, a_leveledListCache,
+                                   a_activeLeveledLists);
+    AppendCachedLeveledListDescription(cache, a_description, a_seenArmor);
+    return sosr::CatalogCollectionItemNode{.name = GetDisplayName(a_item),
+                                           .children = cache.itemTree};
   }
 
   a_description.pieces.push_back(GetDisplayName(a_item));
   return sosr::CatalogCollectionItemNode{.name = GetDisplayName(a_item)};
 }
 
-OutfitDescription DescribeOutfit(const RE::BGSOutfit *a_outfit) {
+OutfitDescription DescribeOutfit(
+    const RE::BGSOutfit *a_outfit,
+    std::unordered_map<RE::FormID, sosr::ResolvedReferenceCollection>
+        &a_leveledListCache) {
   OutfitDescription description;
   if (!a_outfit) {
     return description;
@@ -370,7 +461,8 @@ OutfitDescription DescribeOutfit(const RE::BGSOutfit *a_outfit) {
   a_outfit->ForEachItem([&](RE::TESForm *a_item) {
     if (const auto node = BuildOutfitItemNode(a_item, description,
                                               seenArmorForms,
-                                              activeLeveledLists)) {
+                                              activeLeveledLists,
+                                              a_leveledListCache)) {
       description.itemTree.push_back(*node);
     }
 
@@ -504,6 +596,49 @@ EquipmentCatalog &EquipmentCatalog::Get() {
 EquipmentCatalog::EquipmentCatalog()
     : source_("Catalog not loaded"), revision_("cache-empty") {}
 
+const OutfitEntry *EquipmentCatalog::FindOutfit(const RE::FormID a_formID) const {
+  const auto it = outfitIndexByFormID_.find(a_formID);
+  if (it == outfitIndexByFormID_.end() || it->second >= outfits_.size()) {
+    return nullptr;
+  }
+
+  return std::addressof(outfits_[it->second]);
+}
+
+std::vector<RE::FormID> EquipmentCatalog::ResolveArmorFormIDs(
+    const RE::FormID a_formID) const {
+  if (const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(a_formID)) {
+    return {armor->GetFormID()};
+  }
+
+  if (const auto *outfit = FindOutfit(a_formID)) {
+    return outfit->armorFormIDs;
+  }
+
+  const auto it = leveledListCache_.find(a_formID);
+  if (it != leveledListCache_.end()) {
+    return it->second.armorFormIDs;
+  }
+
+  return {};
+}
+
+std::vector<RE::FormID> EquipmentCatalog::ResolveArmorFormIDs(
+    const std::vector<RE::FormID> &a_formIDs) const {
+  std::vector<RE::FormID> resolved;
+  std::unordered_set<RE::FormID> seenForms;
+
+  for (const auto formID : a_formIDs) {
+    for (const auto armorFormID : ResolveArmorFormIDs(formID)) {
+      if (seenForms.insert(armorFormID).second) {
+        resolved.push_back(armorFormID);
+      }
+    }
+  }
+
+  return resolved;
+}
+
 void EquipmentCatalog::RefreshFromGame() {
   gear_.clear();
   outfits_.clear();
@@ -512,6 +647,8 @@ void EquipmentCatalog::RefreshFromGame() {
   gearSlots_.clear();
   outfitPlugins_.clear();
   kitCollections_.clear();
+  leveledListCache_.clear();
+  outfitIndexByFormID_.clear();
 
   auto *dataHandler = RE::TESDataHandler::GetSingleton();
   if (!dataHandler) {
@@ -566,7 +703,7 @@ void EquipmentCatalog::RefreshFromGame() {
       continue;
     }
 
-    auto description = DescribeOutfit(outfit);
+    auto description = DescribeOutfit(outfit, leveledListCache_);
     if (description.pieces.empty()) {
       continue;
     }
@@ -598,6 +735,7 @@ void EquipmentCatalog::RefreshFromGame() {
     entry.tagsText = JoinStrings(entry.tags);
     entry.searchText = BuildOutfitSearchText(entry);
 
+    outfitIndexByFormID_.emplace(entry.formID, outfits_.size());
     outfits_.push_back(std::move(entry));
   }
 

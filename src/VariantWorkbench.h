@@ -35,10 +35,8 @@ public:
                                        int a_sourceRowIndex = -1,
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
-  bool AddCatalogSelectionToWorkbench(RE::FormID a_formID);
   bool AddCatalogSelectionToWorkbench(const std::vector<RE::FormID> &a_formIDs);
   bool AddCatalogSelectionAsRows(const std::vector<RE::FormID> &a_formIDs);
-  bool ApplyCatalogPreview(RE::FormID a_formID);
   bool ApplyCatalogPreview(std::string_view a_selectionKey,
                            const std::vector<RE::FormID> &a_formIDs);
   void ClearPreview();
@@ -75,9 +73,6 @@ private:
   };
 
   [[nodiscard]] bool
-  ResolveCatalogArmors(RE::FormID a_formID,
-                       std::vector<const RE::TESObjectARMO *> &a_armors) const;
-  [[nodiscard]] bool
   ResolveCatalogArmors(const std::vector<RE::FormID> &a_formIDs,
                        std::vector<const RE::TESObjectARMO *> &a_armors) const;
   [[nodiscard]] int FindBestCatalogTargetRowIndex(
@@ -86,9 +81,6 @@ private:
   [[nodiscard]] bool CanAcceptOverrideWithPendingAssignments(
       int a_targetRowIndex, const EquipmentWidgetItem &a_item,
       const std::vector<PlannedCatalogAssignment> &a_pendingAssignments) const;
-  [[nodiscard]] bool PlanCatalogAssignments(
-      RE::FormID a_formID,
-      std::vector<PlannedCatalogAssignment> &a_assignments) const;
   [[nodiscard]] bool PlanCatalogAssignments(
       const std::vector<RE::FormID> &a_formIDs,
       std::vector<PlannedCatalogAssignment> &a_assignments) const;

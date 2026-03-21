@@ -111,25 +111,6 @@ auto BuildDavVariantJson(
 } // namespace
 
 namespace sosr::workbench {
-bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
-  std::vector<const RE::TESObjectARMO *> armors;
-  if (!ResolveCatalogArmors(a_formID, armors)) {
-    ClearPreview();
-    return false;
-  }
-
-  std::vector<RE::FormID> armorFormIDs;
-  armorFormIDs.reserve(armors.size());
-  for (const auto *armor : armors) {
-    if (armor) {
-      armorFormIDs.push_back(armor->GetFormID());
-    }
-  }
-
-  return ApplyCatalogPreview("form:" + armor::FormatFormID(a_formID),
-                             armorFormIDs);
-}
-
 bool VariantWorkbench::ApplyCatalogPreview(
     std::string_view a_selectionKey, const std::vector<RE::FormID> &a_formIDs) {
   std::vector<PlannedCatalogAssignment> assignments;

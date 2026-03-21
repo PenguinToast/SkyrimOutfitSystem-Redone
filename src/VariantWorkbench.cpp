@@ -1,100 +1,23 @@
 #include "VariantWorkbench.h"
 
 #include "ArmorUtils.h"
+#include "EquipmentCatalog.h"
 
 #include <algorithm>
 #include <unordered_set>
 
-namespace {
-void CollectReferencedArmorFormIDs(
-    const RE::TESForm *a_form, std::vector<RE::FormID> &a_armorFormIDs,
-    std::unordered_set<RE::FormID> &a_seenArmor,
-    std::unordered_set<RE::FormID> &a_activeLeveledLists) {
-  if (!a_form) {
-    return;
-  }
-
-  if (const auto *armor = a_form->As<RE::TESObjectARMO>()) {
-    if (a_seenArmor.insert(armor->GetFormID()).second) {
-      a_armorFormIDs.push_back(armor->GetFormID());
-    }
-    return;
-  }
-
-  if (a_form->GetFormType() == RE::FormType::LeveledItem) {
-    const auto *list = a_form->As<RE::TESLeveledList>();
-    if (!list || !a_activeLeveledLists.insert(a_form->GetFormID()).second) {
-      return;
-    }
-
-    for (const auto &entry : list->entries) {
-      CollectReferencedArmorFormIDs(entry.form, a_armorFormIDs, a_seenArmor,
-                                    a_activeLeveledLists);
-    }
-
-    a_activeLeveledLists.erase(a_form->GetFormID());
-  }
-}
-
-void CollectOutfitArmorFormIDs(
-    const RE::BGSOutfit *a_outfit, std::vector<RE::FormID> &a_armorFormIDs,
-    std::unordered_set<RE::FormID> &a_seenArmor,
-    std::unordered_set<RE::FormID> &a_activeLeveledLists) {
-  if (!a_outfit) {
-    return;
-  }
-
-  a_outfit->ForEachItem([&](RE::TESForm *a_item) {
-    CollectReferencedArmorFormIDs(a_item, a_armorFormIDs, a_seenArmor,
-                                  a_activeLeveledLists);
-    return RE::BSContainer::ForEachResult::kContinue;
-  });
-}
-} // namespace
-
 namespace sosr::workbench {
-bool VariantWorkbench::ResolveCatalogArmors(
-    RE::FormID a_formID,
-    std::vector<const RE::TESObjectARMO *> &a_armors) const {
-  const auto *form = RE::TESForm::LookupByID(a_formID);
-  if (!form) {
-    return false;
-  }
-
-  if (const auto *armor = form->As<RE::TESObjectARMO>()) {
-    return ResolveCatalogArmors(std::vector<RE::FormID>{armor->GetFormID()},
-                                a_armors);
-  }
-
-  const auto *outfit = form->As<RE::BGSOutfit>();
-  if (!outfit) {
-    return false;
-  }
-
-  std::vector<RE::FormID> armorFormIDs;
-  std::unordered_set<RE::FormID> seenArmorForms;
-  std::unordered_set<RE::FormID> activeLeveledLists;
-  CollectOutfitArmorFormIDs(outfit, armorFormIDs, seenArmorForms,
-                            activeLeveledLists);
-
-  return ResolveCatalogArmors(armorFormIDs, a_armors);
-}
-
 bool VariantWorkbench::ResolveCatalogArmors(
     const std::vector<RE::FormID> &a_formIDs,
     std::vector<const RE::TESObjectARMO *> &a_armors) const {
   a_armors.clear();
 
-  std::unordered_set<RE::FormID> seenForms;
-  for (const auto formID : a_formIDs) {
+  for (const auto formID : EquipmentCatalog::Get().ResolveArmorFormIDs(a_formIDs)) {
     const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID);
     if (!armor) {
       continue;
     }
-
-    if (seenForms.insert(formID).second) {
-      a_armors.push_back(armor);
-    }
+    a_armors.push_back(armor);
   }
 
   return !a_armors.empty();
@@ -159,26 +82,6 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
 int VariantWorkbench::FindBestCatalogTargetRowIndex(
     const EquipmentWidgetItem &a_item, bool a_requireAcceptable) const {
   return FindBestCatalogTargetRowIndex(a_item, a_requireAcceptable, nullptr);
-}
-
-bool VariantWorkbench::PlanCatalogAssignments(
-    RE::FormID a_formID,
-    std::vector<PlannedCatalogAssignment> &a_assignments) const {
-  std::vector<const RE::TESObjectARMO *> armors;
-  if (!ResolveCatalogArmors(a_formID, armors)) {
-    return false;
-  }
-
-  return PlanCatalogAssignments(
-      [&]() {
-        std::vector<RE::FormID> armorFormIDs;
-        armorFormIDs.reserve(armors.size());
-        for (const auto *armor : armors) {
-          armorFormIDs.push_back(armor->GetFormID());
-        }
-        return armorFormIDs;
-      }(),
-      a_assignments);
 }
 
 bool VariantWorkbench::PlanCatalogAssignments(
@@ -365,20 +268,6 @@ bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
   rows_[static_cast<std::size_t>(a_targetRowIndex)].overrides.push_back(
       std::move(item));
   return true;
-}
-
-bool VariantWorkbench::AddCatalogSelectionToWorkbench(RE::FormID a_formID) {
-  std::vector<PlannedCatalogAssignment> assignments;
-  if (!PlanCatalogAssignments(a_formID, assignments)) {
-    return false;
-  }
-
-  bool addedAny = false;
-  for (const auto &assignment : assignments) {
-    addedAny |= AddCatalogOverride(assignment.rowIndex, assignment.armorFormID);
-  }
-
-  return addedAny;
 }
 
 bool VariantWorkbench::AddCatalogSelectionToWorkbench(
