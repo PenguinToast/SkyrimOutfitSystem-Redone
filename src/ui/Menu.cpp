@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <unordered_set>
 
 namespace {
 constexpr auto kSettingsDirectory =
@@ -89,6 +90,26 @@ std::string NormalizeKitCollection(std::string_view a_collection) {
     normalized.pop_back();
   }
   return normalized;
+}
+
+std::vector<RE::FormID> CollectOutfitArmorFormIDs(const RE::FormID a_formID) {
+  std::vector<RE::FormID> armorFormIDs;
+  std::unordered_set<RE::FormID> seenArmorForms;
+
+  const auto *outfit = RE::TESForm::LookupByID<RE::BGSOutfit>(a_formID);
+  if (!outfit) {
+    return armorFormIDs;
+  }
+
+  outfit->ForEachItem([&](RE::TESForm *a_item) {
+    const auto *armor = a_item ? a_item->As<RE::TESObjectARMO>() : nullptr;
+    if (armor && seenArmorForms.insert(armor->GetFormID()).second) {
+      armorFormIDs.push_back(armor->GetFormID());
+    }
+    return RE::BSContainer::ForEachResult::kContinue;
+  });
+
+  return armorFormIDs;
 }
 
 int CompareText(std::string_view a_left, std::string_view a_right) {
@@ -547,8 +568,7 @@ void Menu::AddGearEntryToWorkbench(const GearEntry &a_entry) {
 }
 
 void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry) {
-  workbench_.AddCatalogSelectionToWorkbench(
-      std::vector<RE::FormID>{a_entry.formID});
+  workbench_.AddCatalogSelectionToWorkbench(a_entry.formID);
 }
 
 void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry) {
@@ -678,7 +698,7 @@ void Menu::PreviewGearEntry(const GearEntry &a_entry) {
 
 void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {
   workbench_.ApplyCatalogPreview(a_entry.id,
-                                 std::vector<RE::FormID>{a_entry.formID});
+                                 CollectOutfitArmorFormIDs(a_entry.formID));
 }
 
 void Menu::PreviewKitEntry(const KitEntry &a_entry) {
@@ -964,7 +984,7 @@ void Menu::DrawWindow() {
             [](const OutfitEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetOutfits().end()) {
           workbench_.ApplyCatalogPreview(
-              entry->id, std::vector<RE::FormID>{entry->formID});
+              entry->id, CollectOutfitArmorFormIDs(entry->formID));
         }
       } else if (activeTab_ == BrowserTab::Kits) {
         const auto entry = std::ranges::find(

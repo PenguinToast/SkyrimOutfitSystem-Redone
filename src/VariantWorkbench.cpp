@@ -326,7 +326,17 @@ bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
 }
 
 bool VariantWorkbench::AddCatalogSelectionToWorkbench(RE::FormID a_formID) {
-  return AddCatalogSelectionToWorkbench(std::vector<RE::FormID>{a_formID});
+  std::vector<PlannedCatalogAssignment> assignments;
+  if (!PlanCatalogAssignments(a_formID, assignments)) {
+    return false;
+  }
+
+  bool addedAny = false;
+  for (const auto &assignment : assignments) {
+    addedAny |= AddCatalogOverride(assignment.rowIndex, assignment.armorFormID);
+  }
+
+  return addedAny;
 }
 
 bool VariantWorkbench::AddCatalogSelectionToWorkbench(

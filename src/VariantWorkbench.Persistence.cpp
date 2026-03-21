@@ -112,8 +112,22 @@ auto BuildDavVariantJson(
 
 namespace sosr::workbench {
 bool VariantWorkbench::ApplyCatalogPreview(RE::FormID a_formID) {
+  std::vector<const RE::TESObjectARMO *> armors;
+  if (!ResolveCatalogArmors(a_formID, armors)) {
+    ClearPreview();
+    return false;
+  }
+
+  std::vector<RE::FormID> armorFormIDs;
+  armorFormIDs.reserve(armors.size());
+  for (const auto *armor : armors) {
+    if (armor) {
+      armorFormIDs.push_back(armor->GetFormID());
+    }
+  }
+
   return ApplyCatalogPreview("form:" + armor::FormatFormID(a_formID),
-                             std::vector<RE::FormID>{a_formID});
+                             armorFormIDs);
 }
 
 bool VariantWorkbench::ApplyCatalogPreview(
