@@ -1,13 +1,20 @@
 #include "Menu.h"
 
+#include "ArmorUtils.h"
 #include "imgui_internal.h"
 
+#include <algorithm>
 #include <cstring>
 #include <optional>
 #include <unordered_map>
 
 namespace {
 constexpr char kVariantItemPayloadType[] = "SOSR_VARIANT_ITEM";
+constexpr char kIconEditorId[] = "\xee\x84\x8b";   // ICON_LC_LIST
+constexpr char kIconPlugin[] = "\xee\x84\xac";     // ICON_LC_PACKAGE
+constexpr char kIconFormId[] = "\xee\x83\xb2";     // ICON_LC_HASH
+constexpr char kIconIdentifier[] = "\xee\x84\x87"; // ICON_LC_LINK
+constexpr char kIconSlot[] = "\xee\x87\x89";       // ICON_LC_SHIRT
 
 struct ActiveWorkbenchVisual {
   std::string widgetId;
@@ -29,6 +36,118 @@ std::string DescribeActiveWorkbenchVisual(
   }
 
   return a_row.equipped.name + " (equipped)";
+}
+
+void DrawTooltipInfoRow(const char *a_icon, const char *a_label,
+                        const std::string &a_value) {
+  if (a_value.empty()) {
+    return;
+  }
+
+  const auto *theme = sosr::ThemeConfig::GetSingleton();
+  ImGui::TableNextRow();
+
+  ImGui::TableSetColumnIndex(0);
+  if (a_icon && a_icon[0] != '\0') {
+    ImGui::TextColored(theme->GetColor("PRIMARY"), "%s", a_icon);
+    ImGui::SameLine(0.0f, 6.0f);
+  }
+  if (a_label && a_label[0] != '\0') {
+    ImGui::TextDisabled("%s", a_label);
+  }
+
+  ImGui::TableSetColumnIndex(1);
+  const auto availableWidth = ImGui::GetContentRegionAvail().x;
+  const auto valueWidth = ImGui::CalcTextSize(a_value.c_str()).x;
+  if (valueWidth < availableWidth) {
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availableWidth - valueWidth);
+    ImGui::TextUnformatted(a_value.c_str());
+  } else {
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + availableWidth);
+    ImGui::TextWrapped("%s", a_value.c_str());
+    ImGui::PopTextWrapPos();
+  }
+}
+
+void DrawEquipmentInfoTooltip(const sosr::workbench::EquipmentWidgetItem &a_item) {
+  const auto *form = RE::TESForm::LookupByID(a_item.formID);
+  if (!form) {
+    return;
+  }
+
+  const auto *theme = sosr::ThemeConfig::GetSingleton();
+  const auto displayName = sosr::armor::GetDisplayName(form);
+  const auto editorID = sosr::armor::GetEditorID(form);
+  const auto plugin = sosr::armor::GetPluginName(form);
+  const auto formID = sosr::armor::FormatFormID(form->GetFormID());
+  const auto identifier = sosr::armor::GetFormIdentifier(form);
+  const auto slotLabels = sosr::armor::GetArmorSlotLabels(a_item.slotMask);
+  float widestValueWidth = ImGui::CalcTextSize(displayName.c_str()).x;
+  for (const auto *value : {editorID.c_str(), plugin.c_str(), formID.c_str(),
+                            identifier.c_str()}) {
+    widestValueWidth =
+        (std::max)(widestValueWidth, ImGui::CalcTextSize(value).x);
+  }
+  for (const auto &slotLabel : slotLabels) {
+    widestValueWidth =
+        (std::max)(widestValueWidth, ImGui::CalcTextSize(slotLabel.c_str()).x);
+  }
+
+  ImGui::BeginTooltip();
+  const auto tooltipCursor = ImGui::GetCursorPos();
+  const auto tooltipWidth = (std::max)(330.0f, widestValueWidth + 190.0f);
+  ImGui::Dummy(ImVec2(tooltipWidth, 0.0f));
+  ImGui::SetCursorPos(tooltipCursor);
+
+  const auto headerMin = ImGui::GetCursorScreenPos();
+  const auto headerWidth =
+      (std::max)(tooltipWidth, ImGui::GetContentRegionAvail().x);
+  const auto headerHeight = ImGui::GetFontSize() * 2.4f;
+  const auto headerMax =
+      ImVec2(headerMin.x + headerWidth, headerMin.y + headerHeight);
+  auto *drawList = ImGui::GetWindowDrawList();
+  drawList->AddRectFilled(headerMin, headerMax, theme->GetColorU32("BG"), 8.0f);
+  drawList->AddRect(headerMin, headerMax, theme->GetColorU32("BORDER"), 8.0f);
+  drawList->AddRectFilledMultiColor(
+      headerMin, headerMax, theme->GetColorU32("PRIMARY", 0.18f),
+      theme->GetColorU32("PRIMARY", 0.18f), theme->GetColorU32("NONE"),
+      theme->GetColorU32("NONE"));
+
+  const auto titleFontSize = ImGui::GetFontSize() * 1.15f;
+  const auto titleSize =
+      ImGui::CalcTextSize(displayName.c_str(), nullptr, false, headerWidth);
+  drawList->AddText(
+      ImGui::GetFont(), titleFontSize,
+      ImVec2(headerMin.x + (headerWidth - titleSize.x) * 0.5f,
+             headerMin.y + (headerHeight - titleFontSize) * 0.5f - 1.0f),
+      theme->GetColorU32("TEXT"), displayName.c_str());
+  ImGui::Dummy(ImVec2(headerWidth, headerHeight));
+
+  ImGui::Spacing();
+  ImGui::PushStyleColor(ImGuiCol_Separator, theme->GetColorU32("PRIMARY"));
+  ImGui::Separator();
+  ImGui::PopStyleColor();
+  ImGui::Spacing();
+
+  if (ImGui::BeginTable("##equipment-info-tooltip", 2,
+                        ImGuiTableFlags_NoSavedSettings |
+                            ImGuiTableFlags_SizingFixedFit)) {
+    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 122.0f);
+    ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
+
+    DrawTooltipInfoRow(kIconEditorId, "Editor ID", editorID);
+    DrawTooltipInfoRow(kIconPlugin, "Plugin", plugin);
+    DrawTooltipInfoRow(kIconFormId, "Form ID", formID);
+    DrawTooltipInfoRow(kIconIdentifier, "Identifier", identifier);
+    for (std::size_t index = 0; index < slotLabels.size(); ++index) {
+      DrawTooltipInfoRow(index == 0 ? kIconSlot : "",
+                         index == 0 ? "Slots" : "", slotLabels[index]);
+    }
+
+    ImGui::EndTable();
+  }
+
+  ImGui::EndTooltip();
 }
 } // namespace
 
@@ -67,9 +186,13 @@ bool Menu::DrawEquipmentInfoWidget(const char *a_id,
   if (active) {
     fillColor = a_conflict ? theme->GetColorU32("ERROR", 0.75f)
                            : theme->GetColorU32("PRIMARY", 0.80f);
+    borderColor = a_conflict ? theme->GetColorU32("ERROR")
+                             : theme->GetColorU32("PRIMARY");
   } else if (hovered) {
     fillColor = a_conflict ? theme->GetColorU32("ERROR", 0.62f)
                            : theme->GetColorU32("BG_LIGHT", 1.0f);
+    borderColor = a_conflict ? theme->GetColorU32("ERROR")
+                             : theme->GetColorU32("PRIMARY", 0.70f);
   }
 
   drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);
@@ -122,6 +245,11 @@ bool Menu::DrawEquipmentInfoWidget(const char *a_id,
     ImGui::TextUnformatted(a_item.name.c_str());
     ImGui::Text("%s", a_item.slotText.c_str());
     ImGui::EndDragDropSource();
+  }
+
+  if (hovered && !deleteHovered &&
+      ImGui::IsDragDropActive() == false) {
+    DrawEquipmentInfoTooltip(a_item);
   }
 
   ImGui::PopID();
