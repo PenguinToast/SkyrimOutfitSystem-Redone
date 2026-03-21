@@ -376,6 +376,13 @@ void Menu::DrawVariantWorkbenchPane() {
             currentTable ? ImGui::TableGetCellBgRect(currentTable, 1)
                          : ImRect(ImGui::GetCursorScreenPos(),
                                   ImGui::GetCursorScreenPos());
+        const auto overrideDropRect =
+            currentTable
+                ? ImRect(overrideCellRect.Min,
+                         ImVec2(overrideCellRect.Max.x,
+                                overrideCellRect.Max.y +
+                                    currentTable->RowCellPaddingY))
+                : overrideCellRect;
         const auto cellPadding = ImGui::GetStyle().CellPadding;
         ImGui::SetCursorScreenPos(
             ImVec2(overrideCellRect.Min.x + cellPadding.x,
@@ -448,11 +455,11 @@ void Menu::DrawVariantWorkbenchPane() {
           }
         }
 
-        const ImRect dropRect(overrideCellRect.Min, overrideCellRect.Max);
         if (ImGui::BeginDragDropTargetCustom(
-                dropRect, ImGui::GetID(("##override-cell-target-" +
-                                        std::to_string(rowIndex))
-                                           .c_str()))) {
+                overrideDropRect,
+                ImGui::GetID(
+                    ("##override-cell-target-" + std::to_string(rowIndex))
+                        .c_str()))) {
           AcceptOverridePayload(rowIndex);
           ImGui::EndDragDropTarget();
         }
