@@ -203,7 +203,7 @@ bool VariantWorkbench::ApplyCatalogPreview(
     if (!dav->RegisterVariantJson(variantName.c_str(), variantJson.c_str())) {
       logger::warn("Failed to register SOSR preview variant {}", variantName);
       for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
-        dav->RemoveVariantOverride(player, appliedVariantName.c_str(), true);
+        dav->RemoveVariantOverride(player, appliedVariantName.c_str());
         dav->DeleteVariant(appliedVariantName.c_str());
       }
       ClearPreview();
@@ -215,7 +215,7 @@ bool VariantWorkbench::ApplyCatalogPreview(
                    variantName);
       dav->DeleteVariant(variantName.c_str());
       for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
-        dav->RemoveVariantOverride(player, appliedVariantName.c_str(), true);
+        dav->RemoveVariantOverride(player, appliedVariantName.c_str());
         dav->DeleteVariant(appliedVariantName.c_str());
       }
       ClearPreview();
@@ -242,7 +242,7 @@ void VariantWorkbench::ClearPreview() {
   if (dav) {
     if (player) {
       for (const auto &[variantName, _] : previewDavVariants_) {
-        if (!dav->RemoveVariantOverride(player, variantName.c_str(), true)) {
+        if (!dav->RemoveVariantOverride(player, variantName.c_str())) {
           logger::warn("Failed to remove SOSR preview variant override {}",
                        variantName);
         }
