@@ -376,14 +376,10 @@ void Menu::DrawVariantWorkbenchPane() {
             currentTable ? ImGui::TableGetCellBgRect(currentTable, 1)
                          : ImRect(ImGui::GetCursorScreenPos(),
                                   ImGui::GetCursorScreenPos());
-        const auto overrideDropRect =
-            currentTable
-                ? ImRect(overrideCellRect.Min,
-                         ImVec2(overrideCellRect.Max.x,
-                                overrideCellRect.Max.y +
-                                    currentTable->RowCellPaddingY))
-                : overrideCellRect;
         const auto cellPadding = ImGui::GetStyle().CellPadding;
+        const auto overrideDropMin = ImVec2(overrideCellRect.Min.x + cellPadding.x,
+                                            overrideCellRect.Min.y + cellPadding.y);
+        const auto overrideDropMaxX = overrideCellRect.Max.x - cellPadding.x;
         ImGui::SetCursorScreenPos(
             ImVec2(overrideCellRect.Min.x + cellPadding.x,
                    overrideCellRect.Min.y + cellPadding.y));
@@ -455,15 +451,6 @@ void Menu::DrawVariantWorkbenchPane() {
           }
         }
 
-        if (ImGui::BeginDragDropTargetCustom(
-                overrideDropRect,
-                ImGui::GetID(
-                    ("##override-cell-target-" + std::to_string(rowIndex))
-                        .c_str()))) {
-          AcceptOverridePayload(rowIndex);
-          ImGui::EndDragDropTarget();
-        }
-
         ImGui::TableSetColumnIndex(2);
         bool hideEquipped =
             rows[static_cast<std::size_t>(rowIndex)].hideEquipped;
@@ -492,6 +479,20 @@ void Menu::DrawVariantWorkbenchPane() {
           rowBottomY.push_back(bottomRect.Max.y + rowTable->RowCellPaddingY);
         } else {
           rowBottomY.push_back(ImGui::GetItemRectMax().y);
+        }
+
+        const ImRect overrideDropRect(
+            overrideDropMin,
+            ImVec2(overrideDropMaxX,
+                   rowBottomY.back() - cellPadding.y));
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::BeginDragDropTargetCustom(
+                overrideDropRect,
+                ImGui::GetID(
+                    ("##override-cell-target-" + std::to_string(rowIndex))
+                        .c_str()))) {
+          AcceptOverridePayload(rowIndex);
+          ImGui::EndDragDropTarget();
         }
       }
 
