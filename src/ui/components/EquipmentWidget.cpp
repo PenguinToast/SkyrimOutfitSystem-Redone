@@ -127,6 +127,59 @@ void DrawEquipmentInfoTooltipBody(
 } // namespace
 
 namespace sosr::ui::components {
+bool BuildEquipmentTooltipItem(const RE::FormID a_formID, const char *a_key,
+                               workbench::EquipmentWidgetItem &a_item) {
+  const auto *form = RE::TESForm::LookupByID(a_formID);
+  if (!form) {
+    return false;
+  }
+
+  a_item.formID = a_formID;
+  a_item.key = a_key ? a_key : "";
+  a_item.name = sosr::armor::GetDisplayName(form);
+  if (const auto *armor = form->As<RE::TESObjectARMO>()) {
+    a_item.slotMask = armor->GetSlotMask().underlying();
+    a_item.slotText = sosr::armor::JoinStrings(
+        sosr::armor::GetArmorSlotLabels(a_item.slotMask));
+  } else {
+    a_item.slotMask = 0;
+    a_item.slotText.clear();
+  }
+
+  return true;
+}
+
+void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
+                              const bool a_hoveredSource,
+                              const workbench::EquipmentWidgetItem &a_item) {
+  if (!ShouldDrawPinnableTooltip(a_tooltipId, a_hoveredSource)) {
+    return;
+  }
+
+  const auto *form = RE::TESForm::LookupByID(a_item.formID);
+  const auto displayName =
+      form ? sosr::armor::GetDisplayName(form) : a_item.name;
+  const auto editorID = form ? sosr::armor::GetEditorID(form) : std::string{};
+  const auto plugin = form ? sosr::armor::GetPluginName(form) : std::string{};
+  const auto formID = form ? sosr::armor::FormatFormID(form->GetFormID())
+                           : sosr::armor::FormatFormID(a_item.formID);
+  const auto identifier =
+      form ? sosr::armor::GetFormIdentifier(form) : std::string{};
+  const auto slotLabels = sosr::armor::GetArmorSlotLabels(a_item.slotMask);
+  const auto tooltipContentWidth = ComputeEquipmentTooltipWidth(
+      displayName, editorID, plugin, formID, identifier, slotLabels);
+  ImGui::SetNextWindowSize(
+      ImVec2(tooltipContentWidth + ImGui::GetStyle().WindowPadding.x * 2.0f,
+             0.0f),
+      ImGuiCond_Always);
+  if (const auto mode = BeginPinnableTooltip(a_tooltipId, a_hoveredSource);
+      mode != PinnableTooltipMode::None) {
+    DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin, formID,
+                                 identifier, slotLabels);
+    EndPinnableTooltip(a_tooltipId, mode);
+  }
+}
+
 EquipmentWidgetResult
 DrawEquipmentWidget(const char *a_id,
                     const workbench::EquipmentWidgetItem &a_item,
@@ -209,30 +262,8 @@ DrawEquipmentWidget(const char *a_id,
   }
 
   const auto tooltipId = "equipment:" + a_item.key;
-  if (!result.deleteHovered && !ImGui::IsDragDropActive() &&
-      ShouldDrawPinnableTooltip(tooltipId, result.hovered)) {
-    const auto *form = RE::TESForm::LookupByID(a_item.formID);
-    const auto displayName =
-        form ? sosr::armor::GetDisplayName(form) : a_item.name;
-    const auto editorID = form ? sosr::armor::GetEditorID(form) : std::string{};
-    const auto plugin = form ? sosr::armor::GetPluginName(form) : std::string{};
-    const auto formID = form ? sosr::armor::FormatFormID(form->GetFormID())
-                             : sosr::armor::FormatFormID(a_item.formID);
-    const auto identifier =
-        form ? sosr::armor::GetFormIdentifier(form) : std::string{};
-    const auto slotLabels = sosr::armor::GetArmorSlotLabels(a_item.slotMask);
-    const auto tooltipContentWidth = ComputeEquipmentTooltipWidth(
-        displayName, editorID, plugin, formID, identifier, slotLabels);
-    const auto &style = ImGui::GetStyle();
-    ImGui::SetNextWindowSize(
-        ImVec2(tooltipContentWidth + style.WindowPadding.x * 2.0f, 0.0f),
-        ImGuiCond_Always);
-    if (const auto mode = BeginPinnableTooltip(tooltipId, result.hovered);
-        mode != PinnableTooltipMode::None) {
-      DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin,
-                                   formID, identifier, slotLabels);
-      EndPinnableTooltip(tooltipId, mode);
-    }
+  if (!result.deleteHovered && !ImGui::IsDragDropActive()) {
+    DrawEquipmentInfoTooltip(tooltipId, result.hovered, a_item);
   }
 
   ImGui::PopID();

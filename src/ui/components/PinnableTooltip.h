@@ -3,7 +3,12 @@
 #include <string_view>
 
 namespace sosr::ui::components {
-enum class PinnableTooltipMode : std::uint8_t { None, Hovered, Pinned };
+enum class PinnableTooltipMode : std::uint8_t {
+  None,
+  Hovered,
+  HoveredOverlay,
+  Pinned
+};
 
 void BeginPinnableTooltipFrame();
 void EndPinnableTooltipFrame();

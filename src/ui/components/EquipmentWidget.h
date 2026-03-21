@@ -15,6 +15,12 @@ struct EquipmentWidgetResult {
   bool deleteClicked{false};
 };
 
+[[nodiscard]] bool
+BuildEquipmentTooltipItem(RE::FormID a_formID, const char *a_key,
+                          workbench::EquipmentWidgetItem &a_item);
+void DrawEquipmentInfoTooltip(std::string_view a_tooltipId,
+                              bool a_hoveredSource,
+                              const workbench::EquipmentWidgetItem &a_item);
 [[nodiscard]] EquipmentWidgetResult
 DrawEquipmentWidget(const char *a_id,
                     const workbench::EquipmentWidgetItem &a_item,

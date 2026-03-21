@@ -3,6 +3,7 @@
 #include "ArmorUtils.h"
 #include "imgui_internal.h"
 #include "ui/ThemeConfig.h"
+#include "ui/components/EquipmentWidget.h"
 #include "ui/components/PinnableTooltip.h"
 
 #include <algorithm>
@@ -12,7 +13,9 @@ constexpr float kTreeIndentWidth = 18.0f;
 
 struct GroupedTooltipItemNode {
   RE::FormID formID{0};
+  std::int32_t level{-1};
   std::string cachedName;
+  std::vector<sosr::CatalogCollectionItemNode> duplicates;
   std::vector<GroupedTooltipItemNode> children;
   std::size_t count{1};
   bool isCollection{false};
@@ -38,7 +41,10 @@ std::string GetNodeName(const GroupedTooltipItemNode &a_node) {
     return a_node.cachedName;
   }
 
-  return GetNodeName(sosr::CatalogCollectionItemNode{.formID = a_node.formID});
+  return GetNodeName(
+      sosr::CatalogCollectionItemNode{.formID = a_node.formID,
+                                      .cachedName = a_node.cachedName,
+                                      .level = a_node.level});
 }
 
 std::string GetNodeSlots(const sosr::CatalogCollectionItemNode &a_node) {
@@ -51,7 +57,18 @@ std::string GetNodeSlots(const sosr::CatalogCollectionItemNode &a_node) {
 }
 
 std::string GetNodeSlots(const GroupedTooltipItemNode &a_node) {
-  return GetNodeSlots(sosr::CatalogCollectionItemNode{.formID = a_node.formID});
+  return GetNodeSlots(
+      sosr::CatalogCollectionItemNode{.formID = a_node.formID,
+                                      .cachedName = a_node.cachedName,
+                                      .level = a_node.level});
+}
+
+std::string FormatLevelLabel(const std::int32_t a_level) {
+  if (a_level < 0) {
+    return "Any";
+  }
+
+  return "Level " + std::to_string(a_level);
 }
 
 void DrawTooltipInfoRow(const char *a_icon, const std::string &a_label,
@@ -132,12 +149,15 @@ auto BuildGroupedItemTree(
 
     GroupedTooltipItemNode node{};
     node.formID = item.formID;
+    node.level = item.level;
     node.cachedName = item.cachedName;
+    node.duplicates.push_back(item);
     node.children = groupedChildren;
     node.count = 1;
     node.isCollection = isCollection;
     if (existingIt != grouped.end()) {
       existingIt->count += 1;
+      existingIt->duplicates.push_back(item);
       MergeGroupedChildren(existingIt->children, node.children);
     } else {
       grouped.push_back(std::move(node));
@@ -172,13 +192,127 @@ void MeasureItemTree(const std::vector<GroupedTooltipItemNode> &a_items,
   }
 }
 
+void DrawDuplicateItemsTooltip(const std::string_view a_tooltipId,
+                               const bool a_hoveredSource,
+                               const GroupedTooltipItemNode &a_item) {
+  if (a_item.duplicates.size() <= 1 ||
+      !sosr::ui::components::ShouldDrawPinnableTooltip(a_tooltipId,
+                                                       a_hoveredSource)) {
+    return;
+  }
+
+  float widestNameWidth = 0.0f;
+  float widestLevelWidth = 0.0f;
+  for (const auto &duplicate : a_item.duplicates) {
+    const auto duplicateName = GetNodeName(duplicate);
+    widestNameWidth = (std::max)(widestNameWidth,
+                                 ImGui::CalcTextSize(duplicateName.c_str()).x);
+    widestLevelWidth = (std::max)(
+        widestLevelWidth,
+        ImGui::CalcTextSize(FormatLevelLabel(duplicate.level).c_str()).x);
+  }
+
+  ImGui::SetNextWindowSize(
+      ImVec2((std::max)(360.0f, widestNameWidth + widestLevelWidth + 64.0f +
+                                    ImGui::GetStyle().WindowPadding.x * 2.0f),
+             0.0f),
+      ImGuiCond_Always);
+  const auto mode =
+      sosr::ui::components::BeginPinnableTooltip(a_tooltipId, a_hoveredSource);
+  if (mode == sosr::ui::components::PinnableTooltipMode::None) {
+    return;
+  }
+
+  ImGui::TextUnformatted("Duplicate Leveled Entries");
+  ImGui::Spacing();
+  if (ImGui::BeginTable("##duplicate-items", 2,
+                        ImGuiTableFlags_NoSavedSettings |
+                            ImGuiTableFlags_SizingFixedFit)) {
+    ImGui::TableSetupColumn("##duplicate-name",
+                            ImGuiTableColumnFlags_WidthFixed,
+                            widestNameWidth + 8.0f);
+    ImGui::TableSetupColumn("##duplicate-level",
+                            ImGuiTableColumnFlags_WidthStretch);
+
+    for (std::size_t index = 0; index < a_item.duplicates.size(); ++index) {
+      const auto &duplicate = a_item.duplicates[index];
+      const auto duplicateName = GetNodeName(duplicate);
+      const auto duplicateTooltipId =
+          std::string(a_tooltipId) + "/item/" + std::to_string(index);
+      ImGui::TableNextRow();
+
+      ImGui::TableSetColumnIndex(0);
+      const auto rowContentPos = ImGui::GetCursorScreenPos();
+      const auto rowHeight = ImGui::GetTextLineHeightWithSpacing();
+      ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+      ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+      ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+      ImGui::Selectable(("##duplicate-row-hit-" + std::string(a_tooltipId) +
+                         "-" + std::to_string(index))
+                            .c_str(),
+                        false,
+                        ImGuiSelectableFlags_SpanAllColumns |
+                            ImGuiSelectableFlags_AllowOverlap,
+                        ImVec2(0.0f, rowHeight));
+      const bool rowHovered = ImGui::IsItemHovered();
+      ImGui::PopStyleColor(3);
+      ImGui::SetCursorScreenPos(rowContentPos);
+      ImGui::TextUnformatted(duplicateName.c_str());
+
+      ImGui::TableSetColumnIndex(1);
+      const auto levelLabel = FormatLevelLabel(duplicate.level);
+      const auto availableWidth = ImGui::GetContentRegionAvail().x;
+      const auto levelWidth = ImGui::CalcTextSize(levelLabel.c_str()).x;
+      if (levelWidth < availableWidth) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availableWidth -
+                             levelWidth);
+      }
+      ImGui::TextUnformatted(levelLabel.c_str());
+
+      if (rowHovered && duplicate.formID != 0) {
+        sosr::workbench::EquipmentWidgetItem tooltipItem{};
+        const auto duplicateItemKey = "duplicate:" + std::to_string(index);
+        if (sosr::ui::components::BuildEquipmentTooltipItem(
+                duplicate.formID, duplicateItemKey.c_str(), tooltipItem)) {
+          sosr::ui::components::DrawEquipmentInfoTooltip(duplicateTooltipId,
+                                                         true, tooltipItem);
+        }
+      }
+    }
+
+    ImGui::EndTable();
+  }
+
+  sosr::ui::components::EndPinnableTooltip(a_tooltipId, mode);
+}
+
 void DrawItemTreeRows(const std::vector<GroupedTooltipItemNode> &a_items,
-                      int a_depth) {
+                      int a_depth, const std::string_view a_tooltipIdPrefix,
+                      const std::string_view a_pathPrefix = {}) {
   const auto *theme = sosr::ThemeConfig::GetSingleton();
-  for (const auto &item : a_items) {
+  for (std::size_t index = 0; index < a_items.size(); ++index) {
+    const auto &item = a_items[index];
+    const auto rowPath = a_pathPrefix.empty() ? std::to_string(index)
+                                              : std::string(a_pathPrefix) +
+                                                    "/" + std::to_string(index);
     ImGui::TableNextRow();
 
     ImGui::TableSetColumnIndex(0);
+    const auto rowContentPos = ImGui::GetCursorScreenPos();
+    const auto rowHeight = ImGui::GetTextLineHeightWithSpacing();
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+    ImGui::Selectable(("##collection-row-hit-" +
+                       std::string(a_tooltipIdPrefix) + "-" + rowPath)
+                          .c_str(),
+                      false,
+                      ImGuiSelectableFlags_SpanAllColumns |
+                          ImGuiSelectableFlags_AllowOverlap,
+                      ImVec2(0.0f, rowHeight));
+    const bool rowHovered = ImGui::IsItemHovered();
+    ImGui::PopStyleColor(3);
+    ImGui::SetCursorScreenPos(rowContentPos);
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
                          static_cast<float>(a_depth) * kTreeIndentWidth);
     const auto label = BuildDisplayLabel(item);
@@ -200,8 +334,21 @@ void DrawItemTreeRows(const std::vector<GroupedTooltipItemNode> &a_items,
       ImGui::TextUnformatted(itemSlots.c_str());
     }
 
+    const auto rowTooltipId =
+        std::string(a_tooltipIdPrefix) + "/row/" + rowPath;
+    if (item.count > 1) {
+      DrawDuplicateItemsTooltip(rowTooltipId + "/duplicates", rowHovered, item);
+    } else if (!item.isCollection && item.formID != 0) {
+      sosr::workbench::EquipmentWidgetItem tooltipItem{};
+      if (sosr::ui::components::BuildEquipmentTooltipItem(
+              item.formID, rowTooltipId.c_str(), tooltipItem)) {
+        sosr::ui::components::DrawEquipmentInfoTooltip(rowTooltipId + "/item",
+                                                       rowHovered, tooltipItem);
+      }
+    }
+
     if (!item.children.empty()) {
-      DrawItemTreeRows(item.children, a_depth + 1);
+      DrawItemTreeRows(item.children, a_depth + 1, a_tooltipIdPrefix, rowPath);
     }
   }
 }
@@ -305,7 +452,7 @@ void DrawCatalogCollectionTooltip(
                               itemMetrics.widestLabelWidth + 8.0f);
       ImGui::TableSetupColumn("##item-slots",
                               ImGuiTableColumnFlags_WidthStretch);
-      DrawItemTreeRows(groupedItems, 0);
+      DrawItemTreeRows(groupedItems, 0, a_id);
 
       ImGui::EndTable();
     }
