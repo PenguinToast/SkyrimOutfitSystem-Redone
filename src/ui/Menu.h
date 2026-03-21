@@ -31,6 +31,7 @@ public:
   [[nodiscard]] bool IsInitialized() const { return initialized_; }
   [[nodiscard]] bool IsGameDataLoaded() const { return gameDataLoaded_; }
   [[nodiscard]] bool PauseGameWhenOpen() const { return pauseGameWhenOpen_; }
+  [[nodiscard]] bool WantsTextInput() const { return wantTextInput_; }
   [[nodiscard]] bool QueueSmoothScroll(float a_deltaY);
   [[nodiscard]] std::string GetToggleKeyLabel() const;
   [[nodiscard]] std::uint32_t GetToggleKey() const { return toggleKey_; }

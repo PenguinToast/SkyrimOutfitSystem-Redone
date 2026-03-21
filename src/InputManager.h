@@ -5,7 +5,6 @@ class InputManager {
 public:
   static InputManager *GetSingleton();
 
-  void Init();
   void OnFocusChange(bool a_focus);
   void AddEventToQueue(RE::InputEvent **a_events);
   void Flush();

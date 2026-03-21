@@ -5,6 +5,52 @@
 #include "ui/MenuHost.h"
 
 namespace {
+[[nodiscard]] bool
+ShouldBlockKeyboardInputEvent(const RE::InputEvent *a_event) {
+  if (a_event == nullptr) {
+    return false;
+  }
+
+  const auto *menu = sosr::Menu::GetSingleton();
+  if (!menu->IsEnabled() || !menu->WantsTextInput()) {
+    return false;
+  }
+
+  switch (a_event->GetEventType()) {
+  case RE::INPUT_EVENT_TYPE::kChar:
+    return true;
+  case RE::INPUT_EVENT_TYPE::kButton: {
+    const auto *buttonEvent = static_cast<const RE::ButtonEvent *>(a_event);
+    return buttonEvent->device == RE::INPUT_DEVICE::kKeyboard;
+  }
+  default:
+    return false;
+  }
+}
+
+void FilterBlockedInputEvents(RE::InputEvent **a_events) {
+  if (a_events == nullptr) {
+    return;
+  }
+
+  RE::InputEvent *previous = nullptr;
+  RE::InputEvent *event = *a_events;
+  while (event != nullptr) {
+    RE::InputEvent *next = event->next;
+    if (ShouldBlockKeyboardInputEvent(event)) {
+      if (previous != nullptr) {
+        previous->next = next;
+      } else {
+        *a_events = next;
+      }
+      event->next = nullptr;
+    } else {
+      previous = event;
+    }
+    event = next;
+  }
+}
+
 static void
 hk_PollInputDevices(RE::BSTEventSource<RE::InputEvent *> *a_dispatcher,
                     RE::InputEvent **a_events);
@@ -16,6 +62,7 @@ void hk_PollInputDevices(RE::BSTEventSource<RE::InputEvent *> *a_dispatcher,
                          RE::InputEvent **a_events) {
   if (a_events) {
     sosr::InputManager::GetSingleton()->AddEventToQueue(a_events);
+    FilterBlockedInputEvents(a_events);
   }
 
   g_inputHandler(a_dispatcher, a_events);

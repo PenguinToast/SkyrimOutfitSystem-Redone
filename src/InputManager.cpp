@@ -7,16 +7,110 @@ namespace sosr {
 namespace {
 auto MapScanCodeToImGuiKey(std::uint32_t a_scanCode) -> ImGuiKey {
   switch (a_scanCode) {
+  case 0x02:
+    return ImGuiKey_1;
+  case 0x03:
+    return ImGuiKey_2;
+  case 0x04:
+    return ImGuiKey_3;
+  case 0x05:
+    return ImGuiKey_4;
+  case 0x06:
+    return ImGuiKey_5;
+  case 0x07:
+    return ImGuiKey_6;
+  case 0x08:
+    return ImGuiKey_7;
+  case 0x09:
+    return ImGuiKey_8;
+  case 0x0A:
+    return ImGuiKey_9;
+  case 0x0B:
+    return ImGuiKey_0;
+  case 0x0C:
+    return ImGuiKey_Minus;
+  case 0x0D:
+    return ImGuiKey_Equal;
   case 0x01:
     return ImGuiKey_Escape;
   case 0x0E:
     return ImGuiKey_Backspace;
   case 0x0F:
     return ImGuiKey_Tab;
+  case 0x10:
+    return ImGuiKey_Q;
+  case 0x11:
+    return ImGuiKey_W;
+  case 0x12:
+    return ImGuiKey_E;
+  case 0x13:
+    return ImGuiKey_R;
+  case 0x14:
+    return ImGuiKey_T;
+  case 0x15:
+    return ImGuiKey_Y;
+  case 0x16:
+    return ImGuiKey_U;
+  case 0x17:
+    return ImGuiKey_I;
+  case 0x18:
+    return ImGuiKey_O;
+  case 0x19:
+    return ImGuiKey_P;
+  case 0x1A:
+    return ImGuiKey_LeftBracket;
+  case 0x1B:
+    return ImGuiKey_RightBracket;
   case 0x1C:
     return ImGuiKey_Enter;
+  case 0x1E:
+    return ImGuiKey_A;
+  case 0x1F:
+    return ImGuiKey_S;
+  case 0x20:
+    return ImGuiKey_D;
+  case 0x21:
+    return ImGuiKey_F;
+  case 0x22:
+    return ImGuiKey_G;
+  case 0x23:
+    return ImGuiKey_H;
+  case 0x24:
+    return ImGuiKey_J;
+  case 0x25:
+    return ImGuiKey_K;
+  case 0x26:
+    return ImGuiKey_L;
+  case 0x27:
+    return ImGuiKey_Semicolon;
+  case 0x28:
+    return ImGuiKey_Apostrophe;
+  case 0x29:
+    return ImGuiKey_GraveAccent;
   case 0x39:
     return ImGuiKey_Space;
+  case 0x2B:
+    return ImGuiKey_Backslash;
+  case 0x2C:
+    return ImGuiKey_Z;
+  case 0x2D:
+    return ImGuiKey_X;
+  case 0x2E:
+    return ImGuiKey_C;
+  case 0x2F:
+    return ImGuiKey_V;
+  case 0x30:
+    return ImGuiKey_B;
+  case 0x31:
+    return ImGuiKey_N;
+  case 0x32:
+    return ImGuiKey_M;
+  case 0x33:
+    return ImGuiKey_Comma;
+  case 0x34:
+    return ImGuiKey_Period;
+  case 0x35:
+    return ImGuiKey_Slash;
   case 0xC8:
     return ImGuiKey_UpArrow;
   case 0xD0:
@@ -77,14 +171,48 @@ auto MapScanCodeToImGuiKey(std::uint32_t a_scanCode) -> ImGuiKey {
     return ImGuiKey_None;
   }
 }
+
+[[nodiscard]] bool IsModifierKey(const ImGuiKey a_key) {
+  switch (a_key) {
+  case ImGuiKey_LeftShift:
+  case ImGuiKey_RightShift:
+  case ImGuiKey_LeftCtrl:
+  case ImGuiKey_RightCtrl:
+  case ImGuiKey_LeftAlt:
+  case ImGuiKey_RightAlt:
+    return true;
+  default:
+    return false;
+  }
+}
+
+[[nodiscard]] bool IsTextNavigationKey(const ImGuiKey a_key) {
+  switch (a_key) {
+  case ImGuiKey_Backspace:
+  case ImGuiKey_Tab:
+  case ImGuiKey_Enter:
+  case ImGuiKey_Escape:
+  case ImGuiKey_LeftArrow:
+  case ImGuiKey_RightArrow:
+  case ImGuiKey_UpArrow:
+  case ImGuiKey_DownArrow:
+  case ImGuiKey_Home:
+  case ImGuiKey_End:
+  case ImGuiKey_PageUp:
+  case ImGuiKey_PageDown:
+  case ImGuiKey_Insert:
+  case ImGuiKey_Delete:
+    return true;
+  default:
+    return false;
+  }
+}
 } // namespace
 
 auto InputManager::GetSingleton() -> InputManager * {
   static InputManager singleton;
   return std::addressof(singleton);
 }
-
-void InputManager::Init() {}
 
 void InputManager::OnFocusChange(bool a_focus) {
   if (ImGui::GetCurrentContext() == nullptr) {
@@ -160,10 +288,15 @@ void InputManager::ProcessInputEvents() {
   }
 
   auto &io = ImGui::GetIO();
+  const bool wantsTextInput = menu->IsEnabled() && menu->WantsTextInput();
 
   for (const auto *event : queuedEvents) {
     switch (event->GetEventType()) {
     case RE::INPUT_EVENT_TYPE::kChar:
+      if (wantsTextInput) {
+        const auto *charEvent = static_cast<const RE::CharEvent *>(event);
+        io.AddInputCharacter(charEvent->keyCode);
+      }
       break;
     case RE::INPUT_EVENT_TYPE::kButton: {
       const auto *buttonEvent = static_cast<const RE::ButtonEvent *>(event);
@@ -184,6 +317,16 @@ void InputManager::ProcessInputEvents() {
       case RE::INPUT_DEVICE::kMouse:
         break;
       case RE::INPUT_DEVICE::kKeyboard:
+        if (wantsTextInput) {
+          const bool isShortcutChord = ctrlDown_ || altDown_;
+          if (imguiKey != ImGuiKey_None &&
+              (IsModifierKey(imguiKey) || IsTextNavigationKey(imguiKey) ||
+               isShortcutChord)) {
+            io.AddKeyEvent(imguiKey, buttonEvent->IsPressed());
+          }
+          break;
+        }
+
         if (menu->IsCapturingToggleKey() && buttonEvent->IsDown()) {
           if (keycode::IsKeyModifier(scanCode)) {
             break;
@@ -194,8 +337,8 @@ void InputManager::ProcessInputEvents() {
           break;
         }
 
-        if (scanCode == menu->GetToggleKey() && IsBoundModifierDown() &&
-            buttonEvent->IsDown()) {
+        if (!menu->WantsTextInput() && scanCode == menu->GetToggleKey() &&
+            IsBoundModifierDown() && buttonEvent->IsDown()) {
           menu->Toggle();
           io.ClearInputKeys();
           break;

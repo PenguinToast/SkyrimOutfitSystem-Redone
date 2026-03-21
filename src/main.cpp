@@ -14,8 +14,6 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
     sosr::Menu::GetSingleton()->SetGameDataLoaded(true);
     sosr::EquipmentCatalog::Get().RefreshFromGame();
     logger::info("Equipment catalog initialized");
-    sosr::InputManager::GetSingleton()->Init();
-    logger::info("Input manager initialized");
     break;
   case SKSE::MessagingInterface::kPostPostLoad:
     sosr::hooks::Install();
