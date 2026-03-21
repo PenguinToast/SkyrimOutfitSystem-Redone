@@ -13,6 +13,7 @@ constexpr char kIconPlugin[] = "\xee\x84\xac";     // ICON_LC_PACKAGE
 constexpr char kIconFormId[] = "\xee\x83\xb2";     // ICON_LC_HASH
 constexpr char kIconIdentifier[] = "\xee\x84\x87"; // ICON_LC_LINK
 constexpr char kIconSlot[] = "\xee\x87\x89";       // ICON_LC_SHIRT
+constexpr char kIconTrash[] = "\xee\x86\x8c";      // ICON_LC_TRASH
 
 void DrawTooltipInfoRow(const char *a_icon, const char *a_label,
                         const std::string &a_value) {
@@ -228,15 +229,12 @@ DrawEquipmentWidget(const char *a_id,
   const auto namePos = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY);
   const auto slotPos =
       ImVec2(rectMin.x + paddingX, rectMin.y + paddingY + lineHeight + 4.0f);
+  const auto deletePaneWidth = a_options.showDeleteButton ? 34.0f : 0.0f;
   const auto clipMin = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY);
-  const auto buttonWidth = a_options.showDeleteButton ? 24.0f : 0.0f;
   const auto clipMax =
-      ImVec2(rectMax.x - paddingX - buttonWidth, rectMax.y - paddingY);
-  const auto buttonSize = ImVec2(20.0f, 20.0f);
-  const auto buttonMin =
-      ImVec2(rectMax.x - paddingX - buttonSize.x, rectMin.y + paddingY);
-  const auto buttonMax =
-      ImVec2(buttonMin.x + buttonSize.x, buttonMin.y + buttonSize.y);
+      ImVec2(rectMax.x - paddingX - deletePaneWidth, rectMax.y - paddingY);
+  const auto buttonMin = ImVec2(rectMax.x - deletePaneWidth, rectMin.y);
+  const auto buttonMax = rectMax;
   result.deleteHovered = a_options.showDeleteButton &&
                          ImGui::IsMouseHoveringRect(buttonMin, buttonMax);
 
@@ -247,14 +245,21 @@ DrawEquipmentWidget(const char *a_id,
   drawList->PopClipRect();
 
   if (a_options.showDeleteButton) {
-    const auto deleteFill = result.deleteHovered ? theme->GetHover("DECLINE")
-                                                 : theme->GetColor("DECLINE");
-    drawList->AddRectFilled(buttonMin, buttonMax,
-                            ImGui::ColorConvertFloat4ToU32(deleteFill), 4.0f);
-    drawList->AddRect(buttonMin, buttonMax, theme->GetColorU32("DECLINE"),
-                      4.0f);
-    drawList->AddText(ImVec2(buttonMin.x + 6.0f, buttonMin.y + 2.0f),
-                      theme->GetColorU32("TEXT"), "X");
+    const auto deleteFill = result.deleteHovered
+                                ? theme->GetColorU32("DECLINE", 0.95f)
+                                : theme->GetColorU32("DECLINE", 0.78f);
+    drawList->AddRectFilled(buttonMin, buttonMax, deleteFill, 8.0f,
+                            ImDrawFlags_RoundCornersRight);
+    drawList->AddLine(ImVec2(buttonMin.x, rectMin.y + 1.0f),
+                      ImVec2(buttonMin.x, rectMax.y - 1.0f),
+                      theme->GetColorU32("BORDER"), 1.0f);
+
+    const char *deleteLabel = kIconTrash;
+    const auto labelSize = ImGui::CalcTextSize(deleteLabel);
+    drawList->AddText(
+        ImVec2(buttonMin.x + ((deletePaneWidth - labelSize.x) * 0.5f),
+               rectMin.y + ((frameHeight - labelSize.y) * 0.5f) - 1.0f),
+        theme->GetColorU32("TEXT"), deleteLabel);
 
     if (result.deleteHovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
       result.deleteClicked = true;
