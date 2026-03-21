@@ -37,6 +37,7 @@ public:
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
   bool AddCatalogSelectionToWorkbench(RE::FormID a_formID);
   bool AddCatalogSelectionToWorkbench(const std::vector<RE::FormID> &a_formIDs);
+  bool AddCatalogSelectionAsRows(const std::vector<RE::FormID> &a_formIDs);
   bool ApplyCatalogPreview(RE::FormID a_formID);
   bool ApplyCatalogPreview(std::string_view a_selectionKey,
                            const std::vector<RE::FormID> &a_formIDs);
@@ -91,6 +92,8 @@ private:
   [[nodiscard]] bool PlanCatalogAssignments(
       const std::vector<RE::FormID> &a_formIDs,
       std::vector<PlannedCatalogAssignment> &a_assignments) const;
+  [[nodiscard]] std::vector<VariantWorkbenchRow>
+  BuildCatalogRows(const std::vector<RE::FormID> &a_formIDs) const;
   [[nodiscard]] int
   FindBestCatalogTargetRowIndex(const EquipmentWidgetItem &a_item,
                                 bool a_requireAcceptable) const;

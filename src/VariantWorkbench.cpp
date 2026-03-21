@@ -354,6 +354,58 @@ bool VariantWorkbench::AddCatalogSelectionToWorkbench(
   return addedAny;
 }
 
+bool VariantWorkbench::AddCatalogSelectionAsRows(
+    const std::vector<RE::FormID> &a_formIDs) {
+  auto newRows = BuildCatalogRows(a_formIDs);
+  bool addedAny = false;
+  for (auto &row : newRows) {
+    rowOrder_.push_back(row.key);
+    rows_.push_back(std::move(row));
+    addedAny = true;
+  }
+
+  return addedAny;
+}
+
+std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
+    const std::vector<RE::FormID> &a_formIDs) const {
+  std::vector<VariantWorkbenchRow> newRows;
+
+  std::vector<const RE::TESObjectARMO *> armors;
+  if (!ResolveCatalogArmors(a_formIDs, armors)) {
+    return newRows;
+  }
+
+  std::unordered_set<std::string> seenRowKeys;
+  for (const auto &row : rows_) {
+    seenRowKeys.insert(row.key);
+  }
+
+  for (const auto *armor : armors) {
+    if (!armor) {
+      continue;
+    }
+
+    const auto rowKey = "armor:" + armor::FormatFormID(armor->GetFormID());
+    if (!seenRowKeys.insert(rowKey).second) {
+      continue;
+    }
+
+    EquipmentWidgetItem equipped{};
+    if (!BuildCatalogItem(armor->GetFormID(), equipped)) {
+      continue;
+    }
+
+    VariantWorkbenchRow row{};
+    row.key = rowKey;
+    row.equipped = std::move(equipped);
+    row.equipped.key = rowKey;
+    newRows.push_back(std::move(row));
+  }
+
+  return newRows;
+}
+
 bool VariantWorkbench::MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                                     int a_targetRowIndex) {
   if (a_sourceRowIndex < 0 ||
@@ -485,26 +537,14 @@ bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
     return false;
   }
 
-  EquipmentWidgetItem equipped{};
-  if (!BuildCatalogItem(a_formID, equipped)) {
+  auto newRows = BuildCatalogRows(std::vector<RE::FormID>{a_formID});
+  if (newRows.empty()) {
     return false;
   }
-
-  const auto rowKey = "armor:" + armor::FormatFormID(a_formID);
-  if (std::ranges::find(rows_, rowKey, [](const VariantWorkbenchRow &a_row) {
-        return a_row.key;
-      }) != rows_.end()) {
-    return false;
-  }
-
-  VariantWorkbenchRow row{};
-  row.key = rowKey;
-  row.equipped = std::move(equipped);
-  row.equipped.key = rowKey;
 
   auto insertIndex = a_targetRowIndex + (a_insertAfter ? 1 : 0);
   insertIndex = std::clamp(insertIndex, 0, static_cast<int>(rows_.size()));
-  rows_.insert(rows_.begin() + insertIndex, std::move(row));
+  rows_.insert(rows_.begin() + insertIndex, std::move(newRows.front()));
 
   RebuildRowOrder();
   return true;

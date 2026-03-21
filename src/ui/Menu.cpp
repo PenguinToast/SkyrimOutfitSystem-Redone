@@ -1648,6 +1648,12 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           if (ImGui::MenuItem(favoriteLabel)) {
             SetFavorite(BrowserTab::Gear, entry.id, !favorite);
           }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Add to Workbench")) {
+            workbench_.AddCatalogSelectionAsRows(
+                std::vector<RE::FormID>{entry.formID});
+          }
+          ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {
             AddGearEntryToWorkbench(entry);
           }
@@ -1752,6 +1758,12 @@ bool Menu::DrawOutfitTab() {
           if (ImGui::MenuItem(favoriteLabel)) {
             SetFavorite(BrowserTab::Outfits, outfit.id, !favorite);
           }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Add to Workbench")) {
+            workbench_.AddCatalogSelectionAsRows(
+                CollectOutfitArmorFormIDs(outfit.formID));
+          }
+          ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {
             AddOutfitEntryToWorkbench(outfit);
           }
@@ -1871,6 +1883,11 @@ bool Menu::DrawKitTab() {
           if (ImGui::MenuItem(favoriteLabel)) {
             SetFavorite(BrowserTab::Kits, kit.id, !favorite);
           }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Add to Workbench")) {
+            workbench_.AddCatalogSelectionAsRows(kit.armorFormIDs);
+          }
+          ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {
             AddKitEntryToWorkbench(kit);
           }
