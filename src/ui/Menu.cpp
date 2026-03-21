@@ -3,6 +3,7 @@
 #include "ArmorUtils.h"
 #include "InputManager.h"
 #include "MenuHost.h"
+#include "PlayerInventory.h"
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
@@ -1080,6 +1081,21 @@ void Menu::DrawWindow() {
         !IsFavorite(activeTab_, selectedCatalogKey_)) {
       ClearCatalogSelection();
     }
+    if (activeTab_ == BrowserTab::Gear) {
+      ImGui::SameLine();
+      if (ImGui::Checkbox("Inventory Only", &inventoryOnly_) && inventoryOnly_ &&
+          !selectedCatalogKey_.empty()) {
+        const auto &catalog = EquipmentCatalog::Get().GetGear();
+        const auto selectedIt = std::ranges::find(
+            catalog, selectedCatalogKey_, &GearEntry::id);
+        const auto inventoryFormIDs =
+            player_inventory::GetInventoryArmorFormIDs();
+        if (selectedIt != catalog.end() &&
+            !inventoryFormIDs.contains(selectedIt->formID)) {
+          ClearCatalogSelection();
+        }
+      }
+    }
     ImGui::SameLine();
     if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
       if (!previewSelected_) {
@@ -1264,8 +1280,14 @@ std::string Menu::BuildSelectedSlotPreview() const {
 std::vector<const GearEntry *> Menu::BuildFilteredGear() const {
   std::vector<const GearEntry *> rows;
   rows.reserve(EquipmentCatalog::Get().GetGear().size());
+  const auto inventoryFormIDs = inventoryOnly_
+                                    ? player_inventory::GetInventoryArmorFormIDs()
+                                    : std::unordered_set<RE::FormID>{};
+
   for (const auto &entry : EquipmentCatalog::Get().GetGear()) {
-    if (MatchesGearFilters(entry)) {
+    if (MatchesGearFilters(entry) &&
+        (!inventoryOnly_ ||
+         inventoryFormIDs.contains(entry.formID))) {
       rows.push_back(std::addressof(entry));
     }
   }

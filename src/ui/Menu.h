@@ -182,6 +182,7 @@ private:
   std::array<char, 256> pendingKitCollection_{};
   std::string createKitError_;
   bool favoritesOnly_{false};
+  bool inventoryOnly_{false};
   std::unordered_set<std::string> favoriteKeys_;
   workbench::VariantWorkbench workbench_;
 };
