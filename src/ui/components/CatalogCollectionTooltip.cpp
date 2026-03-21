@@ -242,20 +242,22 @@ void DrawDuplicateItemsTooltip(const std::string_view a_tooltipId,
       ImGui::TableNextRow();
 
       ImGui::TableSetColumnIndex(0);
+      const auto *table = ImGui::GetCurrentTable();
       const auto rowContentPos = ImGui::GetCursorScreenPos();
       const auto rowHeight = ImGui::GetTextLineHeightWithSpacing();
-      ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
-      ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
-      ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
-      ImGui::Selectable(("##duplicate-row-hit-" + std::string(a_tooltipId) +
-                         "-" + std::to_string(index))
-                            .c_str(),
-                        false,
-                        ImGuiSelectableFlags_SpanAllColumns |
-                            ImGuiSelectableFlags_AllowOverlap,
-                        ImVec2(0.0f, rowHeight));
+      const auto rowWidth = table != nullptr
+                                ? table->WorkRect.Max.x - table->WorkRect.Min.x
+                                : ImGui::GetContentRegionAvail().x;
+      if (table != nullptr) {
+        ImGui::SetCursorScreenPos(
+            ImVec2(table->WorkRect.Min.x, rowContentPos.y));
+      }
+      ImGui::InvisibleButton(("##duplicate-row-hit-" +
+                              std::string(a_tooltipId) + "-" +
+                              std::to_string(index))
+                                 .c_str(),
+                             ImVec2(rowWidth, rowHeight));
       const bool rowHovered = ImGui::IsItemHovered();
-      ImGui::PopStyleColor(3);
       ImGui::SetCursorScreenPos(rowContentPos);
       ImGui::TextUnformatted(duplicateName.c_str());
 
@@ -298,20 +300,20 @@ void DrawItemTreeRows(const std::vector<GroupedTooltipItemNode> &a_items,
     ImGui::TableNextRow();
 
     ImGui::TableSetColumnIndex(0);
+    const auto *table = ImGui::GetCurrentTable();
     const auto rowContentPos = ImGui::GetCursorScreenPos();
     const auto rowHeight = ImGui::GetTextLineHeightWithSpacing();
-    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
-    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
-    ImGui::Selectable(("##collection-row-hit-" +
-                       std::string(a_tooltipIdPrefix) + "-" + rowPath)
-                          .c_str(),
-                      false,
-                      ImGuiSelectableFlags_SpanAllColumns |
-                          ImGuiSelectableFlags_AllowOverlap,
-                      ImVec2(0.0f, rowHeight));
+    const auto rowWidth = table != nullptr
+                              ? table->WorkRect.Max.x - table->WorkRect.Min.x
+                              : ImGui::GetContentRegionAvail().x;
+    if (table != nullptr) {
+      ImGui::SetCursorScreenPos(ImVec2(table->WorkRect.Min.x, rowContentPos.y));
+    }
+    ImGui::InvisibleButton(("##collection-row-hit-" +
+                            std::string(a_tooltipIdPrefix) + "-" + rowPath)
+                               .c_str(),
+                           ImVec2(rowWidth, rowHeight));
     const bool rowHovered = ImGui::IsItemHovered();
-    ImGui::PopStyleColor(3);
     ImGui::SetCursorScreenPos(rowContentPos);
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
                          static_cast<float>(a_depth) * kTreeIndentWidth);
