@@ -1,117 +1,115 @@
 # Skyrim Outfit System Redone
 
-`Skyrim Outfit System Redone` is a Skyrim SKSE mod for player vanity outfits.
+`Skyrim Outfit System Redone` is a Skyrim SKSE mod for player-facing vanity outfit management.
 
-The goal is to let players keep their real equipped gear for gameplay stats while swapping the
-visible appearance to a selected outfit loadout.
+It lets the player keep their real equipped gear for gameplay while changing the visible appearance through a native in-game browser and variant workbench.
 
-The long-term plan is to integrate with a custom fork of Dynamic Armor Variants Extended to handle the
-visual-swapping layer of the mod.
-
-The current milestone is the equipment and outfit selector portion of the project:
-
-* enumerate and cache all installed armors and outfits
-* provide search, sort, and filter controls for that catalog
-* let the player browse outfits separately from individual armor pieces
-* prototype an armor-variant workbench UI for currently equipped armor
-
-The browser design and data flow are being shaped with
-`https://github.com/Patchu1i/ModExplorerMenu` as a reference for armor/weapon/outfit enumeration,
-caching, search behavior, and the native Dear ImGui integration path.
+## Features
+- Native Dear ImGui browser hosted inside a real Skyrim `IMenu`.
+- Searchable catalog for:
+  - individual armor pieces
+  - outfits
+  - Modex kits
+- Shared search/filter bar across gear, outfits, and kits.
+- Multi-select slot filtering:
+  - OR semantics for gear
+  - AND semantics for outfits and kits
+- Favorites system with persistent `favorites.json`.
+- Full-row selection, double-click add, and context menus in the catalog.
+- Preview mode for selected gear, outfits, and kits.
+- Persistent variant workbench with:
+  - row reordering
+  - drag-and-drop overrides
+  - hide-equipped toggles
+  - conflict highlighting
+  - reset actions
+  - Modex kit creation from equipped gear or active overrides
+- SKSE save/load for workbench state.
+- Integration with Dynamic Armor Variants Extended for runtime visual swaps.
+- Configurable hotkey with modifier support.
+- Optional game pause while the menu is open.
+- Modex-style theme loading, fade behavior, and smooth scrolling.
+- Bundled Ubuntu UI font and Lucide icon font.
 
 ## Requirements
-* [XMake](https://xmake.io) [3.0.0+]
-* C++23 compiler on Windows (MSVC or Clang-CL)
+- [XMake](https://xmake.io) 3.0.0+
+- C++23 compiler on Windows (MSVC or Clang-CL)
 
 ## Getting Started
-```bat
+```bash
 git clone --recurse-submodules git@github.com:PenguinToast/SkyrimOutfitSystem-Redone.git
 cd SkyrimOutfitSystem-Redone
 ```
 
 If you cloned without submodules:
-```bat
+```bash
 git submodule update --init --recursive
 ```
 
 ## Build
-Build from Windows, not WSL:
+From Windows:
+
 ```bat
 xmake build
 ```
 
 This generates output under `build/windows/` in the project root.
 
-The current in-game browser is native Dear ImGui rendered directly through the Skyrim D3D11 swapchain.
-It no longer depends on Prisma UI or any web frontend bundle.
+From WSL, to build and deploy directly into the local test mod folder:
 
-The current UI focus is a searchable browser for:
-
-* armors
-* outfits
-
-Outfits are shown in a dedicated tab because they are collections of individual armor pieces.
-The menu is toggled in game with `F6` by default.
-
-The packaged UI font is Ubuntu Regular, bundled with this mod under
-`Data/Interface/SkyrimOutfitSystemRedone/fonts/` together with the Ubuntu font license text.
-The bundled files come from Canonical's Ubuntu Font Family download archive.
-
-To build from WSL and deploy directly into the local test mod folder:
 ```bash
 ./scripts/build-deploy.sh
 ```
 
-By default this uses `releasedbg` so the deploy includes a `.pdb` alongside the DLL for better crash logs.
+By default this uses `releasedbg`, so the deploy includes a `.pdb` alongside the DLL for better crash logs.
 
 For a full clean rebuild:
+
 ```bash
 ./scripts/build-deploy.sh --clean
 ```
 
-This deploys the plugin to:
-`/mnt/f/games/skyrim/modlists/pt_test/mods/skyrim_outfit_system_redone`
+By default this deploys to:
+`/mnt/f/games/skyrim/modlists/pt_test/mods/Skyrim Outfit System Redone`
 
-To build and package a release mod archive:
+## Build And Package
+To build a release mod archive:
+
 ```bash
 ./scripts/build-package.sh
 ```
 
 This writes a zip under `dist/` named like:
-`Skyrim Outfit System Redone v1.2.3.zip`
+`Skyrim Outfit System Redone v1.0.0.zip`
 
 The package script will fail unless:
-* the worktree is clean
-* `HEAD` has exactly one tag
-* that tag is valid semver
+- the worktree is clean
+- `HEAD` has exactly one tag
+- that tag is valid semver
 
-The archive root contains the normal mod payload (`SKSE/`, `Interface/`, etc.)
-plus `fomod/info.xml` with mod metadata. Packaging uses `releasedbg`, so the
-archive also includes a `.pdb` next to the DLL for symbolized crash logs.
+The archive root contains the normal mod payload plus `fomod/info.xml`.
+Packaging uses `releasedbg`, so the archive also includes a `.pdb` next to the DLL.
 
-## Optional Output Paths
-You can redirect install output with either of these environment variables:
+## Settings And Data
+- Runtime settings are stored under:
+  - `Data/SKSE/Plugins/SkyrimOutfitSystemRedone/settings.json`
+- Favorites are stored separately in:
+  - `Data/SKSE/Plugins/SkyrimOutfitSystemRedone/favorites.json`
+- Bundled UI assets are under:
+  - `Data/Interface/SkyrimOutfitSystemRedone/`
 
-* `XSE_TES5_MODS_PATH`
-* `XSE_TES5_GAME_PATH`
-
-## Project Generation
-For Visual Studio:
-```bat
-xmake project -k vsxmake
-```
-
-For `clangd` or other LSP tooling:
-```bat
-xmake project -k compile_commands
-```
+## Modex Integration
+- Modex kits are loaded from:
+  - `Data/Interface/Modex/user/kits`
+- SOSR can browse kits, preview them, and add them into the workbench.
+- SOSR can also create new Modex kits from equipped gear or active overrides.
 
 ## Lint And Format
 ```bash
 ./scripts/format.sh
 ./scripts/format.sh --check
 ./scripts/lint.sh
-./scripts/lint.sh src/Menu.cpp
+./scripts/lint.sh src/ui/Menu.cpp
 ```
 
 From WSL, `format.sh` prefers Linux `clang-format` when available. `lint.sh` prefers the
@@ -122,8 +120,15 @@ binary is a 32-bit build that crashes in this environment.
 `compile_commands.json` points `clang-tidy` at a PCH path that does not exist, so disabling
 PCH is the reliable way to lint these translation units.
 
-## Upgrading Dependencies
+## Project Generation
+For Visual Studio:
+
 ```bat
-xmake repo --update
-xmake require --upgrade
+xmake project -k vsxmake
+```
+
+For `clangd` or other LSP tooling:
+
+```bat
+xmake project -k compile_commands
 ```
