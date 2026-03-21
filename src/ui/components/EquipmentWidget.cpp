@@ -1,8 +1,9 @@
 #include "ui/components/EquipmentWidget.h"
 
 #include "ArmorUtils.h"
-#include "ui/ThemeConfig.h"
 #include "imgui_internal.h"
+#include "ui/ThemeConfig.h"
+#include "ui/components/PinnableTooltip.h"
 
 #include <algorithm>
 
@@ -44,37 +45,37 @@ void DrawTooltipInfoRow(const char *a_icon, const char *a_label,
   }
 }
 
-void DrawEquipmentInfoTooltip(const sosr::workbench::EquipmentWidgetItem &a_item) {
+float ComputeEquipmentTooltipWidth(
+    const std::string &a_displayName, const std::string &a_editorID,
+    const std::string &a_plugin, const std::string &a_formID,
+    const std::string &a_identifier,
+    const std::vector<std::string> &a_slotLabels) {
+  float widestValueWidth = ImGui::CalcTextSize(a_displayName.c_str()).x;
+  for (const auto *value : {a_editorID.c_str(), a_plugin.c_str(),
+                            a_formID.c_str(), a_identifier.c_str()}) {
+    widestValueWidth =
+        (std::max)(widestValueWidth, ImGui::CalcTextSize(value).x);
+  }
+  for (const auto &slotLabel : a_slotLabels) {
+    widestValueWidth =
+        (std::max)(widestValueWidth, ImGui::CalcTextSize(slotLabel.c_str()).x);
+  }
+
+  return (std::max)(330.0f, widestValueWidth + 190.0f);
+}
+
+void DrawEquipmentInfoTooltipBody(
+    const sosr::workbench::EquipmentWidgetItem &a_item,
+    const std::string &a_displayName, const std::string &a_editorID,
+    const std::string &a_plugin, const std::string &a_formID,
+    const std::string &a_identifier,
+    const std::vector<std::string> &a_slotLabels) {
   const auto *form = RE::TESForm::LookupByID(a_item.formID);
   if (!form) {
     return;
   }
 
   const auto *theme = sosr::ThemeConfig::GetSingleton();
-  const auto displayName = sosr::armor::GetDisplayName(form);
-  const auto editorID = sosr::armor::GetEditorID(form);
-  const auto plugin = sosr::armor::GetPluginName(form);
-  const auto formID = sosr::armor::FormatFormID(form->GetFormID());
-  const auto identifier = sosr::armor::GetFormIdentifier(form);
-  const auto slotLabels = sosr::armor::GetArmorSlotLabels(a_item.slotMask);
-  float widestValueWidth = ImGui::CalcTextSize(displayName.c_str()).x;
-  for (const auto *value : {editorID.c_str(), plugin.c_str(), formID.c_str(),
-                            identifier.c_str()}) {
-    widestValueWidth =
-        (std::max)(widestValueWidth, ImGui::CalcTextSize(value).x);
-  }
-  for (const auto &slotLabel : slotLabels) {
-    widestValueWidth =
-        (std::max)(widestValueWidth, ImGui::CalcTextSize(slotLabel.c_str()).x);
-  }
-
-  const auto tooltipContentWidth = (std::max)(330.0f, widestValueWidth + 190.0f);
-  const auto &style = ImGui::GetStyle();
-  ImGui::SetNextWindowSize(
-      ImVec2(tooltipContentWidth + style.WindowPadding.x * 2.0f, 0.0f),
-      ImGuiCond_Always);
-  ImGui::BeginTooltip();
-
   const auto headerMin = ImGui::GetCursorScreenPos();
   const auto headerWidth = ImGui::GetContentRegionAvail().x;
   const auto headerHeight = ImGui::GetFontSize() * 2.4f;
@@ -90,12 +91,12 @@ void DrawEquipmentInfoTooltip(const sosr::workbench::EquipmentWidgetItem &a_item
 
   const auto titleFontSize = ImGui::GetFontSize() * 1.15f;
   const auto titleSize =
-      ImGui::CalcTextSize(displayName.c_str(), nullptr, false, headerWidth);
+      ImGui::CalcTextSize(a_displayName.c_str(), nullptr, false, headerWidth);
   drawList->AddText(
       ImGui::GetFont(), titleFontSize,
       ImVec2(headerMin.x + (headerWidth - titleSize.x) * 0.5f,
              headerMin.y + (headerHeight - titleFontSize) * 0.5f - 1.0f),
-      theme->GetColorU32("TEXT"), displayName.c_str());
+      theme->GetColorU32("TEXT"), a_displayName.c_str());
   ImGui::Dummy(ImVec2(headerWidth, headerHeight));
 
   ImGui::Spacing();
@@ -107,22 +108,21 @@ void DrawEquipmentInfoTooltip(const sosr::workbench::EquipmentWidgetItem &a_item
   if (ImGui::BeginTable("##equipment-info-tooltip", 2,
                         ImGuiTableFlags_NoSavedSettings |
                             ImGuiTableFlags_SizingFixedFit)) {
-    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 122.0f);
+    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed,
+                            122.0f);
     ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
 
-    DrawTooltipInfoRow(kIconEditorId, "Editor ID", editorID);
-    DrawTooltipInfoRow(kIconPlugin, "Plugin", plugin);
-    DrawTooltipInfoRow(kIconFormId, "Form ID", formID);
-    DrawTooltipInfoRow(kIconIdentifier, "Identifier", identifier);
-    for (std::size_t index = 0; index < slotLabels.size(); ++index) {
-      DrawTooltipInfoRow(index == 0 ? kIconSlot : "",
-                         index == 0 ? "Slots" : "", slotLabels[index]);
+    DrawTooltipInfoRow(kIconEditorId, "Editor ID", a_editorID);
+    DrawTooltipInfoRow(kIconPlugin, "Plugin", a_plugin);
+    DrawTooltipInfoRow(kIconFormId, "Form ID", a_formID);
+    DrawTooltipInfoRow(kIconIdentifier, "Identifier", a_identifier);
+    for (std::size_t index = 0; index < a_slotLabels.size(); ++index) {
+      DrawTooltipInfoRow(index == 0 ? kIconSlot : "", index == 0 ? "Slots" : "",
+                         a_slotLabels[index]);
     }
 
     ImGui::EndTable();
   }
-
-  ImGui::EndTooltip();
 }
 } // namespace
 
@@ -160,15 +160,13 @@ DrawEquipmentWidget(const char *a_id,
   if (result.active) {
     fillColor = a_options.conflict ? theme->GetColorU32("ERROR", 0.75f)
                                    : theme->GetColorU32("PRIMARY", 0.80f);
-    borderColor =
-        a_options.conflict ? theme->GetColorU32("ERROR")
-                           : theme->GetColorU32("PRIMARY");
+    borderColor = a_options.conflict ? theme->GetColorU32("ERROR")
+                                     : theme->GetColorU32("PRIMARY");
   } else if (result.hovered) {
     fillColor = a_options.conflict ? theme->GetColorU32("ERROR", 0.62f)
                                    : theme->GetColorU32("BG_LIGHT", 1.0f);
-    borderColor =
-        a_options.conflict ? theme->GetColorU32("ERROR")
-                           : theme->GetColorU32("PRIMARY", 0.70f);
+    borderColor = a_options.conflict ? theme->GetColorU32("ERROR")
+                                     : theme->GetColorU32("PRIMARY", 0.70f);
   }
 
   drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);
@@ -205,15 +203,36 @@ DrawEquipmentWidget(const char *a_id,
     drawList->AddText(ImVec2(buttonMin.x + 6.0f, buttonMin.y + 2.0f),
                       theme->GetColorU32("TEXT"), "X");
 
-    if (result.deleteHovered &&
-        ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+    if (result.deleteHovered && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
       result.deleteClicked = true;
     }
   }
 
-  if (result.hovered && !result.deleteHovered &&
-      !ImGui::IsDragDropActive()) {
-    DrawEquipmentInfoTooltip(a_item);
+  const auto tooltipId = "equipment:" + a_item.key;
+  if (!result.deleteHovered && !ImGui::IsDragDropActive() &&
+      ShouldDrawPinnableTooltip(tooltipId, result.hovered)) {
+    const auto *form = RE::TESForm::LookupByID(a_item.formID);
+    const auto displayName =
+        form ? sosr::armor::GetDisplayName(form) : a_item.name;
+    const auto editorID = form ? sosr::armor::GetEditorID(form) : std::string{};
+    const auto plugin = form ? sosr::armor::GetPluginName(form) : std::string{};
+    const auto formID = form ? sosr::armor::FormatFormID(form->GetFormID())
+                             : sosr::armor::FormatFormID(a_item.formID);
+    const auto identifier =
+        form ? sosr::armor::GetFormIdentifier(form) : std::string{};
+    const auto slotLabels = sosr::armor::GetArmorSlotLabels(a_item.slotMask);
+    const auto tooltipContentWidth = ComputeEquipmentTooltipWidth(
+        displayName, editorID, plugin, formID, identifier, slotLabels);
+    const auto &style = ImGui::GetStyle();
+    ImGui::SetNextWindowSize(
+        ImVec2(tooltipContentWidth + style.WindowPadding.x * 2.0f, 0.0f),
+        ImGuiCond_Always);
+    if (const auto mode = BeginPinnableTooltip(tooltipId, result.hovered);
+        mode != PinnableTooltipMode::None) {
+      DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin,
+                                   formID, identifier, slotLabels);
+      EndPinnableTooltip(tooltipId, mode);
+    }
   }
 
   ImGui::PopID();

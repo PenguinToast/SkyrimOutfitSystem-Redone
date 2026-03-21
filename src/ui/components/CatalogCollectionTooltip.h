@@ -14,7 +14,7 @@ struct CatalogTooltipMetaRow {
 };
 
 void DrawCatalogCollectionTooltip(
-    std::string_view a_title,
+    std::string_view a_id, bool a_hoveredSource, std::string_view a_title,
     const std::vector<CatalogTooltipMetaRow> &a_metaRows,
     const std::vector<sosr::CatalogCollectionItemNode> &a_items);
 } // namespace sosr::ui::components

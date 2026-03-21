@@ -1,13 +1,13 @@
 #include "ui/components/CatalogCollectionTooltip.h"
 
-#include "ui/ThemeConfig.h"
 #include "imgui_internal.h"
+#include "ui/ThemeConfig.h"
+#include "ui/components/PinnableTooltip.h"
 
 #include <algorithm>
 
 namespace {
 constexpr float kTreeIndentWidth = 18.0f;
-constexpr float kMaxItemsSectionHeightInRows = 10.0f;
 
 struct GroupedTooltipItemNode {
   std::string name;
@@ -84,8 +84,10 @@ auto BuildGroupedItemTree(
     const bool isCollection = !groupedChildren.empty();
 
     auto existingIt = std::find_if(
-        grouped.begin(), grouped.end(), [&](const GroupedTooltipItemNode &a_node) {
-          return a_node.name == item.name && a_node.isCollection == isCollection &&
+        grouped.begin(), grouped.end(),
+        [&](const GroupedTooltipItemNode &a_node) {
+          return a_node.name == item.name &&
+                 a_node.isCollection == isCollection &&
                  (!isCollection ? a_node.slots == item.slots : true);
         });
 
@@ -113,18 +115,16 @@ std::string BuildDisplayLabel(const GroupedTooltipItemNode &a_item) {
   return a_item.name + " x" + std::to_string(a_item.count);
 }
 
-void MeasureItemTree(
-    const std::vector<GroupedTooltipItemNode> &a_items, int a_depth,
-    ItemTreeMetrics &a_metrics) {
+void MeasureItemTree(const std::vector<GroupedTooltipItemNode> &a_items,
+                     int a_depth, ItemTreeMetrics &a_metrics) {
   for (const auto &item : a_items) {
     const auto label = BuildDisplayLabel(item);
     a_metrics.widestLabelWidth =
         (std::max)(a_metrics.widestLabelWidth,
                    ImGui::CalcTextSize(label.c_str()).x +
                        static_cast<float>(a_depth) * kTreeIndentWidth);
-    a_metrics.widestValueWidth =
-        (std::max)(a_metrics.widestValueWidth,
-                   ImGui::CalcTextSize(item.slots.c_str()).x);
+    a_metrics.widestValueWidth = (std::max)(
+        a_metrics.widestValueWidth, ImGui::CalcTextSize(item.slots.c_str()).x);
 
     if (!item.children.empty()) {
       MeasureItemTree(item.children, a_depth + 1, a_metrics);
@@ -132,8 +132,8 @@ void MeasureItemTree(
   }
 }
 
-void DrawItemTreeRows(
-    const std::vector<GroupedTooltipItemNode> &a_items, int a_depth) {
+void DrawItemTreeRows(const std::vector<GroupedTooltipItemNode> &a_items,
+                      int a_depth) {
   const auto *theme = sosr::ThemeConfig::GetSingleton();
   for (const auto &item : a_items) {
     ImGui::TableNextRow();
@@ -168,6 +168,7 @@ void DrawItemTreeRows(
 
 namespace sosr::ui::components {
 void DrawCatalogCollectionTooltip(
+    const std::string_view a_id, const bool a_hoveredSource,
     std::string_view a_title,
     const std::vector<CatalogTooltipMetaRow> &a_metaRows,
     const std::vector<sosr::CatalogCollectionItemNode> &a_items) {
@@ -175,8 +176,8 @@ void DrawCatalogCollectionTooltip(
   const auto &style = ImGui::GetStyle();
   float widestMetaValueWidth = ImGui::CalcTextSize(a_title.data()).x;
   for (const auto &row : a_metaRows) {
-    widestMetaValueWidth = (std::max)(
-        widestMetaValueWidth, ImGui::CalcTextSize(row.value.c_str()).x);
+    widestMetaValueWidth = (std::max)(widestMetaValueWidth,
+                                      ImGui::CalcTextSize(row.value.c_str()).x);
   }
 
   const auto groupedItems = BuildGroupedItemTree(a_items);
@@ -184,16 +185,22 @@ void DrawCatalogCollectionTooltip(
   MeasureItemTree(groupedItems, 0, itemMetrics);
 
   const auto metaSectionWidth = widestMetaValueWidth + 190.0f;
-  const auto itemSectionWidth = itemMetrics.widestLabelWidth +
-                                itemMetrics.widestValueWidth +
-                                style.CellPadding.x * 4.0f +
-                                style.ItemSpacing.x + 28.0f;
+  const auto itemSectionWidth =
+      itemMetrics.widestLabelWidth + itemMetrics.widestValueWidth +
+      style.CellPadding.x * 4.0f + style.ItemSpacing.x + 28.0f;
   const auto tooltipContentWidth =
       (std::max)(360.0f, (std::max)(metaSectionWidth, itemSectionWidth));
+  if (!ShouldDrawPinnableTooltip(a_id, a_hoveredSource)) {
+    return;
+  }
+
   ImGui::SetNextWindowSize(
       ImVec2(tooltipContentWidth + style.WindowPadding.x * 2.0f, 0.0f),
       ImGuiCond_Always);
-  ImGui::BeginTooltip();
+  const auto mode = BeginPinnableTooltip(a_id, a_hoveredSource);
+  if (mode == PinnableTooltipMode::None) {
+    return;
+  }
 
   const auto headerMin = ImGui::GetCursorScreenPos();
   const auto headerWidth = ImGui::GetContentRegionAvail().x;
@@ -227,7 +234,8 @@ void DrawCatalogCollectionTooltip(
   if (ImGui::BeginTable("##catalog-collection-meta", 2,
                         ImGuiTableFlags_NoSavedSettings |
                             ImGuiTableFlags_SizingFixedFit)) {
-    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, 122.0f);
+    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed,
+                            122.0f);
     ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
     for (const auto &row : a_metaRows) {
       DrawTooltipInfoRow(row.icon, row.label, row.value);
@@ -249,27 +257,19 @@ void DrawCatalogCollectionTooltip(
                              0.5f);
     ImGui::TextUnformatted(sectionTitle);
     ImGui::Spacing();
+    if (ImGui::BeginTable("##catalog-collection-items", 2,
+                          ImGuiTableFlags_NoSavedSettings |
+                              ImGuiTableFlags_SizingFixedFit)) {
+      ImGui::TableSetupColumn("##item-name", ImGuiTableColumnFlags_WidthFixed,
+                              itemMetrics.widestLabelWidth + 8.0f);
+      ImGui::TableSetupColumn("##item-slots",
+                              ImGuiTableColumnFlags_WidthStretch);
+      DrawItemTreeRows(groupedItems, 0);
 
-    const auto maxItemsSectionHeight =
-        ImGui::GetTextLineHeightWithSpacing() * kMaxItemsSectionHeightInRows;
-    if (ImGui::BeginChild("##catalog-collection-items-region",
-                          ImVec2(0.0f, maxItemsSectionHeight), false,
-                          ImGuiWindowFlags_NoScrollWithMouse)) {
-      if (ImGui::BeginTable("##catalog-collection-items", 2,
-                            ImGuiTableFlags_NoSavedSettings |
-                                ImGuiTableFlags_SizingFixedFit)) {
-        ImGui::TableSetupColumn("##item-name", ImGuiTableColumnFlags_WidthFixed,
-                                itemMetrics.widestLabelWidth + 8.0f);
-        ImGui::TableSetupColumn("##item-slots",
-                                ImGuiTableColumnFlags_WidthStretch);
-        DrawItemTreeRows(groupedItems, 0);
-
-        ImGui::EndTable();
-      }
+      ImGui::EndTable();
     }
-    ImGui::EndChild();
   }
 
-  ImGui::EndTooltip();
+  EndPinnableTooltip(a_id, mode);
 }
 } // namespace sosr::ui::components

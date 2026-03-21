@@ -7,8 +7,9 @@
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
 #include "ui/components/CatalogCollectionTooltip.h"
-#include "ui/components/EquipmentWidget.h"
 #include "ui/components/EditableCombo.h"
+#include "ui/components/EquipmentWidget.h"
+#include "ui/components/PinnableTooltip.h"
 
 #include <cmath>
 #include <filesystem>
@@ -161,7 +162,8 @@ std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
   return truncated;
 }
 
-void DrawOutfitTooltip(const sosr::OutfitEntry &a_outfit) {
+void DrawOutfitTooltip(const sosr::OutfitEntry &a_outfit,
+                       const bool a_hoveredSource) {
   std::vector<sosr::ui::components::CatalogTooltipMetaRow> metaRows;
   if (!a_outfit.editorID.empty()) {
     metaRows.push_back({kIconEditorId, "Editor ID", a_outfit.editorID});
@@ -178,21 +180,22 @@ void DrawOutfitTooltip(const sosr::OutfitEntry &a_outfit) {
     }
   }
 
-  sosr::ui::components::DrawCatalogCollectionTooltip(a_outfit.name, metaRows,
-                                                     a_outfit.itemTree);
+  sosr::ui::components::DrawCatalogCollectionTooltip(
+      "outfit:" + a_outfit.id, a_hoveredSource, a_outfit.name, metaRows,
+      a_outfit.itemTree);
 }
 
-void DrawKitTooltip(const sosr::KitEntry &a_kit) {
+void DrawKitTooltip(const sosr::KitEntry &a_kit, const bool a_hoveredSource) {
   std::vector<sosr::ui::components::CatalogTooltipMetaRow> metaRows;
-  metaRows.push_back(
-      {kIconCollection, "Collection", a_kit.collection.empty() ? "Root" : a_kit.collection});
+  metaRows.push_back({kIconCollection, "Collection",
+                      a_kit.collection.empty() ? "Root" : a_kit.collection});
   if (!a_kit.filepath.empty()) {
     metaRows.push_back({kIconFile, "File", a_kit.filepath});
   }
   metaRows.push_back({kIconIdentifier, "Identifier", a_kit.id});
 
-  sosr::ui::components::DrawCatalogCollectionTooltip(a_kit.name, metaRows,
-                                                     a_kit.itemTree);
+  sosr::ui::components::DrawCatalogCollectionTooltip(
+      "kit:" + a_kit.id, a_hoveredSource, a_kit.name, metaRows, a_kit.itemTree);
 }
 
 void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
@@ -923,9 +926,11 @@ void Menu::Draw() {
   ImGui_ImplDX11_NewFrame();
   InputManager::GetSingleton()->UpdateMousePosition();
   ImGui::NewFrame();
+  ui::components::BeginPinnableTooltipFrame();
   SyncAllowTextInput();
 
   DrawWindow();
+  ui::components::EndPinnableTooltipFrame();
   ApplySmoothScroll();
   UpdateVisibilityAnimation(ImGui::GetIO().DeltaTime);
 
@@ -1003,8 +1008,7 @@ void Menu::DrawWindow() {
             EquipmentCatalog::Get().GetOutfits(), selectedCatalogKey_,
             [](const OutfitEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetOutfits().end()) {
-          workbench_.ApplyCatalogPreview(
-              entry->id, entry->armorFormIDs);
+          workbench_.ApplyCatalogPreview(entry->id, entry->armorFormIDs);
         }
       } else if (activeTab_ == BrowserTab::Kits) {
         const auto entry = std::ranges::find(
@@ -1831,8 +1835,10 @@ bool Menu::DrawOutfitTab() {
           rowClicked = true;
           AddOutfitEntryToWorkbench(outfit);
         }
-        if (rowHovered && !ImGui::IsDragDropActive()) {
-          DrawOutfitTooltip(outfit);
+        if (!ImGui::IsDragDropActive() &&
+            ui::components::ShouldDrawPinnableTooltip("outfit:" + outfit.id,
+                                                      rowHovered)) {
+          DrawOutfitTooltip(outfit, rowHovered);
         }
 
         const auto displayName = BuildFavoriteLabel(outfit.name, favorite);
@@ -1952,8 +1958,10 @@ bool Menu::DrawKitTab() {
           rowClicked = true;
           AddKitEntryToWorkbench(kit);
         }
-        if (rowHovered && !ImGui::IsDragDropActive()) {
-          DrawKitTooltip(kit);
+        if (!ImGui::IsDragDropActive() &&
+            ui::components::ShouldDrawPinnableTooltip("kit:" + kit.id,
+                                                      rowHovered)) {
+          DrawKitTooltip(kit, rowHovered);
         }
 
         const auto displayName = BuildFavoriteLabel(kit.name, favorite);
