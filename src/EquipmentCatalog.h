@@ -4,8 +4,9 @@
 
 namespace sosr {
 struct CatalogCollectionItemNode {
-  std::string name;
-  std::string slots;
+  RE::FormID formID{0};
+  std::string cachedName;
+  std::int32_t level{-1};
   std::vector<CatalogCollectionItemNode> children;
 };
 
@@ -75,6 +76,7 @@ public:
   void RefreshFromGame();
 
   [[nodiscard]] const std::vector<GearEntry> &GetGear() const { return gear_; }
+  [[nodiscard]] const GearEntry *FindGear(RE::FormID a_formID) const;
   [[nodiscard]] const std::vector<OutfitEntry> &GetOutfits() const {
     return outfits_;
   }
@@ -112,8 +114,8 @@ private:
   std::vector<std::string> gearSlots_;
   std::vector<std::string> outfitPlugins_;
   std::vector<std::string> kitCollections_;
-  std::unordered_map<RE::FormID, ResolvedReferenceCollection>
-      leveledListCache_;
+  std::unordered_map<RE::FormID, ResolvedReferenceCollection> leveledListCache_;
+  std::unordered_map<RE::FormID, std::size_t> gearIndexByFormID_;
   std::unordered_map<RE::FormID, std::size_t> outfitIndexByFormID_;
   std::string source_;
   std::string revision_;

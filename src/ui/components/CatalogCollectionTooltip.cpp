@@ -1,5 +1,6 @@
 #include "ui/components/CatalogCollectionTooltip.h"
 
+#include "ArmorUtils.h"
 #include "imgui_internal.h"
 #include "ui/ThemeConfig.h"
 #include "ui/components/PinnableTooltip.h"
@@ -10,12 +11,48 @@ namespace {
 constexpr float kTreeIndentWidth = 18.0f;
 
 struct GroupedTooltipItemNode {
-  std::string name;
-  std::string slots;
+  RE::FormID formID{0};
+  std::string cachedName;
   std::vector<GroupedTooltipItemNode> children;
   std::size_t count{1};
   bool isCollection{false};
 };
+
+std::string GetNodeName(const sosr::CatalogCollectionItemNode &a_node) {
+  if (!a_node.cachedName.empty()) {
+    return a_node.cachedName;
+  }
+
+  if (const auto *gear =
+          sosr::EquipmentCatalog::Get().FindGear(a_node.formID)) {
+    return gear->name;
+  }
+
+  const auto *form = RE::TESForm::LookupByID(a_node.formID);
+  return form ? sosr::armor::GetDisplayName(form)
+              : ("Form " + sosr::armor::FormatFormID(a_node.formID));
+}
+
+std::string GetNodeName(const GroupedTooltipItemNode &a_node) {
+  if (!a_node.cachedName.empty()) {
+    return a_node.cachedName;
+  }
+
+  return GetNodeName(sosr::CatalogCollectionItemNode{.formID = a_node.formID});
+}
+
+std::string GetNodeSlots(const sosr::CatalogCollectionItemNode &a_node) {
+  if (const auto *gear =
+          sosr::EquipmentCatalog::Get().FindGear(a_node.formID)) {
+    return sosr::armor::JoinStrings(gear->slots);
+  }
+
+  return {};
+}
+
+std::string GetNodeSlots(const GroupedTooltipItemNode &a_node) {
+  return GetNodeSlots(sosr::CatalogCollectionItemNode{.formID = a_node.formID});
+}
 
 void DrawTooltipInfoRow(const char *a_icon, const std::string &a_label,
                         const std::string &a_value) {
@@ -57,10 +94,11 @@ void MergeGroupedChildren(std::vector<GroupedTooltipItemNode> &a_target,
     auto existingIt = std::find_if(
         a_target.begin(), a_target.end(),
         [&](const GroupedTooltipItemNode &a_node) {
-          return a_node.name == sourceNode.name &&
+          return GetNodeName(a_node) == GetNodeName(sourceNode) &&
                  a_node.isCollection == sourceNode.isCollection &&
-                 (!a_node.isCollection ? a_node.slots == sourceNode.slots
-                                       : true);
+                 (!a_node.isCollection
+                      ? GetNodeSlots(a_node) == GetNodeSlots(sourceNode)
+                      : true);
         });
 
     if (existingIt != a_target.end()) {
@@ -86,14 +124,15 @@ auto BuildGroupedItemTree(
     auto existingIt = std::find_if(
         grouped.begin(), grouped.end(),
         [&](const GroupedTooltipItemNode &a_node) {
-          return a_node.name == item.name &&
+          return GetNodeName(a_node) == GetNodeName(item) &&
                  a_node.isCollection == isCollection &&
-                 (!isCollection ? a_node.slots == item.slots : true);
+                 (!isCollection ? GetNodeSlots(a_node) == GetNodeSlots(item)
+                                : true);
         });
 
     GroupedTooltipItemNode node{};
-    node.name = item.name;
-    node.slots = item.slots;
+    node.formID = item.formID;
+    node.cachedName = item.cachedName;
     node.children = groupedChildren;
     node.count = 1;
     node.isCollection = isCollection;
@@ -110,9 +149,9 @@ auto BuildGroupedItemTree(
 
 std::string BuildDisplayLabel(const GroupedTooltipItemNode &a_item) {
   if (a_item.count <= 1) {
-    return a_item.name;
+    return GetNodeName(a_item);
   }
-  return a_item.name + " x" + std::to_string(a_item.count);
+  return GetNodeName(a_item) + " x" + std::to_string(a_item.count);
 }
 
 void MeasureItemTree(const std::vector<GroupedTooltipItemNode> &a_items,
@@ -123,8 +162,9 @@ void MeasureItemTree(const std::vector<GroupedTooltipItemNode> &a_items,
         (std::max)(a_metrics.widestLabelWidth,
                    ImGui::CalcTextSize(label.c_str()).x +
                        static_cast<float>(a_depth) * kTreeIndentWidth);
+    const auto slots = GetNodeSlots(item);
     a_metrics.widestValueWidth = (std::max)(
-        a_metrics.widestValueWidth, ImGui::CalcTextSize(item.slots.c_str()).x);
+        a_metrics.widestValueWidth, ImGui::CalcTextSize(slots.c_str()).x);
 
     if (!item.children.empty()) {
       MeasureItemTree(item.children, a_depth + 1, a_metrics);
@@ -149,14 +189,15 @@ void DrawItemTreeRows(const std::vector<GroupedTooltipItemNode> &a_items,
     }
 
     ImGui::TableSetColumnIndex(1);
-    if (!item.isCollection && !item.slots.empty()) {
+    const auto itemSlots = GetNodeSlots(item);
+    if (!item.isCollection && !itemSlots.empty()) {
       const auto availableWidth = ImGui::GetContentRegionAvail().x;
-      const auto slotsWidth = ImGui::CalcTextSize(item.slots.c_str()).x;
+      const auto slotsWidth = ImGui::CalcTextSize(itemSlots.c_str()).x;
       if (slotsWidth < availableWidth) {
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availableWidth -
                              slotsWidth);
       }
-      ImGui::TextUnformatted(item.slots.c_str());
+      ImGui::TextUnformatted(itemSlots.c_str());
     }
 
     if (!item.children.empty()) {
