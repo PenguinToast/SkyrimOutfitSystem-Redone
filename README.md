@@ -4,32 +4,21 @@
 
 It lets the player keep their real equipped gear for gameplay while changing the visible appearance through a native in-game browser and variant workbench.
 
+Requires https://github.com/PenguinToast/DynamicArmorVariants-Extended to function.
+
+100% vibecoded with Codex, **heavily** inspired by [Modex](https://github.com/patchulidev/ModExplorerMenu) for catalog/UI.
+
 ## Features
-- Native Dear ImGui browser hosted inside a real Skyrim `IMenu`.
+- Snappy ImGui interface for managing armor appearance overrides
 - Searchable catalog for:
   - individual armor pieces
   - outfits
   - Modex kits
-- Shared search/filter bar across gear, outfits, and kits.
-- Multi-select slot filtering:
-  - OR semantics for gear
-  - AND semantics for outfits and kits
-- Favorites system with persistent `favorites.json`.
-- Full-row selection, double-click add, and context menus in the catalog.
+- Persistent favorites system
 - Preview mode for selected gear, outfits, and kits.
-- Persistent variant workbench with:
-  - row reordering
-  - drag-and-drop overrides
-  - hide-equipped toggles
-  - conflict highlighting
-  - reset actions
-  - Modex kit creation from equipped gear or active overrides
-- SKSE save/load for workbench state.
-- Integration with Dynamic Armor Variants Extended for runtime visual swaps.
-- Configurable hotkey with modifier support.
-- Optional game pause while the menu is open.
+- Integration with Modex kits - creation from equipped gear or active overrides
+- SKSE save/load for overrides.
 - Modex-style theme loading, fade behavior, and smooth scrolling.
-- Bundled Ubuntu UI font and Lucide icon font.
 
 ## Requirements
 - [XMake](https://xmake.io) 3.0.0+
