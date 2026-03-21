@@ -57,22 +57,16 @@ void BeginPinnableTooltipFrame() {
 
 void EndPinnableTooltipFrame() {
   auto &manager = GetPinnedTooltipManager();
-  if (manager.stack.empty()) {
-    return;
-  }
-
   manager.stack.erase(std::remove_if(manager.stack.begin(), manager.stack.end(),
                                      [](const PinnedTooltipState &a_state) {
                                        return !a_state.renderedThisFrame;
                                      }),
                       manager.stack.end());
-  if (manager.stack.empty()) {
-    return;
-  }
 
-  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
-      ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
-      ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
+  if (!manager.stack.empty() &&
+      (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+       ImGui::IsMouseClicked(ImGuiMouseButton_Right) ||
+       ImGui::IsMouseClicked(ImGuiMouseButton_Middle))) {
     std::ptrdiff_t hoveredIndex = -1;
     for (std::ptrdiff_t index =
              static_cast<std::ptrdiff_t>(manager.stack.size()) - 1;

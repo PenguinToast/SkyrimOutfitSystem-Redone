@@ -271,13 +271,13 @@ void DrawDuplicateItemsTooltip(const std::string_view a_tooltipId,
       }
       ImGui::TextUnformatted(levelLabel.c_str());
 
-      if (rowHovered && duplicate.formID != 0) {
+      if (duplicate.formID != 0) {
         sosr::workbench::EquipmentWidgetItem tooltipItem{};
         const auto duplicateItemKey = "duplicate:" + std::to_string(index);
         if (sosr::ui::components::BuildEquipmentTooltipItem(
                 duplicate.formID, duplicateItemKey.c_str(), tooltipItem)) {
-          sosr::ui::components::DrawEquipmentInfoTooltip(duplicateTooltipId,
-                                                         true, tooltipItem);
+          sosr::ui::components::DrawEquipmentInfoTooltip(
+              duplicateTooltipId, rowHovered, tooltipItem);
         }
       }
     }
