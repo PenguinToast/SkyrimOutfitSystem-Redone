@@ -68,15 +68,15 @@ void DrawEquipmentInfoTooltip(const sosr::workbench::EquipmentWidgetItem &a_item
         (std::max)(widestValueWidth, ImGui::CalcTextSize(slotLabel.c_str()).x);
   }
 
+  const auto tooltipContentWidth = (std::max)(330.0f, widestValueWidth + 190.0f);
+  const auto &style = ImGui::GetStyle();
+  ImGui::SetNextWindowSize(
+      ImVec2(tooltipContentWidth + style.WindowPadding.x * 2.0f, 0.0f),
+      ImGuiCond_Always);
   ImGui::BeginTooltip();
-  const auto tooltipCursor = ImGui::GetCursorPos();
-  const auto tooltipWidth = (std::max)(330.0f, widestValueWidth + 190.0f);
-  ImGui::Dummy(ImVec2(tooltipWidth, 0.0f));
-  ImGui::SetCursorPos(tooltipCursor);
 
   const auto headerMin = ImGui::GetCursorScreenPos();
-  const auto headerWidth =
-      (std::max)(tooltipWidth, ImGui::GetContentRegionAvail().x);
+  const auto headerWidth = ImGui::GetContentRegionAvail().x;
   const auto headerHeight = ImGui::GetFontSize() * 2.4f;
   const auto headerMax =
       ImVec2(headerMin.x + headerWidth, headerMin.y + headerHeight);
