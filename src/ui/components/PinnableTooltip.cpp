@@ -85,6 +85,14 @@ void EndPinnableTooltipFrame() {
   }
 }
 
+bool HasPinnedTooltips() {
+  return !GetPinnedTooltipManager().stack.empty();
+}
+
+void ClearPinnedTooltips() {
+  GetPinnedTooltipManager().stack.clear();
+}
+
 bool ShouldDrawPinnableTooltip(const std::string_view a_id,
                                const bool a_hoveredSource) {
   auto &manager = GetPinnedTooltipManager();

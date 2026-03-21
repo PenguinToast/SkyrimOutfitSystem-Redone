@@ -12,6 +12,8 @@ enum class PinnableTooltipMode : std::uint8_t {
 
 void BeginPinnableTooltipFrame();
 void EndPinnableTooltipFrame();
+[[nodiscard]] bool HasPinnedTooltips();
+void ClearPinnedTooltips();
 [[nodiscard]] bool ShouldDrawPinnableTooltip(std::string_view a_id,
                                              bool a_hoveredSource);
 [[nodiscard]] PinnableTooltipMode BeginPinnableTooltip(std::string_view a_id,

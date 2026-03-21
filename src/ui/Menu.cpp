@@ -529,6 +529,11 @@ void Menu::HandleCancel() {
     return;
   }
 
+  if (ui::components::HasPinnedTooltips()) {
+    ui::components::ClearPinnedTooltips();
+    return;
+  }
+
   Close();
 }
 
