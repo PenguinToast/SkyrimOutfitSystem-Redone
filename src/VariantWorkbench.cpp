@@ -5,6 +5,53 @@
 #include <algorithm>
 #include <unordered_set>
 
+namespace {
+void CollectReferencedArmorFormIDs(
+    const RE::TESForm *a_form, std::vector<RE::FormID> &a_armorFormIDs,
+    std::unordered_set<RE::FormID> &a_seenArmor,
+    std::unordered_set<RE::FormID> &a_activeLeveledLists) {
+  if (!a_form) {
+    return;
+  }
+
+  if (const auto *armor = a_form->As<RE::TESObjectARMO>()) {
+    if (a_seenArmor.insert(armor->GetFormID()).second) {
+      a_armorFormIDs.push_back(armor->GetFormID());
+    }
+    return;
+  }
+
+  if (a_form->GetFormType() == RE::FormType::LeveledItem) {
+    const auto *list = a_form->As<RE::TESLeveledList>();
+    if (!list || !a_activeLeveledLists.insert(a_form->GetFormID()).second) {
+      return;
+    }
+
+    for (const auto &entry : list->entries) {
+      CollectReferencedArmorFormIDs(entry.form, a_armorFormIDs, a_seenArmor,
+                                    a_activeLeveledLists);
+    }
+
+    a_activeLeveledLists.erase(a_form->GetFormID());
+  }
+}
+
+void CollectOutfitArmorFormIDs(
+    const RE::BGSOutfit *a_outfit, std::vector<RE::FormID> &a_armorFormIDs,
+    std::unordered_set<RE::FormID> &a_seenArmor,
+    std::unordered_set<RE::FormID> &a_activeLeveledLists) {
+  if (!a_outfit) {
+    return;
+  }
+
+  a_outfit->ForEachItem([&](RE::TESForm *a_item) {
+    CollectReferencedArmorFormIDs(a_item, a_armorFormIDs, a_seenArmor,
+                                  a_activeLeveledLists);
+    return RE::BSContainer::ForEachResult::kContinue;
+  });
+}
+} // namespace
+
 namespace sosr::workbench {
 bool VariantWorkbench::ResolveCatalogArmors(
     RE::FormID a_formID,
@@ -25,15 +72,10 @@ bool VariantWorkbench::ResolveCatalogArmors(
   }
 
   std::vector<RE::FormID> armorFormIDs;
-  outfit->ForEachItem([&](RE::TESForm *a_item) {
-    const auto *armor = a_item ? a_item->As<RE::TESObjectARMO>() : nullptr;
-    if (!armor) {
-      return RE::BSContainer::ForEachResult::kContinue;
-    }
-
-    armorFormIDs.push_back(armor->GetFormID());
-    return RE::BSContainer::ForEachResult::kContinue;
-  });
+  std::unordered_set<RE::FormID> seenArmorForms;
+  std::unordered_set<RE::FormID> activeLeveledLists;
+  CollectOutfitArmorFormIDs(outfit, armorFormIDs, seenArmorForms,
+                            activeLeveledLists);
 
   return ResolveCatalogArmors(armorFormIDs, a_armors);
 }

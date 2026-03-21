@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iterator>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <unordered_set>
 #include <windows.h>
 
@@ -273,6 +274,8 @@ std::string BuildKitSearchText(const sosr::KitEntry &a_entry) {
 }
 
 struct OutfitDescription {
+  std::vector<RE::FormID> armorFormIDs;
+  std::vector<sosr::CatalogCollectionItemNode> itemTree;
   std::vector<std::string> pieces;
   std::vector<std::string> slots;
   std::vector<std::string> tags;
@@ -281,10 +284,79 @@ struct OutfitDescription {
 
 struct KitDescription {
   std::vector<RE::FormID> armorFormIDs;
+  std::vector<sosr::CatalogCollectionItemNode> itemTree;
   std::vector<std::string> pieces;
   std::vector<std::string> slots;
   bool hasMissingItems{false};
 };
+
+void AccumulateArmorDescription(const RE::TESObjectARMO *a_armor,
+                                OutfitDescription &a_description,
+                                std::unordered_set<RE::FormID> &a_seenArmor) {
+  if (!a_armor) {
+    return;
+  }
+
+  a_description.pieces.push_back(GetDisplayName(a_armor));
+
+  if (!a_seenArmor.insert(a_armor->GetFormID()).second) {
+    return;
+  }
+
+  a_description.armorFormIDs.push_back(a_armor->GetFormID());
+  ++a_description.armorCount;
+  a_description.tags.emplace_back("Armor");
+  a_description.tags.push_back(GetArmorCategory(a_armor));
+
+  auto slots = GetArmorSlots(a_armor);
+  a_description.slots.insert(a_description.slots.end(), slots.begin(),
+                             slots.end());
+  a_description.tags.insert(a_description.tags.end(),
+                            std::make_move_iterator(slots.begin()),
+                            std::make_move_iterator(slots.end()));
+}
+
+auto BuildOutfitItemNode(
+    const RE::TESForm *a_item, OutfitDescription &a_description,
+    std::unordered_set<RE::FormID> &a_seenArmor,
+    std::unordered_set<RE::FormID> &a_activeLeveledLists)
+    -> std::optional<sosr::CatalogCollectionItemNode> {
+  if (!a_item || a_item->IsDeleted() || a_item->IsIgnored()) {
+    return std::nullopt;
+  }
+
+  if (const auto *armor = a_item->As<RE::TESObjectARMO>()) {
+    AccumulateArmorDescription(armor, a_description, a_seenArmor);
+    return sosr::CatalogCollectionItemNode{
+        .name = GetDisplayName(armor), .slots = JoinStrings(GetArmorSlots(armor))};
+  }
+
+  if (a_item->GetFormType() == RE::FormType::LeveledItem) {
+    const auto *list = a_item->As<RE::TESLeveledList>();
+    if (!list) {
+      return std::nullopt;
+    }
+
+    sosr::CatalogCollectionItemNode node{.name = GetDisplayName(a_item)};
+    if (!a_activeLeveledLists.insert(a_item->GetFormID()).second) {
+      return node;
+    }
+
+    for (const auto &entry : list->entries) {
+      if (const auto child = BuildOutfitItemNode(entry.form, a_description,
+                                                 a_seenArmor,
+                                                 a_activeLeveledLists)) {
+        node.children.push_back(*child);
+      }
+    }
+
+    a_activeLeveledLists.erase(a_item->GetFormID());
+    return node;
+  }
+
+  a_description.pieces.push_back(GetDisplayName(a_item));
+  return sosr::CatalogCollectionItemNode{.name = GetDisplayName(a_item)};
+}
 
 OutfitDescription DescribeOutfit(const RE::BGSOutfit *a_outfit) {
   OutfitDescription description;
@@ -292,24 +364,14 @@ OutfitDescription DescribeOutfit(const RE::BGSOutfit *a_outfit) {
     return description;
   }
 
+  std::unordered_set<RE::FormID> seenArmorForms;
+  std::unordered_set<RE::FormID> activeLeveledLists;
+
   a_outfit->ForEachItem([&](RE::TESForm *a_item) {
-    if (!a_item || a_item->IsDeleted() || a_item->IsIgnored()) {
-      return RE::BSContainer::ForEachResult::kContinue;
-    }
-
-    description.pieces.push_back(GetDisplayName(a_item));
-
-    if (const auto *armor = a_item->As<RE::TESObjectARMO>()) {
-      ++description.armorCount;
-      description.tags.emplace_back("Armor");
-      description.tags.push_back(GetArmorCategory(armor));
-
-      auto slots = GetArmorSlots(armor);
-      description.slots.insert(description.slots.end(), slots.begin(),
-                               slots.end());
-      description.tags.insert(description.tags.end(),
-                              std::make_move_iterator(slots.begin()),
-                              std::make_move_iterator(slots.end()));
+    if (const auto node = BuildOutfitItemNode(a_item, description,
+                                              seenArmorForms,
+                                              activeLeveledLists)) {
+      description.itemTree.push_back(*node);
     }
 
     return RE::BSContainer::ForEachResult::kContinue;
@@ -387,6 +449,8 @@ KitDescription DescribeKitItems(const nlohmann::json &a_items) {
 
     description.armorFormIDs.push_back(armor->GetFormID());
     description.pieces.push_back(GetDisplayName(armor));
+    description.itemTree.push_back(
+        {.name = GetDisplayName(armor), .slots = JoinStrings(GetArmorSlots(armor))});
 
     auto slots = GetArmorSlots(armor);
     description.slots.insert(description.slots.end(), slots.begin(),
@@ -523,6 +587,8 @@ void EquipmentCatalog::RefreshFromGame() {
     entry.editorID = std::move(editorID);
     entry.plugin = GetPluginName(outfit);
     entry.summary = BuildOutfitSummary(description);
+    entry.armorFormIDs = std::move(description.armorFormIDs);
+    entry.itemTree = std::move(description.itemTree);
     entry.pieces = std::move(description.pieces);
     entry.slots = std::move(description.slots);
     entry.tags = std::move(description.tags);
@@ -577,6 +643,7 @@ void EquipmentCatalog::RefreshFromGame() {
       kitEntry.filepath = entry.path().string();
       kitEntry.summary = BuildKitSummary(description);
       kitEntry.armorFormIDs = description.armorFormIDs;
+      kitEntry.itemTree = std::move(description.itemTree);
       kitEntry.pieces = description.pieces;
       kitEntry.slots = description.slots;
       kitEntry.piecesText = JoinStrings(kitEntry.pieces);

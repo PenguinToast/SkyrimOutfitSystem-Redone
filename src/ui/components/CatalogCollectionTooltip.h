@@ -1,5 +1,7 @@
 #pragma once
 
+#include "EquipmentCatalog.h"
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -11,13 +13,8 @@ struct CatalogTooltipMetaRow {
   std::string value;
 };
 
-struct CatalogTooltipItemRow {
-  std::string name;
-  std::string slots;
-};
-
 void DrawCatalogCollectionTooltip(
     std::string_view a_title,
     const std::vector<CatalogTooltipMetaRow> &a_metaRows,
-    const std::vector<CatalogTooltipItemRow> &a_items);
+    const std::vector<sosr::CatalogCollectionItemNode> &a_items);
 } // namespace sosr::ui::components

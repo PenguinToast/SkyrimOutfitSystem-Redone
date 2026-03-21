@@ -14,7 +14,6 @@
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
-#include <unordered_set>
 
 namespace {
 constexpr auto kSettingsDirectory =
@@ -100,26 +99,6 @@ std::string NormalizeKitCollection(std::string_view a_collection) {
   return normalized;
 }
 
-std::vector<RE::FormID> CollectOutfitArmorFormIDs(const RE::FormID a_formID) {
-  std::vector<RE::FormID> armorFormIDs;
-  std::unordered_set<RE::FormID> seenArmorForms;
-
-  const auto *outfit = RE::TESForm::LookupByID<RE::BGSOutfit>(a_formID);
-  if (!outfit) {
-    return armorFormIDs;
-  }
-
-  outfit->ForEachItem([&](RE::TESForm *a_item) {
-    const auto *armor = a_item ? a_item->As<RE::TESObjectARMO>() : nullptr;
-    if (armor && seenArmorForms.insert(armor->GetFormID()).second) {
-      armorFormIDs.push_back(armor->GetFormID());
-    }
-    return RE::BSContainer::ForEachResult::kContinue;
-  });
-
-  return armorFormIDs;
-}
-
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
   const auto rightSize = a_right.size();
@@ -199,19 +178,8 @@ void DrawOutfitTooltip(const sosr::OutfitEntry &a_outfit) {
     }
   }
 
-  std::vector<sosr::ui::components::CatalogTooltipItemRow> items;
-  items.reserve(CollectOutfitArmorFormIDs(a_outfit.formID).size());
-  for (const auto formID : CollectOutfitArmorFormIDs(a_outfit.formID)) {
-    if (const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID)) {
-      items.push_back(
-          {.name = sosr::armor::GetDisplayName(armor),
-           .slots = sosr::armor::JoinStrings(
-               sosr::armor::GetArmorSlotLabels(armor->GetSlotMask().underlying()))});
-    }
-  }
-
   sosr::ui::components::DrawCatalogCollectionTooltip(a_outfit.name, metaRows,
-                                                     items);
+                                                     a_outfit.itemTree);
 }
 
 void DrawKitTooltip(const sosr::KitEntry &a_kit) {
@@ -223,19 +191,8 @@ void DrawKitTooltip(const sosr::KitEntry &a_kit) {
   }
   metaRows.push_back({kIconIdentifier, "Identifier", a_kit.id});
 
-  std::vector<sosr::ui::components::CatalogTooltipItemRow> items;
-  items.reserve(a_kit.armorFormIDs.size());
-  for (const auto formID : a_kit.armorFormIDs) {
-    if (const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID)) {
-      items.push_back(
-          {.name = sosr::armor::GetDisplayName(armor),
-           .slots = sosr::armor::JoinStrings(
-               sosr::armor::GetArmorSlotLabels(armor->GetSlotMask().underlying()))});
-    }
-  }
-
   sosr::ui::components::DrawCatalogCollectionTooltip(a_kit.name, metaRows,
-                                                     items);
+                                                     a_kit.itemTree);
 }
 
 void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
@@ -632,7 +589,7 @@ void Menu::AddGearEntryToWorkbench(const GearEntry &a_entry) {
 }
 
 void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry) {
-  workbench_.AddCatalogSelectionToWorkbench(a_entry.formID);
+  workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
 }
 
 void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry) {
@@ -761,8 +718,7 @@ void Menu::PreviewGearEntry(const GearEntry &a_entry) {
 }
 
 void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {
-  workbench_.ApplyCatalogPreview(a_entry.id,
-                                 CollectOutfitArmorFormIDs(a_entry.formID));
+  workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs);
 }
 
 void Menu::PreviewKitEntry(const KitEntry &a_entry) {
@@ -1048,7 +1004,7 @@ void Menu::DrawWindow() {
             [](const OutfitEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetOutfits().end()) {
           workbench_.ApplyCatalogPreview(
-              entry->id, CollectOutfitArmorFormIDs(entry->formID));
+              entry->id, entry->armorFormIDs);
         }
       } else if (activeTab_ == BrowserTab::Kits) {
         const auto entry = std::ranges::find(
@@ -1837,8 +1793,7 @@ bool Menu::DrawOutfitTab() {
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add to Workbench")) {
-            workbench_.AddCatalogSelectionAsRows(
-                CollectOutfitArmorFormIDs(outfit.formID));
+            workbench_.AddCatalogSelectionAsRows(outfit.armorFormIDs);
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {

@@ -6,6 +6,8 @@
 #include <algorithm>
 
 namespace {
+constexpr float kTreeIndentWidth = 18.0f;
+
 void DrawTooltipInfoRow(const char *a_icon, const std::string &a_label,
                         const std::string &a_value) {
   if (a_value.empty()) {
@@ -34,33 +36,79 @@ void DrawTooltipInfoRow(const char *a_icon, const std::string &a_label,
     ImGui::PopTextWrapPos();
   }
 }
+
+struct ItemTreeMetrics {
+  float widestLabelWidth{0.0f};
+  float widestValueWidth{0.0f};
+};
+
+void MeasureItemTree(
+    const std::vector<sosr::CatalogCollectionItemNode> &a_items, int a_depth,
+    ItemTreeMetrics &a_metrics) {
+  for (const auto &item : a_items) {
+    a_metrics.widestLabelWidth =
+        (std::max)(a_metrics.widestLabelWidth,
+                   ImGui::CalcTextSize(item.name.c_str()).x +
+                       static_cast<float>(a_depth) * kTreeIndentWidth);
+    a_metrics.widestValueWidth =
+        (std::max)(a_metrics.widestValueWidth,
+                   ImGui::CalcTextSize(item.slots.c_str()).x);
+
+    if (!item.children.empty()) {
+      MeasureItemTree(item.children, a_depth + 1, a_metrics);
+    }
+  }
+}
+
+void DrawItemTreeRows(
+    const std::vector<sosr::CatalogCollectionItemNode> &a_items, int a_depth) {
+  for (const auto &item : a_items) {
+    ImGui::TableNextRow();
+
+    ImGui::TableSetColumnIndex(0);
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
+                         static_cast<float>(a_depth) * kTreeIndentWidth);
+    ImGui::TextUnformatted(item.name.c_str());
+
+    ImGui::TableSetColumnIndex(1);
+    if (!item.slots.empty()) {
+      const auto availableWidth = ImGui::GetContentRegionAvail().x;
+      const auto slotsWidth = ImGui::CalcTextSize(item.slots.c_str()).x;
+      if (slotsWidth < availableWidth) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availableWidth -
+                             slotsWidth);
+      }
+      ImGui::TextUnformatted(item.slots.c_str());
+    }
+
+    if (!item.children.empty()) {
+      DrawItemTreeRows(item.children, a_depth + 1);
+    }
+  }
+}
 } // namespace
 
 namespace sosr::ui::components {
 void DrawCatalogCollectionTooltip(
     std::string_view a_title,
     const std::vector<CatalogTooltipMetaRow> &a_metaRows,
-    const std::vector<CatalogTooltipItemRow> &a_items) {
+    const std::vector<sosr::CatalogCollectionItemNode> &a_items) {
   const auto *theme = sosr::ThemeConfig::GetSingleton();
   const auto &style = ImGui::GetStyle();
   float widestMetaValueWidth = ImGui::CalcTextSize(a_title.data()).x;
-  float widestItemLabelWidth = 0.0f;
-  float widestItemValueWidth = 0.0f;
   for (const auto &row : a_metaRows) {
     widestMetaValueWidth = (std::max)(
         widestMetaValueWidth, ImGui::CalcTextSize(row.value.c_str()).x);
   }
-  for (const auto &item : a_items) {
-    widestItemLabelWidth = (std::max)(
-        widestItemLabelWidth, ImGui::CalcTextSize(item.name.c_str()).x);
-    widestItemValueWidth = (std::max)(
-        widestItemValueWidth, ImGui::CalcTextSize(item.slots.c_str()).x);
-  }
+
+  ItemTreeMetrics itemMetrics{};
+  MeasureItemTree(a_items, 0, itemMetrics);
 
   const auto metaSectionWidth = widestMetaValueWidth + 190.0f;
-  const auto itemSectionWidth =
-      widestItemLabelWidth + widestItemValueWidth +
-      style.CellPadding.x * 4.0f + style.ItemSpacing.x + 24.0f;
+  const auto itemSectionWidth = itemMetrics.widestLabelWidth +
+                                itemMetrics.widestValueWidth +
+                                style.CellPadding.x * 4.0f +
+                                style.ItemSpacing.x + 28.0f;
   const auto tooltipContentWidth =
       (std::max)(360.0f, (std::max)(metaSectionWidth, itemSectionWidth));
   ImGui::SetNextWindowSize(
@@ -127,22 +175,10 @@ void DrawCatalogCollectionTooltip(
                           ImGuiTableFlags_NoSavedSettings |
                               ImGuiTableFlags_SizingFixedFit)) {
       ImGui::TableSetupColumn("##item-name", ImGuiTableColumnFlags_WidthFixed,
-                              widestItemLabelWidth + 8.0f);
+                              itemMetrics.widestLabelWidth + 8.0f);
       ImGui::TableSetupColumn("##item-slots",
                               ImGuiTableColumnFlags_WidthStretch);
-
-      for (const auto &item : a_items) {
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0);
-        ImGui::TextUnformatted(item.name.c_str());
-        ImGui::TableSetColumnIndex(1);
-        const auto availableWidth = ImGui::GetContentRegionAvail().x;
-        const auto slotsWidth = ImGui::CalcTextSize(item.slots.c_str()).x;
-        if (slotsWidth < availableWidth) {
-          ImGui::SetCursorPosX(ImGui::GetCursorPosX() + availableWidth - slotsWidth);
-        }
-        ImGui::TextUnformatted(item.slots.c_str());
-      }
+      DrawItemTreeRows(a_items, 0);
 
       ImGui::EndTable();
     }

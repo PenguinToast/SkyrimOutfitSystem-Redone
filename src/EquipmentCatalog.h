@@ -1,6 +1,12 @@
 #pragma once
 
 namespace sosr {
+struct CatalogCollectionItemNode {
+  std::string name;
+  std::string slots;
+  std::vector<CatalogCollectionItemNode> children;
+};
+
 struct GearEntry {
   RE::FormID formID;
   std::string id;
@@ -25,6 +31,8 @@ struct OutfitEntry {
   std::string editorID;
   std::string plugin;
   std::string summary;
+  std::vector<RE::FormID> armorFormIDs;
+  std::vector<CatalogCollectionItemNode> itemTree;
   std::vector<std::string> pieces;
   std::vector<std::string> slots;
   std::vector<std::string> tags;
@@ -42,6 +50,7 @@ struct KitEntry {
   std::string filepath;
   std::string summary;
   std::vector<RE::FormID> armorFormIDs;
+  std::vector<CatalogCollectionItemNode> itemTree;
   std::vector<std::string> pieces;
   std::vector<std::string> slots;
   std::string piecesText;
