@@ -340,6 +340,7 @@ auto GetOrBuildLeveledListCache(
   }
 
   std::unordered_set<RE::FormID> seenArmorForms;
+  std::unordered_set<RE::FormID> seenDirectArmorChildren;
   for (const auto &entry : a_list->entries) {
     const auto *form = entry.form;
     if (!form || form->IsDeleted() || form->IsIgnored()) {
@@ -347,8 +348,10 @@ auto GetOrBuildLeveledListCache(
     }
 
     if (const auto *armor = form->As<RE::TESObjectARMO>()) {
-      built.itemTree.push_back(
-          {.formID = armor->GetFormID(), .level = entry.level});
+      if (seenDirectArmorChildren.insert(armor->GetFormID()).second) {
+        built.itemTree.push_back(
+            {.formID = armor->GetFormID(), .level = entry.level});
+      }
       built.pieces.push_back(GetDisplayName(armor));
 
       if (seenArmorForms.insert(armor->GetFormID()).second) {
