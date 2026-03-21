@@ -543,10 +543,20 @@ void Menu::DrawVariantWorkbenchPane() {
       if (reorderPreviewActive && insertionLineY >= 0.0f &&
           insertionLineX2 > insertionLineX1) {
         auto *drawList = ImGui::GetWindowDrawList();
-        drawList->AddLine(ImVec2(insertionLineX1, insertionLineY),
-                          ImVec2(insertionLineX2, insertionLineY),
-                          ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"),
-                          2.0f);
+        if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
+          drawList->PushClipRect(table->OuterRect.Min, table->OuterRect.Max,
+                                 true);
+          drawList->AddLine(
+              ImVec2(insertionLineX1, insertionLineY),
+              ImVec2(insertionLineX2, insertionLineY),
+              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"), 2.0f);
+          drawList->PopClipRect();
+        } else {
+          drawList->AddLine(
+              ImVec2(insertionLineX1, insertionLineY),
+              ImVec2(insertionLineX2, insertionLineY),
+              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"), 2.0f);
+        }
       }
 
       if (!hoveredConflictWidgetId.empty()) {
