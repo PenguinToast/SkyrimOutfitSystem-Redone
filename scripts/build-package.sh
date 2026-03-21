@@ -61,7 +61,18 @@ fi
 VERSION="${TAG#v}"
 ARCHIVE_NAME="${MOD_NAME} v${VERSION}.zip"
 ARCHIVE_PATH="${DIST_DIR}/${ARCHIVE_NAME}"
-REMOTE_URL="$(git -C "${REPO_ROOT}" remote get-url upstream 2>/dev/null || git -C "${REPO_ROOT}" remote get-url origin)"
+normalize_repo_url() {
+    local remote_url="$1"
+    if [[ "${remote_url}" =~ ^git@github\.com:(.+)/(.+)\.git$ ]]; then
+        printf 'https://github.com/%s/%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    elif [[ "${remote_url}" =~ ^https://github\.com/(.+)/(.+)\.git$ ]]; then
+        printf 'https://github.com/%s/%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    else
+        printf '%s\n' "${remote_url}"
+    fi
+}
+
+REMOTE_URL="$(normalize_repo_url "$(git -C "${REPO_ROOT}" remote get-url upstream 2>/dev/null || git -C "${REPO_ROOT}" remote get-url origin)")"
 
 WIN_REPO_ROOT="$(wslpath -w "${REPO_ROOT}")"
 WIN_ARCHIVE_PATH="$(wslpath -w "${ARCHIVE_PATH}")"
@@ -92,6 +103,26 @@ cp "${PLUGIN_SRC}" "${STAGE_DIR}/SKSE/Plugins/${PLUGIN_NAME}.dll"
 if [[ -f "${PDB_SRC}" ]]; then
     cp "${PDB_SRC}" "${STAGE_DIR}/SKSE/Plugins/${PLUGIN_NAME}.pdb"
 fi
+
+python3 - <<'PY' "${STAGE_DIR}/fomod"
+from pathlib import Path
+import sys
+
+fomod_dir = Path(sys.argv[1])
+if fomod_dir.is_dir():
+    for xml_path in fomod_dir.glob("*.xml"):
+        raw = xml_path.read_bytes()
+        text = None
+        for encoding in ("utf-8-sig", "utf-16", "utf-16-le", "utf-16-be"):
+            try:
+                text = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            raise SystemExit(f"Could not decode {xml_path}")
+        xml_path.write_text(text.lstrip("\ufeff"), encoding="utf-8", newline="\n")
+PY
 
 cat > "${STAGE_DIR}/fomod/info.xml" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
