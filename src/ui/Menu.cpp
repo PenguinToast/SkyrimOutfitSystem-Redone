@@ -6,6 +6,7 @@
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
+#include "ui/components/CatalogCollectionTooltip.h"
 #include "ui/components/EquipmentWidget.h"
 #include "ui/components/EditableCombo.h"
 
@@ -64,6 +65,12 @@ enum class KitColumn : ImGuiID { Name = 1, Collection, Pieces };
 
 constexpr std::string_view kFavoritePrefix = "\xEE\x83\xB5 ";
 constexpr std::array<ImWchar, 3> kLucideIconRanges = {0xE038, 0xE63F, 0};
+constexpr char kIconEditorId[] = "\xee\x84\x8b";   // ICON_LC_LIST
+constexpr char kIconPlugin[] = "\xee\x84\xac";     // ICON_LC_PACKAGE
+constexpr char kIconFormId[] = "\xee\x83\xb2";     // ICON_LC_HASH
+constexpr char kIconIdentifier[] = "\xee\x84\x87"; // ICON_LC_LINK
+constexpr char kIconCollection[] = "\xee\x97\xbf"; // ICON_LC_FOLDER_CODE
+constexpr char kIconFile[] = "\xee\x83\x87";       // ICON_LC_FILE_CODE
 
 std::string TrimText(std::string_view a_text) {
   std::size_t start = 0;
@@ -173,6 +180,62 @@ std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
 
   truncated.append(ellipsis);
   return truncated;
+}
+
+void DrawOutfitTooltip(const sosr::OutfitEntry &a_outfit) {
+  std::vector<sosr::ui::components::CatalogTooltipMetaRow> metaRows;
+  if (!a_outfit.editorID.empty()) {
+    metaRows.push_back({kIconEditorId, "Editor ID", a_outfit.editorID});
+  }
+  if (!a_outfit.plugin.empty()) {
+    metaRows.push_back({kIconPlugin, "Plugin", a_outfit.plugin});
+  }
+  metaRows.push_back(
+      {kIconFormId, "Form ID", sosr::armor::FormatFormID(a_outfit.formID)});
+  if (const auto *form = RE::TESForm::LookupByID(a_outfit.formID)) {
+    if (const auto identifier = sosr::armor::GetFormIdentifier(form);
+        !identifier.empty()) {
+      metaRows.push_back({kIconIdentifier, "Identifier", identifier});
+    }
+  }
+
+  std::vector<sosr::ui::components::CatalogTooltipItemRow> items;
+  items.reserve(CollectOutfitArmorFormIDs(a_outfit.formID).size());
+  for (const auto formID : CollectOutfitArmorFormIDs(a_outfit.formID)) {
+    if (const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID)) {
+      items.push_back(
+          {.name = sosr::armor::GetDisplayName(armor),
+           .slots = sosr::armor::JoinStrings(
+               sosr::armor::GetArmorSlotLabels(armor->GetSlotMask().underlying()))});
+    }
+  }
+
+  sosr::ui::components::DrawCatalogCollectionTooltip(a_outfit.name, metaRows,
+                                                     items);
+}
+
+void DrawKitTooltip(const sosr::KitEntry &a_kit) {
+  std::vector<sosr::ui::components::CatalogTooltipMetaRow> metaRows;
+  metaRows.push_back(
+      {kIconCollection, "Collection", a_kit.collection.empty() ? "Root" : a_kit.collection});
+  if (!a_kit.filepath.empty()) {
+    metaRows.push_back({kIconFile, "File", a_kit.filepath});
+  }
+  metaRows.push_back({kIconIdentifier, "Identifier", a_kit.id});
+
+  std::vector<sosr::ui::components::CatalogTooltipItemRow> items;
+  items.reserve(a_kit.armorFormIDs.size());
+  for (const auto formID : a_kit.armorFormIDs) {
+    if (const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID)) {
+      items.push_back(
+          {.name = sosr::armor::GetDisplayName(armor),
+           .slots = sosr::armor::JoinStrings(
+               sosr::armor::GetArmorSlotLabels(armor->GetSlotMask().underlying()))});
+    }
+  }
+
+  sosr::ui::components::DrawCatalogCollectionTooltip(a_kit.name, metaRows,
+                                                     items);
 }
 
 void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
@@ -1813,6 +1876,9 @@ bool Menu::DrawOutfitTab() {
           rowClicked = true;
           AddOutfitEntryToWorkbench(outfit);
         }
+        if (rowHovered && !ImGui::IsDragDropActive()) {
+          DrawOutfitTooltip(outfit);
+        }
 
         const auto displayName = BuildFavoriteLabel(outfit.name, favorite);
         ImGui::TextUnformatted(displayName.c_str());
@@ -1826,12 +1892,6 @@ bool Menu::DrawOutfitTab() {
           const auto displayText =
               TruncateTextToWidth(outfit.piecesText, availableWidth);
           ImGui::TextUnformatted(displayText.c_str());
-          if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort) &&
-              displayText != outfit.piecesText) {
-            ImGui::BeginTooltip();
-            ImGui::TextUnformatted(outfit.piecesText.c_str());
-            ImGui::EndTooltip();
-          }
         }
       }
     }
@@ -1937,6 +1997,9 @@ bool Menu::DrawKitTab() {
           rowClicked = true;
           AddKitEntryToWorkbench(kit);
         }
+        if (rowHovered && !ImGui::IsDragDropActive()) {
+          DrawKitTooltip(kit);
+        }
 
         const auto displayName = BuildFavoriteLabel(kit.name, favorite);
         ImGui::TextUnformatted(displayName.c_str());
@@ -1950,12 +2013,6 @@ bool Menu::DrawKitTab() {
         const auto displayText =
             TruncateTextToWidth(kit.piecesText, availableWidth);
         ImGui::TextUnformatted(displayText.c_str());
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort) &&
-            displayText != kit.piecesText) {
-          ImGui::BeginTooltip();
-          ImGui::TextUnformatted(kit.piecesText.c_str());
-          ImGui::EndTooltip();
-        }
       }
     }
 
