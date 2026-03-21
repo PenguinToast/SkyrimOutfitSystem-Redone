@@ -293,11 +293,12 @@ void Menu::DrawVariantWorkbenchPane() {
         }
 
         ImGui::TableSetColumnIndex(0);
-        [[maybe_unused]] const auto equippedWidget =
-            ui::components::DrawEquipmentWidget(
-                rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
-                rows[static_cast<std::size_t>(rowIndex)].equipped);
-        if (ImGui::BeginDragDropSource()) {
+        const auto equippedWidget = ui::components::DrawEquipmentWidget(
+            rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
+            rows[static_cast<std::size_t>(rowIndex)].equipped,
+            {.showDeleteButton =
+                 !rows[static_cast<std::size_t>(rowIndex)].isEquipped});
+        if (!equippedWidget.deleteHovered && ImGui::BeginDragDropSource()) {
           DraggedEquipmentPayload payload{};
           payload.sourceKind = static_cast<std::uint32_t>(DragSourceKind::Row);
           payload.rowIndex = rowIndex;
@@ -311,6 +312,10 @@ void Menu::DrawVariantWorkbenchPane() {
           ImGui::Text("%s", rows[static_cast<std::size_t>(rowIndex)]
                                 .equipped.slotText.c_str());
           ImGui::EndDragDropSource();
+        }
+        if (equippedWidget.deleteClicked) {
+          workbench_.DeleteRow(rowIndex);
+          break;
         }
         widgetRects.insert_or_assign(
             rows[static_cast<std::size_t>(rowIndex)].key,
