@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "ui/ThemeConfig.h"
 
 #include <algorithm>
 #include <string>
@@ -22,6 +23,7 @@ struct PinnedTooltipManager {
   std::vector<PinnedTooltipState> stack;
   bool altWasDownLastFrame{false};
   bool altPressedThisFrame{false};
+  std::size_t currentDepth{0};
 };
 
 PinnedTooltipManager &GetPinnedTooltipManager() {
@@ -45,6 +47,7 @@ void BeginPinnableTooltipFrame() {
   manager.altPressedThisFrame =
       altDownThisFrame && !manager.altWasDownLastFrame;
   manager.altWasDownLastFrame = altDownThisFrame;
+  manager.currentDepth = 0;
 
   for (auto &state : manager.stack) {
     state.renderedThisFrame = false;
@@ -103,6 +106,9 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
     pinnedIt->renderedThisFrame = true;
 
     const auto windowName = "##PinnedTooltip_" + std::string(a_id);
+    const auto *theme = sosr::ThemeConfig::GetSingleton();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
+    ImGui::PushStyleColor(ImGuiCol_Border, theme->GetColorU32("PRIMARY"));
     ImGui::SetNextWindowPos(pinnedIt->pos, ImGuiCond_Always);
     ImGui::SetNextWindowSize(pinnedIt->size, ImGuiCond_Always);
     auto flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
@@ -117,6 +123,7 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
       ImGui::BringWindowToFocusFront(ImGui::GetCurrentWindow());
       pinnedIt->requestFocus = false;
     }
+    ++manager.currentDepth;
     return PinnableTooltipMode::Pinned;
   }
 
@@ -128,6 +135,7 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
     if (!ImGui::BeginTooltip()) {
       return PinnableTooltipMode::None;
     }
+    ++manager.currentDepth;
     return PinnableTooltipMode::Hovered;
   }
 
@@ -144,6 +152,7 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
     return PinnableTooltipMode::None;
   }
   ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+  ++manager.currentDepth;
   return PinnableTooltipMode::HoveredOverlay;
 }
 
@@ -157,23 +166,29 @@ void EndPinnableTooltip(const std::string_view a_id,
   if (a_mode == PinnableTooltipMode::Hovered ||
       a_mode == PinnableTooltipMode::HoveredOverlay) {
     if (manager.altPressedThisFrame) {
-      auto pinnedIt = FindPinnedTooltip(manager.stack, a_id);
-      if (pinnedIt == manager.stack.end()) {
-        PinnedTooltipState state{};
-        state.id = std::string(a_id);
-        state.pos = ImGui::GetWindowPos();
-        state.size = ImGui::GetWindowSize();
-        state.hadVerticalScroll = ImGui::GetCurrentWindow()->ScrollMax.y > 0.0f;
-        state.requestFocus = true;
-        state.renderedThisFrame = true;
-        manager.stack.push_back(std::move(state));
+      const auto targetLevel =
+          manager.currentDepth > 0 ? manager.currentDepth - 1 : 0;
+      if (manager.stack.size() > targetLevel) {
+        manager.stack.resize(targetLevel);
       }
+
+      PinnedTooltipState state{};
+      state.id = std::string(a_id);
+      state.pos = ImGui::GetWindowPos();
+      state.size = ImGui::GetWindowSize();
+      state.hadVerticalScroll = ImGui::GetCurrentWindow()->ScrollMax.y > 0.0f;
+      state.requestFocus = true;
+      state.renderedThisFrame = true;
+      manager.stack.push_back(std::move(state));
     }
 
     if (a_mode == PinnableTooltipMode::Hovered) {
       ImGui::EndTooltip();
     } else {
       ImGui::End();
+    }
+    if (manager.currentDepth > 0) {
+      --manager.currentDepth;
     }
     return;
   }
@@ -186,5 +201,10 @@ void EndPinnableTooltip(const std::string_view a_id,
                                ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
   }
   ImGui::End();
+  ImGui::PopStyleColor();
+  ImGui::PopStyleVar();
+  if (manager.currentDepth > 0) {
+    --manager.currentDepth;
+  }
 }
 } // namespace sosr::ui::components
