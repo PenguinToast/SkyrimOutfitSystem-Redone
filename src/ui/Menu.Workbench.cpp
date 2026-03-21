@@ -12,6 +12,8 @@
 
 namespace {
 constexpr char kVariantItemPayloadType[] = "SOSR_VARIANT_ITEM";
+constexpr float kWorkbenchRowGapY = 20.0f;
+constexpr float kWorkbenchOverrideGapY = 5.0f;
 
 struct ActiveWorkbenchVisual {
   std::string widgetId;
@@ -204,6 +206,10 @@ void Menu::DrawVariantWorkbenchPane() {
   overrideConflicts.reserve(rows.size() * 2);
   for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
     const auto &row = rows[static_cast<std::size_t>(rowIndex)];
+    if (!row.isEquipped) {
+      continue;
+    }
+
     for (int overrideIndex = 0;
          overrideIndex < static_cast<int>(row.overrides.size());
          ++overrideIndex) {
@@ -281,16 +287,16 @@ void Menu::DrawVariantWorkbenchPane() {
         const auto overrideCount =
             rows[static_cast<std::size_t>(rowIndex)].overrides.size();
         const auto widgetHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
-        const auto overrideSpacingY = ImGui::GetStyle().ItemSpacing.y;
         const auto dropZoneHeight =
             overrideCount > 0
                 ? (static_cast<float>(overrideCount) * widgetHeight) +
                       ((overrideCount > 1)
                            ? static_cast<float>(overrideCount - 1) *
-                                 overrideSpacingY
+                                 kWorkbenchOverrideGapY
                            : 0.0f)
                 : widgetHeight;
-        const auto rowHeight = (std::max)(widgetHeight, dropZoneHeight);
+        const auto contentHeight = (std::max)(widgetHeight, dropZoneHeight);
+        const auto rowHeight = contentHeight + kWorkbenchRowGapY;
         ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
         ImGui::TableSetBgColor(
             ImGuiTableBgTarget_RowBg0,
@@ -303,6 +309,19 @@ void Menu::DrawVariantWorkbenchPane() {
         }
 
         ImGui::TableSetColumnIndex(0);
+        const auto *table = ImGui::GetCurrentTable();
+        if (table) {
+          const ImRect leftCellRect = ImGui::TableGetCellBgRect(table, 0);
+          const auto leftCellContentHeight =
+              (leftCellRect.Max.y - leftCellRect.Min.y) -
+              (ImGui::GetStyle().CellPadding.y * 2.0f);
+          const auto leftCellContentOffsetY =
+              (std::max)(0.0f, (leftCellContentHeight - contentHeight) * 0.5f);
+          ImGui::SetCursorScreenPos(
+              ImVec2(leftCellRect.Min.x + ImGui::GetStyle().CellPadding.x,
+                     leftCellRect.Min.y + ImGui::GetStyle().CellPadding.y +
+                         leftCellContentOffsetY));
+        }
         const auto equippedWidget = ui::components::DrawEquipmentWidget(
             rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
             rows[static_cast<std::size_t>(rowIndex)].equipped,
@@ -330,7 +349,6 @@ void Menu::DrawVariantWorkbenchPane() {
         widgetRects.insert_or_assign(
             rows[static_cast<std::size_t>(rowIndex)].key,
             ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
-        const auto *table = ImGui::GetCurrentTable();
         if (table) {
           const ImRect leftCellRect = ImGui::TableGetCellBgRect(table, 0);
           rowTopY.push_back(leftCellRect.Min.y);
@@ -380,22 +398,38 @@ void Menu::DrawVariantWorkbenchPane() {
         const auto overrideDropMin = ImVec2(overrideCellRect.Min.x + cellPadding.x,
                                             overrideCellRect.Min.y + cellPadding.y);
         const auto overrideDropMaxX = overrideCellRect.Max.x - cellPadding.x;
+        const auto overrideCellContentHeight =
+            (overrideCellRect.Max.y - overrideCellRect.Min.y) -
+            (cellPadding.y * 2.0f);
+        const auto overrideCellContentOffsetY =
+            (std::max)(0.0f, (overrideCellContentHeight - contentHeight) * 0.5f);
         ImGui::SetCursorScreenPos(
             ImVec2(overrideCellRect.Min.x + cellPadding.x,
-                   overrideCellRect.Min.y + cellPadding.y));
+                   overrideCellRect.Min.y + cellPadding.y +
+                       overrideCellContentOffsetY));
 
         if (overrideCount == 0) {
+          const auto wrappedWidth =
+              (overrideCellRect.Max.x - cellPadding.x) -
+              (overrideCellRect.Min.x + cellPadding.x);
+          const auto textSize = ImGui::CalcTextSize(
+              "Drop equipment overrides here.", nullptr, false, wrappedWidth);
+          ImGui::SetCursorScreenPos(
+              ImVec2(overrideCellRect.Min.x + cellPadding.x,
+                     overrideCellRect.Min.y + cellPadding.y +
+                         overrideCellContentOffsetY +
+                         ((dropZoneHeight - textSize.y) * 0.5f)));
           ImGui::PushTextWrapPos(overrideCellRect.Max.x - cellPadding.x);
           ImGui::TextWrapped("Drop equipment overrides here.");
           ImGui::PopTextWrapPos();
         } else {
+          const auto oldItemSpacing = ImGui::GetStyle().ItemSpacing;
+          ImGui::PushStyleVar(
+              ImGuiStyleVar_ItemSpacing,
+              ImVec2(oldItemSpacing.x, kWorkbenchOverrideGapY));
           for (int overrideIndex = 0;
                overrideIndex < static_cast<int>(overrideCount);
                ++overrideIndex) {
-            if (overrideIndex > 0) {
-              ImGui::Spacing();
-            }
-
             const auto widgetId = "override:" + std::to_string(rowIndex) + ":" +
                                   std::to_string(overrideIndex);
             const auto overrideWidget = ui::components::DrawEquipmentWidget(
@@ -449,6 +483,7 @@ void Menu::DrawVariantWorkbenchPane() {
                   });
             }
           }
+          ImGui::PopStyleVar();
         }
 
         ImGui::TableSetColumnIndex(2);
