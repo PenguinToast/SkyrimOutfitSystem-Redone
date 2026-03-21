@@ -6,6 +6,7 @@
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
+#include "ui/components/EquipmentWidget.h"
 #include "ui/components/EditableCombo.h"
 
 #include <cmath>
@@ -1660,8 +1661,21 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           ImGui::EndPopup();
         }
         ImGui::SetCursorScreenPos(rowContentPos);
-        DrawEquipmentInfoWidget(item.key.c_str(), item, true,
-                                DragSourceKind::Catalog);
+        [[maybe_unused]] const auto widgetResult =
+            ui::components::DrawEquipmentWidget(item.key.c_str(), item);
+        if (ImGui::BeginDragDropSource()) {
+          DraggedEquipmentPayload payload{};
+          payload.sourceKind =
+              static_cast<std::uint32_t>(DragSourceKind::Catalog);
+          payload.rowIndex = -1;
+          payload.itemIndex = -1;
+          payload.formID = item.formID;
+          ImGui::SetDragDropPayload("SOSR_VARIANT_ITEM", &payload,
+                                    sizeof(payload));
+          ImGui::TextUnformatted(item.name.c_str());
+          ImGui::Text("%s", item.slotText.c_str());
+          ImGui::EndDragDropSource();
+        }
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(entry.plugin.data());
