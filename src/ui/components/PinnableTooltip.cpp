@@ -126,7 +126,13 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
   }
 
   if (manager.stack.empty()) {
+    const auto &style = ImGui::GetStyle();
+    const auto *theme = sosr::ThemeConfig::GetSingleton();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.WindowBorderSize);
+    ImGui::PushStyleColor(ImGuiCol_Border, theme->GetColorU32("BORDER"));
     if (!ImGui::BeginTooltip()) {
+      ImGui::PopStyleColor();
+      ImGui::PopStyleVar();
       return PinnableTooltipMode::None;
     }
     ++manager.currentDepth;
@@ -135,6 +141,10 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
 
   const auto windowName = "##HoveredTooltip_" + std::string(a_id);
   const auto mousePos = ImGui::GetIO().MousePos;
+  const auto &style = ImGui::GetStyle();
+  const auto *theme = sosr::ThemeConfig::GetSingleton();
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.WindowBorderSize);
+  ImGui::PushStyleColor(ImGuiCol_Border, theme->GetColorU32("BORDER"));
   ImGui::SetNextWindowPos(ImVec2(mousePos.x + 16.0f, mousePos.y + 16.0f),
                           ImGuiCond_Always);
   if (!ImGui::Begin(windowName.c_str(), nullptr,
@@ -143,6 +153,8 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
                         ImGuiWindowFlags_NoSavedSettings |
                         ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::End();
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
     return PinnableTooltipMode::None;
   }
   ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
@@ -181,6 +193,8 @@ void EndPinnableTooltip(const std::string_view a_id,
     } else {
       ImGui::End();
     }
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar();
     if (manager.currentDepth > 0) {
       --manager.currentDepth;
     }
