@@ -14,6 +14,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -196,6 +197,21 @@ void DrawKitTooltip(const sosr::KitEntry &a_kit, const bool a_hoveredSource) {
 
   sosr::ui::components::DrawCatalogCollectionTooltip(
       "kit:" + a_kit.id, a_hoveredSource, a_kit.name, metaRows, a_kit.itemTree);
+}
+
+void DrawSimplePinnableTooltip(const std::string_view a_id,
+                               const bool a_hoveredSource,
+                               const std::function<void()> &a_drawBody) {
+  if (!sosr::ui::components::ShouldDrawPinnableTooltip(a_id, a_hoveredSource)) {
+    return;
+  }
+
+  if (const auto mode =
+          sosr::ui::components::BeginPinnableTooltip(a_id, a_hoveredSource);
+      mode != sosr::ui::components::PinnableTooltipMode::None) {
+    a_drawBody();
+    sosr::ui::components::EndPinnableTooltip(a_id, mode);
+  }
 }
 
 void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
@@ -1038,14 +1054,14 @@ void Menu::DrawWindow() {
       }
 
       if (ImGui::BeginTabItem("Kits")) {
-        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
-          ImGui::BeginTooltip();
-          ImGui::TextUnformatted("These are Modex kits loaded from "
-                                 "data/interface/modex/user/kits.");
-          ImGui::TextUnformatted(
-              "Kits that refer to non-existent items are not shown.");
-          ImGui::EndTooltip();
-        }
+        DrawSimplePinnableTooltip(
+            "catalog:kits-tab",
+            ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort), []() {
+              ImGui::TextUnformatted("These are Modex kits loaded from "
+                                     "data/interface/modex/user/kits.");
+              ImGui::TextUnformatted(
+                  "Kits that refer to non-existent items are not shown.");
+            });
         if (activeTab_ != BrowserTab::Kits) {
           ClearCatalogSelection();
         }

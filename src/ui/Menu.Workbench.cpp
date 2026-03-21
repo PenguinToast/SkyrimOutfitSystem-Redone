@@ -2,9 +2,11 @@
 
 #include "imgui_internal.h"
 #include "ui/components/EquipmentWidget.h"
+#include "ui/components/PinnableTooltip.h"
 
 #include <algorithm>
 #include <cstring>
+#include <functional>
 #include <optional>
 #include <unordered_map>
 
@@ -31,6 +33,21 @@ std::string DescribeActiveWorkbenchVisual(
   }
 
   return a_row.equipped.name + " (equipped)";
+}
+
+void DrawSimplePinnableTooltip(const std::string_view a_id,
+                               const bool a_hoveredSource,
+                               const std::function<void()> &a_drawBody) {
+  if (!sosr::ui::components::ShouldDrawPinnableTooltip(a_id, a_hoveredSource)) {
+    return;
+  }
+
+  if (const auto mode =
+          sosr::ui::components::BeginPinnableTooltip(a_id, a_hoveredSource);
+      mode != sosr::ui::components::PinnableTooltipMode::None) {
+    a_drawBody();
+    sosr::ui::components::EndPinnableTooltip(a_id, mode);
+  }
 }
 } // namespace
 
@@ -118,13 +135,14 @@ void Menu::DrawVariantWorkbenchPane() {
   if (!canCreateEquippedKit) {
     ImGui::EndDisabled();
   }
-  if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
-                           ImGuiHoveredFlags_AllowWhenDisabled)) {
-    ImGui::BeginTooltip();
-    ImGui::TextUnformatted(
-        "Create a Modex kit from the player's currently equipped armor.");
-    ImGui::EndTooltip();
-  }
+  DrawSimplePinnableTooltip(
+      "workbench:kit-from-equipped",
+      ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
+                           ImGuiHoveredFlags_AllowWhenDisabled),
+      []() {
+        ImGui::TextUnformatted(
+            "Create a Modex kit from the player's currently equipped armor.");
+      });
   ImGui::SameLine();
   const bool canCreateOverrideKit = !overrideKitFormIDs.empty();
   if (!canCreateOverrideKit) {
@@ -136,13 +154,14 @@ void Menu::DrawVariantWorkbenchPane() {
   if (!canCreateOverrideKit) {
     ImGui::EndDisabled();
   }
-  if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
-                           ImGuiHoveredFlags_AllowWhenDisabled)) {
-    ImGui::BeginTooltip();
-    ImGui::TextUnformatted(
-        "Create a Modex kit from overrides on currently equipped armor only.");
-    ImGui::EndTooltip();
-  }
+  DrawSimplePinnableTooltip(
+      "workbench:kit-from-overrides",
+      ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
+                           ImGuiHoveredFlags_AllowWhenDisabled),
+      []() {
+        ImGui::TextUnformatted("Create a Modex kit from overrides on currently "
+                               "equipped armor only.");
+      });
   ImGui::Spacing();
 
   const auto &rows = workbench_.GetRows();
@@ -274,9 +293,10 @@ void Menu::DrawVariantWorkbenchPane() {
         }
 
         ImGui::TableSetColumnIndex(0);
-        [[maybe_unused]] const auto equippedWidget = ui::components::DrawEquipmentWidget(
-            rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
-            rows[static_cast<std::size_t>(rowIndex)].equipped);
+        [[maybe_unused]] const auto equippedWidget =
+            ui::components::DrawEquipmentWidget(
+                rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
+                rows[static_cast<std::size_t>(rowIndex)].equipped);
         if (ImGui::BeginDragDropSource()) {
           DraggedEquipmentPayload payload{};
           payload.sourceKind = static_cast<std::uint32_t>(DragSourceKind::Row);
@@ -288,9 +308,8 @@ void Menu::DrawVariantWorkbenchPane() {
                                     sizeof(payload));
           ImGui::TextUnformatted(
               rows[static_cast<std::size_t>(rowIndex)].equipped.name.c_str());
-          ImGui::Text("%s",
-                      rows[static_cast<std::size_t>(rowIndex)].equipped.slotText
-                          .c_str());
+          ImGui::Text("%s", rows[static_cast<std::size_t>(rowIndex)]
+                                .equipped.slotText.c_str());
           ImGui::EndDragDropSource();
         }
         widgetRects.insert_or_assign(
@@ -379,10 +398,9 @@ void Menu::DrawVariantWorkbenchPane() {
                       .overrides[static_cast<std::size_t>(overrideIndex)]
                       .name.c_str());
               ImGui::Text(
-                  "%s",
-                  rows[static_cast<std::size_t>(rowIndex)]
-                      .overrides[static_cast<std::size_t>(overrideIndex)]
-                      .slotText.c_str());
+                  "%s", rows[static_cast<std::size_t>(rowIndex)]
+                            .overrides[static_cast<std::size_t>(overrideIndex)]
+                            .slotText.c_str());
               ImGui::EndDragDropSource();
             }
             if (overrideWidget.deleteClicked) {
@@ -392,18 +410,20 @@ void Menu::DrawVariantWorkbenchPane() {
             widgetRects.insert_or_assign(
                 widgetId,
                 ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
-            if (overrideConflicts.contains(widgetId) && overrideWidget.hovered) {
+            if (overrideConflicts.contains(widgetId) &&
+                overrideWidget.hovered) {
               hoveredConflictWidgetId = widgetId;
-              if (ImGui::BeginTooltip()) {
-                ImGui::TextWrapped("This override shares equipment slots with "
-                                   "currently active visuals.");
-                ImGui::Separator();
-                for (const auto &description :
-                     overrideConflicts.at(widgetId).targetDescriptions) {
-                  ImGui::BulletText("%s", description.c_str());
-                }
-                ImGui::EndTooltip();
-              }
+              DrawSimplePinnableTooltip(
+                  "workbench:conflict:" + widgetId, overrideWidget.hovered,
+                  [&]() {
+                    ImGui::TextWrapped("This override shares equipment slots "
+                                       "with currently active visuals.");
+                    ImGui::Separator();
+                    for (const auto &description :
+                         overrideConflicts.at(widgetId).targetDescriptions) {
+                      ImGui::BulletText("%s", description.c_str());
+                    }
+                  });
             }
           }
         }
