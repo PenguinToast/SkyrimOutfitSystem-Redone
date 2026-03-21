@@ -280,16 +280,26 @@ void Menu::DrawVariantWorkbenchPane() {
            ++rowIndex) {
         const auto overrideCount =
             rows[static_cast<std::size_t>(rowIndex)].overrides.size();
-        const auto dropZoneHeight = (std::max)(
-            72.0f, 14.0f + static_cast<float>(overrideCount) *
-                               (ImGui::GetTextLineHeightWithSpacing() * 2.5f));
         const auto widgetHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
+        const auto overrideSpacingY = ImGui::GetStyle().ItemSpacing.y;
+        const auto dropZoneHeight =
+            overrideCount > 0
+                ? (static_cast<float>(overrideCount) * widgetHeight) +
+                      ((overrideCount > 1)
+                           ? static_cast<float>(overrideCount - 1) *
+                                 overrideSpacingY
+                           : 0.0f)
+                : widgetHeight;
         const auto rowHeight = (std::max)(widgetHeight, dropZoneHeight);
         ImGui::TableNextRow(ImGuiTableRowFlags_None, rowHeight);
+        ImGui::TableSetBgColor(
+            ImGuiTableBgTarget_RowBg0,
+            ThemeConfig::GetSingleton()->GetColorU32(
+                (rowIndex % 2) == 0 ? "TABLE_BG" : "TABLE_BG_ALT"));
         if (rows[static_cast<std::size_t>(rowIndex)].isEquipped) {
           ImGui::TableSetBgColor(
-              ImGuiTableBgTarget_RowBg0,
-              ThemeConfig::GetSingleton()->GetColorU32("SECONDARY", 0.35f));
+              ImGuiTableBgTarget_RowBg1,
+              ThemeConfig::GetSingleton()->GetColorU32("SECONDARY", 0.16f));
         }
 
         ImGui::TableSetColumnIndex(0);
@@ -361,15 +371,20 @@ void Menu::DrawVariantWorkbenchPane() {
         }
 
         ImGui::TableSetColumnIndex(1);
-        const auto dropId = "##override-drop-" + std::to_string(rowIndex);
-        ImGui::BeginChild(dropId.c_str(), ImVec2(0.0f, dropZoneHeight),
-                          ImGuiChildFlags_Borders,
-                          ImGuiWindowFlags_NoScrollbar);
-        const auto childPos = ImGui::GetWindowPos();
-        const auto childSize = ImGui::GetWindowSize();
+        const auto *currentTable = ImGui::GetCurrentTable();
+        const auto overrideCellRect =
+            currentTable ? ImGui::TableGetCellBgRect(currentTable, 1)
+                         : ImRect(ImGui::GetCursorScreenPos(),
+                                  ImGui::GetCursorScreenPos());
+        const auto cellPadding = ImGui::GetStyle().CellPadding;
+        ImGui::SetCursorScreenPos(
+            ImVec2(overrideCellRect.Min.x + cellPadding.x,
+                   overrideCellRect.Min.y + cellPadding.y));
 
         if (overrideCount == 0) {
+          ImGui::PushTextWrapPos(overrideCellRect.Max.x - cellPadding.x);
           ImGui::TextWrapped("Drop equipment overrides here.");
+          ImGui::PopTextWrapPos();
         } else {
           for (int overrideIndex = 0;
                overrideIndex < static_cast<int>(overrideCount);
@@ -433,8 +448,7 @@ void Menu::DrawVariantWorkbenchPane() {
           }
         }
 
-        const ImRect dropRect(childPos, ImVec2(childPos.x + childSize.x,
-                                               childPos.y + childSize.y));
+        const ImRect dropRect(overrideCellRect.Min, overrideCellRect.Max);
         if (ImGui::BeginDragDropTargetCustom(
                 dropRect, ImGui::GetID(("##override-cell-target-" +
                                         std::to_string(rowIndex))
@@ -443,14 +457,12 @@ void Menu::DrawVariantWorkbenchPane() {
           ImGui::EndDragDropTarget();
         }
 
-        ImGui::EndChild();
-
         ImGui::TableSetColumnIndex(2);
         bool hideEquipped =
             rows[static_cast<std::size_t>(rowIndex)].hideEquipped;
-        if (const auto *currentTable = ImGui::GetCurrentTable();
-            currentTable != nullptr) {
-          const auto hideCellRect = ImGui::TableGetCellBgRect(currentTable, 2);
+        if (const auto *hideTable = ImGui::GetCurrentTable();
+            hideTable != nullptr) {
+          const auto hideCellRect = ImGui::TableGetCellBgRect(hideTable, 2);
           const auto checkboxSize =
               ImVec2(ImGui::GetFrameHeight(), ImGui::GetFrameHeight());
           const auto checkboxPos = ImVec2(
