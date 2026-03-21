@@ -364,10 +364,6 @@ void VariantWorkbench::Serialize(SKSE::SerializationInterface *a_skse) const {
   root["rows"] = nlohmann::json::array();
 
   for (const auto &row : rows_) {
-    if (row.overrides.empty() && !row.hideEquipped) {
-      continue;
-    }
-
     nlohmann::json serializedRow;
     serializedRow["equipped"] =
         armor::GetFormIdentifier(RE::TESForm::LookupByID(row.equipped.formID));
