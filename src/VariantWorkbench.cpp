@@ -4,9 +4,99 @@
 #include "EquipmentCatalog.h"
 
 #include <algorithm>
+#include <array>
 #include <unordered_set>
 
 namespace sosr::workbench {
+namespace {
+using BipedSlot = RE::BGSBipedObjectForm::BipedObjectSlot;
+
+constexpr std::uint64_t SlotBit(const BipedSlot a_slot) {
+  return static_cast<std::uint64_t>(std::to_underlying(a_slot));
+}
+
+int ScorePreferredTargetSlots(
+    const std::uint64_t a_itemMask, const std::uint64_t a_targetMask,
+    const std::initializer_list<BipedSlot> &a_sourceSlots,
+    const std::initializer_list<BipedSlot> &a_preferredTargetSlots) {
+  for (const auto sourceSlot : a_sourceSlots) {
+    if ((a_itemMask & SlotBit(sourceSlot)) == 0) {
+      continue;
+    }
+
+    int score = static_cast<int>(a_preferredTargetSlots.size());
+    for (const auto targetSlot : a_preferredTargetSlots) {
+      if ((a_targetMask & SlotBit(targetSlot)) != 0) {
+        return score;
+      }
+      --score;
+    }
+  }
+
+  return -1;
+}
+
+int ScoreFallbackTargetRow(const std::uint64_t a_itemMask,
+                           const std::uint64_t a_targetMask) {
+  int bestScore = -1;
+
+  const std::array scores{
+      ScorePreferredTargetSlots(a_itemMask, a_targetMask, {BipedSlot::kCirclet},
+                                {BipedSlot::kHead, BipedSlot::kHair,
+                                 BipedSlot::kLongHair, BipedSlot::kEars}),
+      ScorePreferredTargetSlots(a_itemMask, a_targetMask, {BipedSlot::kHead},
+                                {BipedSlot::kCirclet, BipedSlot::kHair,
+                                 BipedSlot::kLongHair, BipedSlot::kEars}),
+      ScorePreferredTargetSlots(a_itemMask, a_targetMask,
+                                {BipedSlot::kHair, BipedSlot::kLongHair,
+                                 BipedSlot::kEars},
+                                {BipedSlot::kHead, BipedSlot::kCirclet}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask, {BipedSlot::kAmulet, BipedSlot::kModNeck},
+          {BipedSlot::kModNeck, BipedSlot::kAmulet, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask, {BipedSlot::kRing},
+          {BipedSlot::kModFaceJewelry, BipedSlot::kCirclet, BipedSlot::kEars}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask, {BipedSlot::kHands},
+          {BipedSlot::kForearms, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask, {BipedSlot::kForearms},
+          {BipedSlot::kHands, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask, {BipedSlot::kFeet},
+          {BipedSlot::kCalves, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask, {BipedSlot::kCalves},
+          {BipedSlot::kFeet, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask,
+          {BipedSlot::kModFaceJewelry, BipedSlot::kModMouth},
+          {BipedSlot::kHead, BipedSlot::kCirclet, BipedSlot::kEars}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask,
+          {BipedSlot::kModChestPrimary, BipedSlot::kModChestSecondary,
+           BipedSlot::kModBack, BipedSlot::kModShoulder,
+           BipedSlot::kModPelvisPrimary, BipedSlot::kModPelvisSecondary},
+          {BipedSlot::kBody}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask,
+          {BipedSlot::kModArmLeft, BipedSlot::kModArmRight},
+          {BipedSlot::kHands, BipedSlot::kForearms, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask,
+          {BipedSlot::kModLegLeft, BipedSlot::kModLegRight},
+          {BipedSlot::kFeet, BipedSlot::kCalves, BipedSlot::kBody}),
+  };
+
+  for (const auto score : scores) {
+    bestScore = (std::max)(bestScore, score);
+  }
+
+  return bestScore;
+}
+} // namespace
+
 bool VariantWorkbench::ResolveCatalogArmors(
     const std::vector<RE::FormID> &a_formIDs,
     std::vector<const RE::TESObjectARMO *> &a_armors) const {
@@ -52,6 +142,8 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
     const EquipmentWidgetItem &a_item, bool a_requireAcceptable,
     const std::vector<PlannedCatalogAssignment> *a_pendingAssignments) const {
   int fallbackRowIndex = -1;
+  int bestPrecedenceRowIndex = -1;
+  int bestPrecedenceScore = -1;
   for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size());
        ++rowIndex) {
     const auto &row = rows_[static_cast<std::size_t>(rowIndex)];
@@ -74,6 +166,17 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
     if (fallbackRowIndex < 0) {
       fallbackRowIndex = rowIndex;
     }
+
+    const auto precedenceScore =
+        ScoreFallbackTargetRow(a_item.slotMask, row.equipped.slotMask);
+    if (precedenceScore > bestPrecedenceScore) {
+      bestPrecedenceScore = precedenceScore;
+      bestPrecedenceRowIndex = rowIndex;
+    }
+  }
+
+  if (bestPrecedenceRowIndex >= 0) {
+    return bestPrecedenceRowIndex;
   }
 
   return fallbackRowIndex;
