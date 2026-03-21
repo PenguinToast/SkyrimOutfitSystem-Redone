@@ -229,6 +229,8 @@ void VariantWorkbench::SyncRowsFromPlayer() {
   }
 
   std::unordered_set<RE::FormID> seenArmorForms;
+  std::vector<VariantWorkbenchRow> newlyEquippedRows;
+  std::vector<std::string> newlyEquippedRowKeys;
 
   for (const auto slot :
        {RE::BGSBipedObjectForm::BipedObjectSlot::kHead,
@@ -295,8 +297,17 @@ void VariantWorkbench::SyncRowsFromPlayer() {
     row.equipped = std::move(equipped);
     row.equipped.key = rowKey;
     row.isEquipped = true;
-    rows_.push_back(std::move(row));
-    rowOrder_.push_back(rowKey);
+    newlyEquippedRowKeys.push_back(rowKey);
+    newlyEquippedRows.push_back(std::move(row));
+  }
+
+  if (!newlyEquippedRows.empty()) {
+    rows_.insert(rows_.begin(),
+                 std::make_move_iterator(newlyEquippedRows.begin()),
+                 std::make_move_iterator(newlyEquippedRows.end()));
+    rowOrder_.insert(rowOrder_.begin(),
+                     std::make_move_iterator(newlyEquippedRowKeys.begin()),
+                     std::make_move_iterator(newlyEquippedRowKeys.end()));
   }
 }
 

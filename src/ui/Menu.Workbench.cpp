@@ -511,7 +511,7 @@ void Menu::DrawVariantWorkbenchPane() {
 
         if (const auto *rowTable = ImGui::GetCurrentTable()) {
           const auto bottomRect = ImGui::TableGetCellBgRect(rowTable, 2);
-          rowBottomY.push_back(bottomRect.Max.y + rowTable->RowCellPaddingY);
+          rowBottomY.push_back(bottomRect.Max.y);
         } else {
           rowBottomY.push_back(ImGui::GetItemRectMax().y);
         }
@@ -545,7 +545,7 @@ void Menu::DrawVariantWorkbenchPane() {
         auto *drawList = ImGui::GetWindowDrawList();
         if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
           drawList->PushClipRect(table->OuterRect.Min, table->OuterRect.Max,
-                                 true);
+                                 false);
           drawList->AddLine(
               ImVec2(insertionLineX1, insertionLineY),
               ImVec2(insertionLineX2, insertionLineY),
