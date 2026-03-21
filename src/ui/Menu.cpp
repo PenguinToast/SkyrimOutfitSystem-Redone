@@ -55,7 +55,7 @@ constexpr auto kBlockedGameplayControls = static_cast<UserEventFlag>(
         UserEventFlag::kWheelZoom) |
     static_cast<std::underlying_type_t<UserEventFlag>>(UserEventFlag::kVATS));
 
-enum class GearColumn : ImGuiID { Name = 1, Plugin, Slot };
+enum class GearColumn : ImGuiID { Name = 1, Plugin };
 
 enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Pieces };
 
@@ -1272,12 +1272,6 @@ void Menu::SortGearRows(std::vector<const GearEntry *> &a_rows,
     case GearColumn::Plugin:
       compare = CompareText(a_left->plugin, a_right->plugin);
       break;
-    case GearColumn::Slot:
-      compare = CompareText(a_left->slot, a_right->slot);
-      if (compare == 0) {
-        compare = CompareText(a_left->category, a_right->category);
-      }
-      break;
     case GearColumn::Name:
     default:
       compare = CompareText(a_left->name, a_right->name);
@@ -1599,7 +1593,7 @@ bool Menu::DrawGearTab() {
 
 bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
   bool rowClicked = false;
-  if (ImGui::BeginTable("##gear-table", 3,
+  if (ImGui::BeginTable("##gear-table", 2,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
                             ImGuiTableFlags_Resizable |
                             ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY,
@@ -1608,8 +1602,6 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
                             static_cast<ImGuiID>(GearColumn::Name));
     ImGui::TableSetupColumn("Plugin", ImGuiTableColumnFlags_None, 0.0f,
                             static_cast<ImGuiID>(GearColumn::Plugin));
-    ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_None, 0.0f,
-                            static_cast<ImGuiID>(GearColumn::Slot));
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
 
@@ -1628,7 +1620,6 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           item.formID = entry.formID;
           item.key = "catalog:" + entry.id;
           item.name = entry.name;
-          item.slotText = entry.slot;
         }
         item.name = BuildFavoriteLabel(item.name, favorite);
 
@@ -1668,9 +1659,6 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(entry.plugin.data());
-
-        ImGui::TableSetColumnIndex(2);
-        ImGui::Text("%s", entry.slot.data());
 
         if (selected) {
           ImGui::TableSetBgColor(
