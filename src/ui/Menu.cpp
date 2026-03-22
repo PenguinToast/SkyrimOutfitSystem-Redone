@@ -4,6 +4,7 @@
 #include "InputManager.h"
 #include "MenuHost.h"
 #include "PlayerInventory.h"
+#include "integrations/DynamicArmorVariantsExtendedClient.h"
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
@@ -17,6 +18,7 @@
 #include <fstream>
 #include <functional>
 #include <nlohmann/json.hpp>
+#include <optional>
 
 namespace {
 constexpr auto kSettingsDirectory =
@@ -213,6 +215,41 @@ void DrawSimplePinnableTooltip(const std::string_view a_id,
     a_drawBody();
     sosr::ui::components::EndPinnableTooltip(a_id, mode);
   }
+}
+
+std::optional<std::string> GetDavAvailabilityMessage() {
+  auto *dav =
+      sosr::integrations::DynamicArmorVariantsExtendedClient::Get();
+  if (!dav) {
+    return "Dynamic Armor Variants Extended is unavailable. Browsing will "
+           "work, but previews and overrides are disabled.";
+  }
+
+  if (!dav->IsReady()) {
+    return "Dynamic Armor Variants Extended is loaded but not ready yet. "
+           "Previews and overrides are temporarily unavailable.";
+  }
+
+  return std::nullopt;
+}
+
+void DrawDavAvailabilityBanner(const std::string_view a_message) {
+  if (a_message.empty()) {
+    return;
+  }
+
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(88, 30, 30, 180));
+  ImGui::PushStyleColor(ImGuiCol_Border, IM_COL32(196, 78, 78, 255));
+  if (ImGui::BeginChild("##dav-unavailable-banner", ImVec2(0.0f, 0.0f),
+                        ImGuiChildFlags_Borders |
+                            ImGuiChildFlags_AutoResizeY)) {
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 205, 205, 255));
+    ImGui::TextWrapped("%.*s", static_cast<int>(a_message.size()),
+                       a_message.data());
+    ImGui::PopStyleColor();
+  }
+  ImGui::EndChild();
+  ImGui::PopStyleColor(2);
 }
 
 void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
@@ -1007,6 +1044,11 @@ void Menu::DrawWindow() {
     activeTab_ = BrowserTab::Options;
   }
   ImGui::Separator();
+  const auto davAvailabilityMessage = GetDavAvailabilityMessage();
+  if (davAvailabilityMessage) {
+    DrawDavAvailabilityBanner(*davAvailabilityMessage);
+    ImGui::Spacing();
+  }
 
   if (activeTab_ == BrowserTab::Options) {
     DrawOptionsTab();
