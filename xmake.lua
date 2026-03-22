@@ -7,7 +7,7 @@ local build_version = os.getenv("SOSR_BUILD_VERSION") or "1.1.0"
 local build_version_string = os.getenv("SOSR_BUILD_VERSION_STRING") or build_version
 local major, minor, patch = build_version:match("^(%d+)%.(%d+)%.(%d+)$")
 if not major then
-    raise("SOSR_BUILD_VERSION must be in major.minor.patch format, got " .. build_version)
+    error("SOSR_BUILD_VERSION must be in major.minor.patch format, got " .. build_version)
 end
 
 set_project("SkyrimOutfitSystemRedone")

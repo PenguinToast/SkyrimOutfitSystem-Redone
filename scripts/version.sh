@@ -24,6 +24,17 @@ done
 
 SEMVER_REGEX='^v?([0-9]+)\.([0-9]+)\.([0-9]+)$'
 
+find_latest_release_tag() {
+    local tag
+    while IFS= read -r tag; do
+        if [[ "${tag}" =~ ${SEMVER_REGEX} ]]; then
+            printf '%s\n' "${tag}"
+            return 0
+        fi
+    done < <(git -C "${REPO_ROOT}" tag --sort=-version:refname)
+    return 1
+}
+
 HEAD_TAG=""
 mapfile -t HEAD_TAGS < <(git -C "${REPO_ROOT}" tag --points-at HEAD --sort=-creatordate)
 for tag in "${HEAD_TAGS[@]}"; do
@@ -37,10 +48,7 @@ if [[ -n "${HEAD_TAG}" ]]; then
     BASE_VERSION="${HEAD_TAG#v}"
     DISPLAY_VERSION="${BASE_VERSION}"
 else
-    LAST_TAG="$(git -C "${REPO_ROOT}" describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)"
-    if [[ -z "${LAST_TAG}" ]]; then
-        LAST_TAG="$(git -C "${REPO_ROOT}" describe --tags --abbrev=0 --match '[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)"
-    fi
+    LAST_TAG="$(find_latest_release_tag || true)"
     if [[ -z "${LAST_TAG}" ]]; then
         BASE_VERSION="0.0.0"
     else
