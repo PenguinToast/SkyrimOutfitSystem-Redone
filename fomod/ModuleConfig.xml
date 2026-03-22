@@ -16,7 +16,17 @@
                 <folder source="SkyrimSE" destination="" priority="0" />
               </files>
               <typeDescriptor>
-                <type name="Required" />
+                <dependencyType>
+                  <defaultType name="Recommended" />
+                  <patterns>
+                    <pattern>
+                      <dependencies operator="And">
+                        <fileDependency file="SkyrimVR.esm" state="Active" />
+                      </dependencies>
+                      <type name="Optional" />
+                    </pattern>
+                  </patterns>
+                </dependencyType>
               </typeDescriptor>
             </plugin>
             <plugin name="Skyrim VR">
@@ -25,7 +35,17 @@
                 <folder source="SkyrimVR" destination="" priority="0" />
               </files>
               <typeDescriptor>
-                <type name="Required" />
+                <dependencyType>
+                  <defaultType name="Optional" />
+                  <patterns>
+                    <pattern>
+                      <dependencies operator="And">
+                        <fileDependency file="SkyrimVR.esm" state="Active" />
+                      </dependencies>
+                      <type name="Recommended" />
+                    </pattern>
+                  </patterns>
+                </dependencyType>
               </typeDescriptor>
             </plugin>
           </plugins>
