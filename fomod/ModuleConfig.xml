@@ -5,24 +5,32 @@
   <requiredInstallFiles>
     <folder source="Data" destination="" />
   </requiredInstallFiles>
-  <conditionalFileInstalls>
-    <patterns>
-      <pattern>
-        <dependencies operator="And">
-          <fileDependency file="..\SkyrimSE.exe" state="Active" />
-        </dependencies>
-        <files>
-          <folder source="SkyrimSE" destination="" />
-        </files>
-      </pattern>
-      <pattern>
-        <dependencies operator="And">
-          <fileDependency file="..\SkyrimVR.exe" state="Active" />
-        </dependencies>
-        <files>
-          <folder source="SkyrimVR" destination="" />
-        </files>
-      </pattern>
-    </patterns>
-  </conditionalFileInstalls>
+  <installSteps order="Explicit">
+    <installStep name="Game Version">
+      <optionalFileGroups order="Explicit">
+        <group name="Select Runtime" type="SelectExactlyOne">
+          <plugins order="Explicit">
+            <plugin name="Skyrim SE / Anniversary Edition">
+              <description>Installs the shared Skyrim SE / AE plugin build.</description>
+              <files>
+                <folder source="SkyrimSE" destination="" priority="0" />
+              </files>
+              <typeDescriptor>
+                <type name="Required" />
+              </typeDescriptor>
+            </plugin>
+            <plugin name="Skyrim VR">
+              <description>Installs the Skyrim VR-specific plugin build.</description>
+              <files>
+                <folder source="SkyrimVR" destination="" priority="0" />
+              </files>
+              <typeDescriptor>
+                <type name="Required" />
+              </typeDescriptor>
+            </plugin>
+          </plugins>
+        </group>
+      </optionalFileGroups>
+    </installStep>
+  </installSteps>
 </config>
