@@ -37,6 +37,9 @@ if ! command -v wslpath >/dev/null 2>&1; then
     exit 1
 fi
 
+SOSR_BUILD_VERSION="$("${SCRIPT_DIR}/version.sh" --numeric)"
+SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
+
 copy_file() {
     local src="$1"
     local dst="$2"
@@ -62,6 +65,8 @@ fi
 POWERSHELL_CMD="
 \$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath '$WIN_REPO_ROOT'
+\$env:SOSR_BUILD_VERSION = '$SOSR_BUILD_VERSION'
+\$env:SOSR_BUILD_VERSION_STRING = '$SOSR_BUILD_VERSION_STRING'
 xmake f -y -c
 xmake f -y -m '$MODE'
 xmake build -y
@@ -88,6 +93,7 @@ if [[ -d "$DATA_SRC_DIR" ]]; then
 fi
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
+echo "Version ${SOSR_BUILD_VERSION_STRING}"
 echo "Deployed plugin to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"
 if [[ -f "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb" ]]; then
     echo "Deployed symbols to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb"

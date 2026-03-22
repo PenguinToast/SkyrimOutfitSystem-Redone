@@ -1,6 +1,7 @@
 #include "EquipmentCatalog.h"
 #include "Hooks.h"
 #include "InputManager.h"
+#include "Plugin.h"
 #include "Serialization.h"
 #include "integrations/DynamicArmorVariantsExtendedClient.h"
 #include "ui/Menu.h"
@@ -35,6 +36,7 @@ SKSEPlugin_Load(const SKSE::LoadInterface *a_skse) {
 
   SKSE::Init(a_skse);
   SKSE::AllocTrampoline(1 << 10);
+  logger::info("{} build {}", Plugin::NAME, Plugin::VERSION_STRING);
 
   messaging->RegisterListener("SKSE", SKSEMessageHandler);
 
@@ -45,6 +47,6 @@ SKSEPlugin_Load(const SKSE::LoadInterface *a_skse) {
     serialization->SetRevertCallback(&sosr::serialization::RevertCallback);
   }
 
-  logger::info("Skyrim Outfit System Redone loaded");
+  logger::info("{} loaded", Plugin::NAME);
   return true;
 }

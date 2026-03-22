@@ -73,6 +73,8 @@ normalize_repo_url() {
 }
 
 REMOTE_URL="$(normalize_repo_url "$(git -C "${REPO_ROOT}" remote get-url upstream 2>/dev/null || git -C "${REPO_ROOT}" remote get-url origin)")"
+SOSR_BUILD_VERSION="$("${SCRIPT_DIR}/version.sh" --numeric)"
+SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
 
 WIN_REPO_ROOT="$(wslpath -w "${REPO_ROOT}")"
 WIN_ARCHIVE_PATH="$(wslpath -w "${ARCHIVE_PATH}")"
@@ -81,6 +83,8 @@ WIN_STAGE_DIR="$(wslpath -w "${STAGE_DIR}")"
 POWERSHELL_CMD="
 \$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath '$WIN_REPO_ROOT'
+\$env:SOSR_BUILD_VERSION = '$SOSR_BUILD_VERSION'
+\$env:SOSR_BUILD_VERSION_STRING = '$SOSR_BUILD_VERSION_STRING'
 xmake f -y -c
 xmake f -y -m '$MODE'
 xmake build -y
