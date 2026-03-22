@@ -28,11 +28,10 @@ constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
 constexpr auto kFavoritesFilename = "favorites.json";
 constexpr auto kModexKitDirectory = "data/interface/modex/user/kits";
-constexpr auto kInterfaceDirectory = "Data/Interface/SkyrimVanitySystem";
-constexpr auto kLegacyInterfaceDirectory =
-    "Data/Interface/SkyrimOutfitSystemRedone";
-constexpr auto kDefaultFontRelativePath = "fonts/Ubuntu-R.ttf";
-constexpr auto kDefaultIconFontRelativePath = "fonts/lucide.ttf";
+constexpr auto kDefaultFontPath =
+    "Data/Interface/SkyrimVanitySystem/fonts/Ubuntu-R.ttf";
+constexpr auto kDefaultIconFontPath =
+    "Data/Interface/SkyrimVanitySystem/fonts/lucide.ttf";
 constexpr int kDefaultFontSizePixels = 16;
 constexpr int kMinFontSizePixels = 8;
 constexpr int kMaxFontSizePixels = 48;
@@ -166,17 +165,6 @@ std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
 
   truncated.append(ellipsis);
   return truncated;
-}
-
-std::string ResolveInterfaceAssetPath(std::string_view a_relativePath) {
-  const auto primaryPath =
-      (std::filesystem::path(kInterfaceDirectory) / a_relativePath).string();
-  if (std::filesystem::exists(primaryPath)) {
-    return primaryPath;
-  }
-
-  return (std::filesystem::path(kLegacyInterfaceDirectory) / a_relativePath)
-      .string();
 }
 
 void CopyLegacyFileIfNeeded(const std::filesystem::path &a_newPath,
@@ -482,25 +470,20 @@ void Menu::RebuildFontAtlas() {
 
   io.Fonts->Clear();
   io.FontDefault = nullptr;
-  const auto defaultFontPath =
-      ResolveInterfaceAssetPath(kDefaultFontRelativePath);
-  if (std::filesystem::exists(defaultFontPath)) {
+  if (std::filesystem::exists(kDefaultFontPath)) {
     io.FontDefault = io.Fonts->AddFontFromFileTTF(
-        defaultFontPath.c_str(), static_cast<float>(fontSizePixels_),
-        &fontConfig);
+        kDefaultFontPath, static_cast<float>(fontSizePixels_), &fontConfig);
   }
   if (!io.FontDefault) {
     io.FontDefault = io.Fonts->AddFontDefaultVector(&fontConfig);
   }
-  const auto defaultIconFontPath =
-      ResolveInterfaceAssetPath(kDefaultIconFontRelativePath);
-  if (io.FontDefault && std::filesystem::exists(defaultIconFontPath)) {
+  if (io.FontDefault && std::filesystem::exists(kDefaultIconFontPath)) {
     ImFontConfig iconConfig{};
     iconConfig.MergeMode = true;
     iconConfig.PixelSnapH = true;
     iconConfig.GlyphOffset.y = 3.0f;
     iconConfig.DstFont = io.FontDefault;
-    io.Fonts->AddFontFromFileTTF(defaultIconFontPath.c_str(),
+    io.Fonts->AddFontFromFileTTF(kDefaultIconFontPath,
                                  static_cast<float>(fontSizePixels_),
                                  &iconConfig, kLucideIconRanges.data());
   }

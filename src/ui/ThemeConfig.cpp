@@ -8,8 +8,6 @@
 
 namespace {
 constexpr auto kThemeDirectory = "Data/Interface/SkyrimVanitySystem/themes";
-constexpr auto kLegacyThemeDirectory =
-    "Data/Interface/SkyrimOutfitSystemRedone/themes";
 constexpr auto kDefaultThemeName = "default";
 
 using ColorEntry = std::pair<std::string_view, ImVec4>;
@@ -76,10 +74,6 @@ ThemeConfig *ThemeConfig::GetSingleton() {
 }
 
 ThemeConfig::ThemeConfig() : themeDirectory_(kThemeDirectory) {
-  if (!std::filesystem::exists(themeDirectory_) &&
-      std::filesystem::exists(kLegacyThemeDirectory)) {
-    themeDirectory_ = kLegacyThemeDirectory;
-  }
   LoadDefaultColors();
 }
 
