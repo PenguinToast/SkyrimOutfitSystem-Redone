@@ -11,6 +11,7 @@ MOD_NAME="Skyrim Outfit System Redone"
 MOD_AUTHOR="PenguinToast"
 MOD_DESCRIPTION="SKSE plugin for player vanity outfits with a native Dear ImGui browser."
 DATA_SRC_DIR="${REPO_ROOT}/data"
+FOMOD_SRC_DIR="${REPO_ROOT}/fomod"
 DIST_DIR="${REPO_ROOT}/dist"
 STAGE_DIR="${DIST_DIR}/.stage"
 BUILD_DIR="${REPO_ROOT}/build/windows/x64/${MODE}"
@@ -80,32 +81,51 @@ WIN_REPO_ROOT="$(wslpath -w "${REPO_ROOT}")"
 WIN_ARCHIVE_PATH="$(wslpath -w "${ARCHIVE_PATH}")"
 WIN_STAGE_DIR="$(wslpath -w "${STAGE_DIR}")"
 
-POWERSHELL_CMD="
+build_variant() {
+    local skyrim_se="$1"
+    local skyrim_ae="$2"
+    local skyrim_vr="$3"
+
+    local powershell_cmd="
 \$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath '$WIN_REPO_ROOT'
 \$env:SOSR_BUILD_VERSION = '$SOSR_BUILD_VERSION'
 \$env:SOSR_BUILD_VERSION_STRING = '$SOSR_BUILD_VERSION_STRING'
-xmake f -y -c
-xmake f -y -m '$MODE'
+xmake f -y -c --skyrim_se=${skyrim_se} --skyrim_ae=${skyrim_ae} --skyrim_vr=${skyrim_vr} -m '$MODE'
 xmake build -y
 "
-powershell.exe -NoProfile -Command "${POWERSHELL_CMD}"
+    powershell.exe -NoProfile -Command "${powershell_cmd}"
 
-if [[ ! -f "${PLUGIN_SRC}" ]]; then
-    echo "Build succeeded but ${PLUGIN_SRC} was not found." >&2
-    exit 1
-fi
+    if [[ ! -f "${PLUGIN_SRC}" ]]; then
+        echo "Build succeeded but ${PLUGIN_SRC} was not found." >&2
+        exit 1
+    fi
+}
 
 rm -rf "${STAGE_DIR}"
-mkdir -p "${STAGE_DIR}/SKSE/Plugins" "${STAGE_DIR}/fomod"
+mkdir -p "${STAGE_DIR}/Data" \
+         "${STAGE_DIR}/SkyrimSE/SKSE/Plugins" \
+         "${STAGE_DIR}/SkyrimVR/SKSE/Plugins" \
+         "${STAGE_DIR}/fomod"
 
 if [[ -d "${DATA_SRC_DIR}" ]]; then
-    cp -R "${DATA_SRC_DIR}/." "${STAGE_DIR}/"
+    cp -R "${DATA_SRC_DIR}/." "${STAGE_DIR}/Data/"
 fi
 
-cp "${PLUGIN_SRC}" "${STAGE_DIR}/SKSE/Plugins/${PLUGIN_NAME}.dll"
+if [[ -d "${FOMOD_SRC_DIR}" ]]; then
+    cp -R "${FOMOD_SRC_DIR}/." "${STAGE_DIR}/fomod/"
+fi
+
+build_variant y y n
+cp "${PLUGIN_SRC}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.dll"
 if [[ -f "${PDB_SRC}" ]]; then
-    cp "${PDB_SRC}" "${STAGE_DIR}/SKSE/Plugins/${PLUGIN_NAME}.pdb"
+    cp "${PDB_SRC}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.pdb"
+fi
+
+build_variant n n y
+cp "${PLUGIN_SRC}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.dll"
+if [[ -f "${PDB_SRC}" ]]; then
+    cp "${PDB_SRC}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.pdb"
 fi
 
 python3 - <<'PY' "${STAGE_DIR}/fomod"

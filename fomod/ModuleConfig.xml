@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+  <moduleName>Skyrim Outfit System Redone</moduleName>
+  <requiredInstallFiles>
+    <folder source="Data" destination="" />
+  </requiredInstallFiles>
+  <conditionalFileInstalls>
+    <patterns>
+      <pattern>
+        <dependencies operator="And">
+          <fileDependency file="..\SkyrimSE.exe" state="Active" />
+        </dependencies>
+        <files>
+          <folder source="SkyrimSE" destination="" />
+        </files>
+      </pattern>
+      <pattern>
+        <dependencies operator="And">
+          <fileDependency file="..\SkyrimVR.exe" state="Active" />
+        </dependencies>
+        <files>
+          <folder source="SkyrimVR" destination="" />
+        </files>
+      </pattern>
+    </patterns>
+  </conditionalFileInstalls>
+</config>
