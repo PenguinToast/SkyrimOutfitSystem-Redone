@@ -7,7 +7,8 @@
 #include <nlohmann/json.hpp>
 
 namespace {
-constexpr auto kThemeDirectory =
+constexpr auto kThemeDirectory = "Data/Interface/SkyrimVanitySystem/themes";
+constexpr auto kLegacyThemeDirectory =
     "Data/Interface/SkyrimOutfitSystemRedone/themes";
 constexpr auto kDefaultThemeName = "default";
 
@@ -75,6 +76,10 @@ ThemeConfig *ThemeConfig::GetSingleton() {
 }
 
 ThemeConfig::ThemeConfig() : themeDirectory_(kThemeDirectory) {
+  if (!std::filesystem::exists(themeDirectory_) &&
+      std::filesystem::exists(kLegacyThemeDirectory)) {
+    themeDirectory_ = kLegacyThemeDirectory;
+  }
   LoadDefaultColors();
 }
 

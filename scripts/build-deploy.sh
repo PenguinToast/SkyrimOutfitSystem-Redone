@@ -7,8 +7,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 MODE="releasedbg"
 CLEAN=0
-PLUGIN_NAME="SkyrimOutfitSystemRedone"
-DEFAULT_MOD_DIR="/mnt/f/games/skyrim/modlists/pt_test/mods/Skyrim Outfit System Redone"
+PLUGIN_NAME="SkyrimVanitySystem"
+DEFAULT_MOD_DIR="/mnt/f/games/skyrim/modlists/pt_test/mods/Skyrim Vanity System"
 MOD_DIR="${MOD_DIR:-$DEFAULT_MOD_DIR}"
 
 while (($#)); do
@@ -27,7 +27,7 @@ while (($#)); do
     shift
 done
 
-SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
+SVS_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
 
 copy_file() {
     local src="$1"
@@ -80,7 +80,7 @@ if [[ -d "$DATA_SRC_DIR" ]]; then
 fi
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
-echo "Version ${SOSR_BUILD_VERSION_STRING}"
+echo "Version ${SVS_BUILD_VERSION_STRING}"
 echo "Deployed plugin to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"
 if [[ -f "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb" ]]; then
     echo "Deployed symbols to ${PLUGIN_DST_DIR}/${PLUGIN_NAME}.pdb"

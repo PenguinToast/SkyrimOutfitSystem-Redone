@@ -7,8 +7,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 MODE="releasedbg"
 CLEAN=0
-PLUGIN_NAME="SkyrimOutfitSystemRedone"
-MOD_NAME="Skyrim Outfit System Redone"
+PLUGIN_NAME="SkyrimVanitySystem"
+MOD_NAME="Skyrim Vanity System"
 MOD_AUTHOR="PenguinToast"
 MOD_DESCRIPTION="SKSE plugin for player vanity outfits with a native Dear ImGui browser."
 DATA_SRC_DIR="${REPO_ROOT}/data"
@@ -52,8 +52,8 @@ normalize_repo_url() {
 }
 
 REMOTE_URL="$(normalize_repo_url "$(git -C "${REPO_ROOT}" remote get-url upstream 2>/dev/null || git -C "${REPO_ROOT}" remote get-url origin)")"
-SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
-VERSION="${SOSR_BUILD_VERSION_STRING}"
+SVS_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
+VERSION="${SVS_BUILD_VERSION_STRING}"
 ARCHIVE_NAME="${MOD_NAME} v${VERSION}.zip"
 ARCHIVE_PATH="${DIST_DIR}/${ARCHIVE_NAME}"
 

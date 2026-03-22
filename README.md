@@ -1,6 +1,8 @@
-# Skyrim Outfit System Redone
+# Skyrim Vanity System
 
-`Skyrim Outfit System Redone` is a Skyrim SKSE mod for player-facing vanity outfit management.
+`Skyrim Vanity System` is a Skyrim SKSE mod for player-facing vanity outfit management.
+
+This project was previously named `Skyrim Outfit System Redone`.
 
 It lets the player keep their real equipped gear for gameplay while changing the visible appearance through a native in-game browser and variant workbench.
 
@@ -26,8 +28,8 @@ Requires https://github.com/PenguinToast/DynamicArmorVariants-Extended to functi
 
 ## Getting Started
 ```bash
-git clone --recurse-submodules git@github.com:PenguinToast/SkyrimOutfitSystem-Redone.git
-cd SkyrimOutfitSystem-Redone
+git clone --recurse-submodules git@github.com:PenguinToast/SkyrimVanitySystem.git
+cd SkyrimVanitySystem
 ```
 
 If you cloned without submodules:
@@ -59,7 +61,7 @@ For a full clean rebuild:
 ```
 
 By default this deploys to:
-`/mnt/f/games/skyrim/modlists/pt_test/mods/Skyrim Outfit System Redone`
+`/mnt/f/games/skyrim/modlists/pt_test/mods/Skyrim Vanity System`
 
 ## Build And Package
 To build a release mod archive:
@@ -69,29 +71,31 @@ To build a release mod archive:
 ```
 
 This writes a zip under `dist/` named like:
-`Skyrim Outfit System Redone v1.0.0.zip`
+`Skyrim Vanity System v1.1.1.zip`
 
-The package script will fail unless:
-- the worktree is clean
-- `HEAD` has exactly one tag
-- that tag is valid semver
+Tagged clean builds produce a normal `X.Y.Z` archive version.
+Dirty or untagged builds produce a `X.Y.Z-dev+<sha>[.dirty]` archive version.
 
 The archive root contains the normal mod payload plus `fomod/info.xml`.
 Packaging uses `releasedbg`, so the archive also includes a `.pdb` next to the DLL.
 
 ## Settings And Data
 - Runtime settings are stored under:
-  - `Data/SKSE/Plugins/SkyrimOutfitSystemRedone/settings.json`
+  - `Data/SKSE/Plugins/SkyrimVanitySystem/settings.json`
 - Favorites are stored separately in:
-  - `Data/SKSE/Plugins/SkyrimOutfitSystemRedone/favorites.json`
+  - `Data/SKSE/Plugins/SkyrimVanitySystem/favorites.json`
 - Bundled UI assets are under:
-  - `Data/Interface/SkyrimOutfitSystemRedone/`
+  - `Data/Interface/SkyrimVanitySystem/`
+
+For backward compatibility, the mod will migrate or fall back to the old
+`SkyrimOutfitSystemRedone` settings/interface paths when the renamed ones are
+missing.
 
 ## Modex Integration
 - Modex kits are loaded from:
   - `Data/Interface/Modex/user/kits`
-- SOSR can browse kits, preview them, and add them into the workbench.
-- SOSR can also create new Modex kits from equipped gear or active overrides.
+- SVS can browse kits, preview them, and add them into the workbench.
+- SVS can also create new Modex kits from equipped gear or active overrides.
 
 ## Lint And Format
 ```bash

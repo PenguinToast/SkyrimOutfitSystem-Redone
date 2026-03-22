@@ -4,10 +4,10 @@
 #include "InputManager.h"
 #include "MenuHost.h"
 #include "PlayerInventory.h"
-#include "integrations/DynamicArmorVariantsExtendedClient.h"
 #include "backends/imgui_impl_dx11.h"
 #include "backends/imgui_impl_win32.h"
 #include "imgui_internal.h"
+#include "integrations/DynamicArmorVariantsExtendedClient.h"
 #include "ui/components/CatalogCollectionTooltip.h"
 #include "ui/components/EditableCombo.h"
 #include "ui/components/EquipmentWidget.h"
@@ -21,16 +21,18 @@
 #include <optional>
 
 namespace {
-constexpr auto kSettingsDirectory =
+constexpr auto kSettingsDirectory = "Data/SKSE/Plugins/SkyrimVanitySystem";
+constexpr auto kLegacySettingsDirectory =
     "Data/SKSE/Plugins/SkyrimOutfitSystemRedone";
 constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
 constexpr auto kFavoritesFilename = "favorites.json";
 constexpr auto kModexKitDirectory = "data/interface/modex/user/kits";
-constexpr auto kDefaultFontPath =
-    "Data/Interface/SkyrimOutfitSystemRedone/fonts/Ubuntu-R.ttf";
-constexpr auto kDefaultIconFontPath =
-    "Data/Interface/SkyrimOutfitSystemRedone/fonts/lucide.ttf";
+constexpr auto kInterfaceDirectory = "Data/Interface/SkyrimVanitySystem";
+constexpr auto kLegacyInterfaceDirectory =
+    "Data/Interface/SkyrimOutfitSystemRedone";
+constexpr auto kDefaultFontRelativePath = "fonts/Ubuntu-R.ttf";
+constexpr auto kDefaultIconFontRelativePath = "fonts/lucide.ttf";
 constexpr int kDefaultFontSizePixels = 16;
 constexpr int kMinFontSizePixels = 8;
 constexpr int kMaxFontSizePixels = 48;
@@ -166,6 +168,41 @@ std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
   return truncated;
 }
 
+std::string ResolveInterfaceAssetPath(std::string_view a_relativePath) {
+  const auto primaryPath =
+      (std::filesystem::path(kInterfaceDirectory) / a_relativePath).string();
+  if (std::filesystem::exists(primaryPath)) {
+    return primaryPath;
+  }
+
+  return (std::filesystem::path(kLegacyInterfaceDirectory) / a_relativePath)
+      .string();
+}
+
+void CopyLegacyFileIfNeeded(const std::filesystem::path &a_newPath,
+                            const std::filesystem::path &a_legacyPath) {
+  if (std::filesystem::exists(a_newPath) ||
+      !std::filesystem::exists(a_legacyPath)) {
+    return;
+  }
+
+  std::error_code error;
+  std::filesystem::create_directories(a_newPath.parent_path(), error);
+  if (error) {
+    logger::warn("Failed to prepare migrated settings path {}: {}",
+                 a_newPath.string(), error.message());
+    return;
+  }
+
+  std::filesystem::copy_file(a_legacyPath, a_newPath,
+                             std::filesystem::copy_options::overwrite_existing,
+                             error);
+  if (error) {
+    logger::warn("Failed to migrate legacy settings file {} to {}: {}",
+                 a_legacyPath.string(), a_newPath.string(), error.message());
+  }
+}
+
 void DrawOutfitTooltip(const sosr::OutfitEntry &a_outfit,
                        const bool a_hoveredSource) {
   std::vector<sosr::ui::components::CatalogTooltipMetaRow> metaRows;
@@ -218,8 +255,7 @@ void DrawSimplePinnableTooltip(const std::string_view a_id,
 }
 
 std::optional<std::string> GetDavAvailabilityMessage() {
-  auto *dav =
-      sosr::integrations::DynamicArmorVariantsExtendedClient::Get();
+  auto *dav = sosr::integrations::DynamicArmorVariantsExtendedClient::Get();
   if (!dav) {
     return "Dynamic Armor Variants Extended is unavailable. Browsing will "
            "work, but previews and overrides are disabled.";
@@ -252,7 +288,8 @@ void DrawDavAvailabilityBanner(const std::string_view a_message) {
   ImGui::PopStyleColor(2);
 }
 
-void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
+void AllowTextInput([[maybe_unused]] RE::ControlMap *a_controlMap,
+                    [[maybe_unused]] bool a_allow) {
 #ifdef EXCLUSIVE_SKYRIM_VR
   return;
 #else
@@ -277,6 +314,15 @@ void Menu::Init(IDXGISwapChain *a_swapChain, ID3D11Device *a_device,
   }
 
   settingsDirectory_ = kSettingsDirectory;
+  CopyLegacyFileIfNeeded(
+      std::filesystem::path(settingsDirectory_) / kImGuiIniFilename,
+      std::filesystem::path(kLegacySettingsDirectory) / kImGuiIniFilename);
+  CopyLegacyFileIfNeeded(
+      std::filesystem::path(settingsDirectory_) / kUserSettingsFilename,
+      std::filesystem::path(kLegacySettingsDirectory) / kUserSettingsFilename);
+  CopyLegacyFileIfNeeded(
+      std::filesystem::path(settingsDirectory_) / kFavoritesFilename,
+      std::filesystem::path(kLegacySettingsDirectory) / kFavoritesFilename);
   imguiIniPath_ =
       (std::filesystem::path(settingsDirectory_) / kImGuiIniFilename).string();
   userSettingsPath_ =
@@ -436,20 +482,25 @@ void Menu::RebuildFontAtlas() {
 
   io.Fonts->Clear();
   io.FontDefault = nullptr;
-  if (std::filesystem::exists(kDefaultFontPath)) {
+  const auto defaultFontPath =
+      ResolveInterfaceAssetPath(kDefaultFontRelativePath);
+  if (std::filesystem::exists(defaultFontPath)) {
     io.FontDefault = io.Fonts->AddFontFromFileTTF(
-        kDefaultFontPath, static_cast<float>(fontSizePixels_), &fontConfig);
+        defaultFontPath.c_str(), static_cast<float>(fontSizePixels_),
+        &fontConfig);
   }
   if (!io.FontDefault) {
     io.FontDefault = io.Fonts->AddFontDefaultVector(&fontConfig);
   }
-  if (io.FontDefault && std::filesystem::exists(kDefaultIconFontPath)) {
+  const auto defaultIconFontPath =
+      ResolveInterfaceAssetPath(kDefaultIconFontRelativePath);
+  if (io.FontDefault && std::filesystem::exists(defaultIconFontPath)) {
     ImFontConfig iconConfig{};
     iconConfig.MergeMode = true;
     iconConfig.PixelSnapH = true;
     iconConfig.GlyphOffset.y = 3.0f;
     iconConfig.DstFont = io.FontDefault;
-    io.Fonts->AddFontFromFileTTF(kDefaultIconFontPath,
+    io.Fonts->AddFontFromFileTTF(defaultIconFontPath.c_str(),
                                  static_cast<float>(fontSizePixels_),
                                  &iconConfig, kLucideIconRanges.data());
   }
@@ -757,7 +808,7 @@ bool Menu::SavePendingKit() {
   nlohmann::json data = nlohmann::json::object();
   data[name] = nlohmann::json::object();
   data[name]["Collection"] = collection;
-  data[name]["Description"] = "Created by Skyrim Outfit System Redone.";
+  data[name]["Description"] = "Created by Skyrim Vanity System.";
   data[name]["Items"] = std::move(items);
 
   std::ofstream file(fullPath, std::ios::trunc);
@@ -1012,7 +1063,7 @@ void Menu::DrawWindow() {
 
   bool open = enabled_;
   ImGui::PushStyleVar(ImGuiStyleVar_Alpha, windowAlpha_);
-  if (!ImGui::Begin("Skyrim Outfit System Redone", &open,
+  if (!ImGui::Begin("Skyrim Vanity System", &open,
                     ImGuiWindowFlags_NoCollapse)) {
     ImGui::End();
     ImGui::PopStyleVar();
@@ -1134,11 +1185,11 @@ void Menu::DrawWindow() {
     }
     if (activeTab_ == BrowserTab::Gear) {
       ImGui::SameLine();
-      if (ImGui::Checkbox("Inventory Only", &inventoryOnly_) && inventoryOnly_ &&
-          !selectedCatalogKey_.empty()) {
+      if (ImGui::Checkbox("Inventory Only", &inventoryOnly_) &&
+          inventoryOnly_ && !selectedCatalogKey_.empty()) {
         const auto &catalog = EquipmentCatalog::Get().GetGear();
-        const auto selectedIt = std::ranges::find(
-            catalog, selectedCatalogKey_, &GearEntry::id);
+        const auto selectedIt =
+            std::ranges::find(catalog, selectedCatalogKey_, &GearEntry::id);
         const auto inventoryFormIDs =
             player_inventory::GetInventoryArmorFormIDs();
         if (selectedIt != catalog.end() &&
@@ -1331,14 +1382,13 @@ std::string Menu::BuildSelectedSlotPreview() const {
 std::vector<const GearEntry *> Menu::BuildFilteredGear() const {
   std::vector<const GearEntry *> rows;
   rows.reserve(EquipmentCatalog::Get().GetGear().size());
-  const auto inventoryFormIDs = inventoryOnly_
-                                    ? player_inventory::GetInventoryArmorFormIDs()
-                                    : std::unordered_set<RE::FormID>{};
+  const auto inventoryFormIDs =
+      inventoryOnly_ ? player_inventory::GetInventoryArmorFormIDs()
+                     : std::unordered_set<RE::FormID>{};
 
   for (const auto &entry : EquipmentCatalog::Get().GetGear()) {
     if (MatchesGearFilters(entry) &&
-        (!inventoryOnly_ ||
-         inventoryFormIDs.contains(entry.formID))) {
+        (!inventoryOnly_ || inventoryFormIDs.contains(entry.formID))) {
       rows.push_back(std::addressof(entry));
     }
   }

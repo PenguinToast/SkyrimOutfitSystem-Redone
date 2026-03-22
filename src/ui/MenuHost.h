@@ -3,7 +3,7 @@
 namespace sosr {
 class MenuHost : public RE::IMenu {
 public:
-  static constexpr std::string_view MENU_NAME = "SkyrimOutfitSystemRedoneMenu";
+  static constexpr std::string_view MENU_NAME = "SkyrimVanitySystemMenu";
 
   static void RegisterMenu();
 

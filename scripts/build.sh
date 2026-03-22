@@ -7,7 +7,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 MODE="releasedbg"
 CLEAN=0
-PLUGIN_NAME="SkyrimOutfitSystemRedone"
+PLUGIN_NAME="SkyrimVanitySystem"
 BUILD_ROOT="${REPO_ROOT}/build/runtime"
 
 while (($#)); do
@@ -36,8 +36,8 @@ if ! command -v wslpath >/dev/null 2>&1; then
     exit 1
 fi
 
-SOSR_BUILD_VERSION="$("${SCRIPT_DIR}/version.sh" --numeric)"
-SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
+SVS_BUILD_VERSION="$("${SCRIPT_DIR}/version.sh" --numeric)"
+SVS_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
 WIN_REPO_ROOT="$(wslpath -w "${REPO_ROOT}")"
 
 if ((CLEAN)); then
@@ -57,8 +57,8 @@ build_variant() {
     local powershell_cmd="
 \$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath '$WIN_REPO_ROOT'
-\$env:SOSR_BUILD_VERSION = '$SOSR_BUILD_VERSION'
-\$env:SOSR_BUILD_VERSION_STRING = '$SOSR_BUILD_VERSION_STRING'
+\$env:SVS_BUILD_VERSION = '$SVS_BUILD_VERSION'
+\$env:SVS_BUILD_VERSION_STRING = '$SVS_BUILD_VERSION_STRING'
 xmake f -y --builddir='$win_variant_build_dir' --skyrim_se=${skyrim_se} --skyrim_ae=${skyrim_ae} --skyrim_vr=${skyrim_vr} -m '$MODE'
 xmake build -y
 "
@@ -75,6 +75,6 @@ build_variant flat y y n
 build_variant vr n n y
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
-echo "Version ${SOSR_BUILD_VERSION_STRING}"
+echo "Version ${SVS_BUILD_VERSION_STRING}"
 echo "Flat build: ${BUILD_ROOT}/flat/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
 echo "VR build: ${BUILD_ROOT}/vr/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
