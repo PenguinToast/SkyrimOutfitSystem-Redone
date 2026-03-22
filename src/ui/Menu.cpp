@@ -253,9 +253,13 @@ void DrawDavAvailabilityBanner(const std::string_view a_message) {
 }
 
 void AllowTextInput(RE::ControlMap *a_controlMap, bool a_allow) {
+#ifdef EXCLUSIVE_SKYRIM_VR
+  return;
+#else
   using Func = decltype(&AllowTextInput);
   static REL::Relocation<Func> func{RELOCATION_ID(67252, 68552)};
   func(a_controlMap, a_allow);
+#endif
 }
 
 } // namespace
