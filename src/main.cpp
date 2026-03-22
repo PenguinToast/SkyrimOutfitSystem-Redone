@@ -7,15 +7,13 @@
 
 static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
   switch (a_message->type) {
-  case SKSE::MessagingInterface::kPostLoad:
-    sosr::integrations::DynamicArmorVariantsExtendedClient::Refresh();
-    break;
   case SKSE::MessagingInterface::kDataLoaded:
     sosr::Menu::GetSingleton()->SetGameDataLoaded(true);
     sosr::EquipmentCatalog::Get().RefreshFromGame();
     logger::info("Equipment catalog initialized");
     break;
   case SKSE::MessagingInterface::kPostPostLoad:
+    sosr::integrations::DynamicArmorVariantsExtendedClient::Refresh();
     sosr::hooks::Install();
     break;
   default:
