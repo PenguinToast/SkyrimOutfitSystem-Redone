@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 MODE="releasedbg"
+CLEAN=0
 PLUGIN_NAME="SkyrimOutfitSystemRedone"
 MOD_NAME="Skyrim Outfit System Redone"
 MOD_AUTHOR="PenguinToast"
@@ -14,12 +15,12 @@ DATA_SRC_DIR="${REPO_ROOT}/data"
 FOMOD_SRC_DIR="${REPO_ROOT}/fomod"
 DIST_DIR="${REPO_ROOT}/dist"
 STAGE_DIR="${DIST_DIR}/.stage"
-BUILD_ROOT="${REPO_ROOT}/build/package"
+BUILD_ROOT="${REPO_ROOT}/build/runtime"
 
 while (($#)); do
     case "$1" in
         --clean)
-            rm -rf "${REPO_ROOT}/build" "${REPO_ROOT}/.xmake" "${DIST_DIR}"
+            CLEAN=1
             ;;
         *)
             echo "Usage: $0 [--clean]" >&2
@@ -51,45 +52,21 @@ normalize_repo_url() {
 }
 
 REMOTE_URL="$(normalize_repo_url "$(git -C "${REPO_ROOT}" remote get-url upstream 2>/dev/null || git -C "${REPO_ROOT}" remote get-url origin)")"
-SOSR_BUILD_VERSION="$("${SCRIPT_DIR}/version.sh" --numeric)"
 SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
 VERSION="${SOSR_BUILD_VERSION_STRING}"
 ARCHIVE_NAME="${MOD_NAME} v${VERSION}.zip"
 ARCHIVE_PATH="${DIST_DIR}/${ARCHIVE_NAME}"
 
-WIN_REPO_ROOT="$(wslpath -w "${REPO_ROOT}")"
 WIN_ARCHIVE_PATH="$(wslpath -w "${ARCHIVE_PATH}")"
 WIN_STAGE_DIR="$(wslpath -w "${STAGE_DIR}")"
+FLAT_PLUGIN_SRC="${BUILD_ROOT}/flat/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
+FLAT_PDB_SRC="${BUILD_ROOT}/flat/windows/x64/${MODE}/${PLUGIN_NAME}.pdb"
+VR_PLUGIN_SRC="${BUILD_ROOT}/vr/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
+VR_PDB_SRC="${BUILD_ROOT}/vr/windows/x64/${MODE}/${PLUGIN_NAME}.pdb"
 
-build_variant() {
-    local variant_name="$1"
-    shift
-    local skyrim_se="$1"
-    local skyrim_ae="$2"
-    local skyrim_vr="$3"
-    local variant_build_dir="${BUILD_ROOT}/${variant_name}"
-    local variant_plugin_src="${variant_build_dir}/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
-    local variant_pdb_src="${variant_build_dir}/windows/x64/${MODE}/${PLUGIN_NAME}.pdb"
-    local win_variant_build_dir
-    win_variant_build_dir="$(wslpath -w "${variant_build_dir}")"
-
-    local powershell_cmd="
-\$ErrorActionPreference = 'Stop'
-Set-Location -LiteralPath '$WIN_REPO_ROOT'
-\$env:SOSR_BUILD_VERSION = '$SOSR_BUILD_VERSION'
-\$env:SOSR_BUILD_VERSION_STRING = '$SOSR_BUILD_VERSION_STRING'
-xmake f -y --builddir='$win_variant_build_dir' --skyrim_se=${skyrim_se} --skyrim_ae=${skyrim_ae} --skyrim_vr=${skyrim_vr} -m '$MODE'
-xmake build -y
-"
-    powershell.exe -NoProfile -Command "${powershell_cmd}"
-
-    if [[ ! -f "${variant_plugin_src}" ]]; then
-        echo "Build succeeded but ${variant_plugin_src} was not found." >&2
-        exit 1
-    fi
-
-    printf '%s\n%s\n' "${variant_plugin_src}" "${variant_pdb_src}"
-}
+if ((CLEAN)); then
+    rm -rf "${REPO_ROOT}/build" "${REPO_ROOT}/.xmake" "${DIST_DIR}"
+fi
 
 rm -rf "${STAGE_DIR}"
 mkdir -p "${STAGE_DIR}/Data" \
@@ -105,16 +82,30 @@ if [[ -d "${FOMOD_SRC_DIR}" ]]; then
     cp -R "${FOMOD_SRC_DIR}/." "${STAGE_DIR}/fomod/"
 fi
 
-mapfile -t flat_outputs < <(build_variant flat y y n)
-cp "${flat_outputs[0]}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.dll"
-if [[ -f "${flat_outputs[1]}" ]]; then
-    cp "${flat_outputs[1]}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.pdb"
+BUILD_ARGS=()
+if ((CLEAN)); then
+    BUILD_ARGS+=("--clean")
+fi
+BUILD_ARGS+=("$MODE")
+"${SCRIPT_DIR}/build.sh" "${BUILD_ARGS[@]}"
+
+if [[ ! -f "${FLAT_PLUGIN_SRC}" ]]; then
+    echo "Build succeeded but ${FLAT_PLUGIN_SRC} was not found." >&2
+    exit 1
+fi
+if [[ ! -f "${VR_PLUGIN_SRC}" ]]; then
+    echo "Build succeeded but ${VR_PLUGIN_SRC} was not found." >&2
+    exit 1
 fi
 
-mapfile -t vr_outputs < <(build_variant vr n n y)
-cp "${vr_outputs[0]}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.dll"
-if [[ -f "${vr_outputs[1]}" ]]; then
-    cp "${vr_outputs[1]}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.pdb"
+cp "${FLAT_PLUGIN_SRC}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.dll"
+if [[ -f "${FLAT_PDB_SRC}" ]]; then
+    cp "${FLAT_PDB_SRC}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.pdb"
+fi
+
+cp "${VR_PLUGIN_SRC}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.dll"
+if [[ -f "${VR_PDB_SRC}" ]]; then
+    cp "${VR_PDB_SRC}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.pdb"
 fi
 
 python3 - <<'PY' "${STAGE_DIR}/fomod"

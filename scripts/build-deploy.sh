@@ -27,17 +27,6 @@ while (($#)); do
     shift
 done
 
-if ! command -v powershell.exe >/dev/null 2>&1; then
-    echo "powershell.exe is required to invoke the Windows toolchain from WSL." >&2
-    exit 1
-fi
-
-if ! command -v wslpath >/dev/null 2>&1; then
-    echo "wslpath is required to convert the repo path for Windows xmake." >&2
-    exit 1
-fi
-
-SOSR_BUILD_VERSION="$("${SCRIPT_DIR}/version.sh" --numeric)"
 SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
 
 copy_file() {
@@ -51,30 +40,28 @@ copy_file() {
     fi
 }
 
-WIN_REPO_ROOT="$(wslpath -w "$REPO_ROOT")"
-BUILD_DIR="${REPO_ROOT}/build/windows/x64/${MODE}"
+BUILD_ROOT="${REPO_ROOT}/build/runtime"
+BUILD_DIR="${BUILD_ROOT}/flat/windows/x64/${MODE}"
 PLUGIN_SRC="${BUILD_DIR}/${PLUGIN_NAME}.dll"
 PDB_SRC="${BUILD_DIR}/${PLUGIN_NAME}.pdb"
+VR_PLUGIN_SRC="${BUILD_ROOT}/vr/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
 PLUGIN_DST_DIR="${MOD_DIR}/SKSE/Plugins"
 DATA_SRC_DIR="${REPO_ROOT}/data"
 
+BUILD_ARGS=()
 if ((CLEAN)); then
-    rm -rf "${REPO_ROOT}/build" "${REPO_ROOT}/.xmake"
+    BUILD_ARGS+=("--clean")
 fi
+BUILD_ARGS+=("$MODE")
 
-POWERSHELL_CMD="
-\$ErrorActionPreference = 'Stop'
-Set-Location -LiteralPath '$WIN_REPO_ROOT'
-\$env:SOSR_BUILD_VERSION = '$SOSR_BUILD_VERSION'
-\$env:SOSR_BUILD_VERSION_STRING = '$SOSR_BUILD_VERSION_STRING'
-xmake f -y -c
-xmake f -y -m '$MODE'
-xmake build -y
-"
-powershell.exe -NoProfile -Command "$POWERSHELL_CMD"
+"${SCRIPT_DIR}/build.sh" "${BUILD_ARGS[@]}"
 
 if [[ ! -f "$PLUGIN_SRC" ]]; then
     echo "Build succeeded but ${PLUGIN_SRC} was not found." >&2
+    exit 1
+fi
+if [[ ! -f "$VR_PLUGIN_SRC" ]]; then
+    echo "Build succeeded but ${VR_PLUGIN_SRC} was not found." >&2
     exit 1
 fi
 
