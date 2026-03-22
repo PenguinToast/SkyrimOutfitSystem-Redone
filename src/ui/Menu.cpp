@@ -27,7 +27,6 @@ constexpr auto kLegacySettingsDirectory =
 constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
 constexpr auto kFavoritesFilename = "favorites.json";
-constexpr auto kModexKitDirectory = "data/interface/modex/user/kits";
 constexpr auto kDefaultFontPath =
     "Data/Interface/SkyrimVanitySystem/fonts/Ubuntu-R.ttf";
 constexpr auto kDefaultIconFontPath =
@@ -76,34 +75,6 @@ constexpr char kIconFormId[] = "\xee\x83\xb2";     // ICON_LC_HASH
 constexpr char kIconIdentifier[] = "\xee\x84\x87"; // ICON_LC_LINK
 constexpr char kIconCollection[] = "\xee\x97\xbf"; // ICON_LC_FOLDER_CODE
 constexpr char kIconFile[] = "\xee\x83\x87";       // ICON_LC_FILE_CODE
-
-std::string TrimText(std::string_view a_text) {
-  std::size_t start = 0;
-  while (start < a_text.size() &&
-         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
-    ++start;
-  }
-
-  std::size_t end = a_text.size();
-  while (end > start &&
-         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
-    --end;
-  }
-
-  return std::string(a_text.substr(start, end - start));
-}
-
-std::string NormalizeKitCollection(std::string_view a_collection) {
-  auto normalized = TrimText(a_collection);
-  std::replace(normalized.begin(), normalized.end(), '\\', '/');
-  while (!normalized.empty() && normalized.front() == '/') {
-    normalized.erase(normalized.begin());
-  }
-  while (!normalized.empty() && normalized.back() == '/') {
-    normalized.pop_back();
-  }
-  return normalized;
-}
 
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
@@ -704,136 +675,12 @@ void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry) {
   workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
 }
 
-void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry) {
-  workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
-}
-
-void Menu::OpenCreateKitDialog(const KitCreationSource a_source) {
-  pendingKitFormIDs_.clear();
-  if (a_source == KitCreationSource::Equipped) {
-    pendingKitFormIDs_ = workbench_.CollectEquippedArmorFormIDs();
-  } else {
-    pendingKitFormIDs_ =
-        workbench_.CollectOverrideArmorFormIDsFromEquippedRows();
-  }
-
-  if (pendingKitFormIDs_.empty()) {
-    return;
-  }
-
-  createKitSource_ = a_source;
-  pendingKitName_.fill('\0');
-  pendingKitCollection_.fill('\0');
-  createKitError_.clear();
-  openCreateKitDialog_ = true;
-}
-
-bool Menu::SavePendingKit() {
-  const auto name = TrimText(pendingKitName_.data());
-  if (name.empty()) {
-    createKitError_ = "Kit name is required.";
-    return false;
-  }
-  if (name.find_first_of("\"'") != std::string::npos) {
-    createKitError_ = "Kit name cannot contain quotes.";
-    return false;
-  }
-  if (name.find_first_of("/\\") != std::string::npos) {
-    createKitError_ = "Kit name cannot contain path separators.";
-    return false;
-  }
-
-  auto collection = NormalizeKitCollection(pendingKitCollection_.data());
-  if (collection.find_first_of("\"'") != std::string::npos) {
-    createKitError_ = "Collection cannot contain quotes.";
-    return false;
-  }
-
-  nlohmann::json items = nlohmann::json::object();
-  for (const auto formID : pendingKitFormIDs_) {
-    const auto *armorForm = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID);
-    if (!armorForm) {
-      continue;
-    }
-
-    const auto editorID = armor::GetEditorID(armorForm);
-    if (editorID.empty()) {
-      createKitError_ = "Cannot save kit because '" +
-                        armor::GetDisplayName(armorForm) +
-                        "' has no editor ID.";
-      return false;
-    }
-
-    items[editorID] = {{"Plugin", armor::GetPluginName(armorForm)},
-                       {"Name", armor::GetDisplayName(armorForm)},
-                       {"Amount", 1},
-                       {"Equipped", true}};
-  }
-
-  if (items.empty()) {
-    createKitError_ = "No valid armor items were available to save.";
-    return false;
-  }
-
-  const auto &kits = EquipmentCatalog::Get().GetKits();
-  const auto existingIt =
-      std::ranges::find_if(kits, [&](const KitEntry &a_kit) {
-        return CompareText(a_kit.name, name) == 0;
-      });
-
-  std::filesystem::path relativePath;
-  std::filesystem::path fullPath;
-  if (existingIt != kits.end()) {
-    relativePath = existingIt->key;
-    fullPath = existingIt->filepath;
-    collection = existingIt->collection;
-  } else {
-    relativePath = std::filesystem::path(collection) / (name + ".json");
-    fullPath = std::filesystem::path(kModexKitDirectory) / relativePath;
-  }
-
-  try {
-    std::filesystem::create_directories(fullPath.parent_path());
-  } catch (const std::exception &exception) {
-    createKitError_ =
-        "Failed to create kit directory: " + std::string(exception.what());
-    return false;
-  }
-
-  nlohmann::json data = nlohmann::json::object();
-  data[name] = nlohmann::json::object();
-  data[name]["Collection"] = collection;
-  data[name]["Description"] = "Created by Skyrim Vanity System.";
-  data[name]["Items"] = std::move(items);
-
-  std::ofstream file(fullPath, std::ios::trunc);
-  if (!file.is_open()) {
-    createKitError_ = "Failed to open kit file for writing.";
-    return false;
-  }
-
-  file << data.dump(4) << '\n';
-  file.close();
-
-  EquipmentCatalog::Get().RefreshFromGame();
-  selectedCatalogKey_ = "kit:" + relativePath.generic_string();
-  activeTab_ = BrowserTab::Kits;
-  openCreateKitDialog_ = false;
-  pendingKitFormIDs_.clear();
-  createKitError_.clear();
-  return true;
-}
-
 void Menu::PreviewGearEntry(const GearEntry &a_entry) {
   workbench_.ApplyCatalogPreview(a_entry.id,
                                  std::vector<RE::FormID>{a_entry.formID});
 }
 
 void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {
-  workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs);
-}
-
-void Menu::PreviewKitEntry(const KitEntry &a_entry) {
   workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs);
 }
 
@@ -1247,6 +1094,7 @@ void Menu::DrawWindow() {
   }
 
   DrawCreateKitDialog();
+  DrawDeleteKitDialog();
 
   ImGui::End();
   ImGui::PopStyleVar();
@@ -1518,100 +1366,6 @@ void Menu::SortKitRows(std::vector<const KitEntry *> &a_rows,
   });
 
   a_sortSpecs->SpecsDirty = false;
-}
-
-void Menu::DrawCreateKitDialog() {
-  if (openCreateKitDialog_) {
-    ImGui::OpenPopup("Create Modex Kit");
-    openCreateKitDialog_ = false;
-  }
-
-  const auto &catalog = EquipmentCatalog::Get();
-  std::vector<std::string> existingNames;
-  existingNames.reserve(catalog.GetKits().size());
-  for (const auto &kit : catalog.GetKits()) {
-    if (std::ranges::find(existingNames, kit.name) == existingNames.end()) {
-      existingNames.push_back(kit.name);
-    }
-  }
-  std::ranges::sort(existingNames);
-
-  createKitDialogOpen_ = false;
-  if (ImGui::BeginPopupModal("Create Modex Kit", nullptr,
-                             ImGuiWindowFlags_AlwaysAutoResize)) {
-    createKitDialogOpen_ = true;
-    const bool popupAppearing = ImGui::IsWindowAppearing();
-    ImGui::TextWrapped(
-        "%s",
-        createKitSource_ == KitCreationSource::Equipped
-            ? "Create a Modex kit from the player's currently equipped armor."
-            : "Create a Modex kit from overrides on currently equipped armor "
-              "only.");
-    ImGui::Separator();
-    ImGui::Text("Items: %zu", pendingKitFormIDs_.size());
-
-    constexpr float fieldWidth = 360.0f;
-    std::string selectedName;
-    ImGui::TextUnformatted("Name");
-    if (popupAppearing) {
-      ImGui::SetKeyboardFocusHere();
-    }
-    if (ui::components::DrawEditableDropdown(
-            "kit-name", "New or existing kit name", pendingKitName_.data(),
-            pendingKitName_.size(), existingNames, fieldWidth, &selectedName,
-            false) &&
-        !selectedName.empty()) {
-      if (const auto it = std::ranges::find_if(catalog.GetKits(),
-                                               [&](const KitEntry &a_entry) {
-                                                 return a_entry.name ==
-                                                        selectedName;
-                                               });
-          it != catalog.GetKits().end()) {
-        std::snprintf(pendingKitCollection_.data(),
-                      pendingKitCollection_.size(), "%s",
-                      it->collection.c_str());
-      }
-    }
-
-    ImGui::Spacing();
-    ImGui::TextUnformatted("Collection");
-    ui::components::DrawEditableDropdown(
-        "kit-collection", "Collection (optional)", pendingKitCollection_.data(),
-        pendingKitCollection_.size(), catalog.GetKitCollections(), fieldWidth,
-        nullptr, false);
-
-    if (!createKitError_.empty()) {
-      ImGui::Spacing();
-      ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(
-                             ThemeConfig::GetSingleton()->GetColorU32("WARN")),
-                         "%s", createKitError_.c_str());
-    }
-
-    ImGui::Spacing();
-    const bool requestClose =
-        createKitDialogCancelRequested_ ||
-        ImGui::Shortcut(ImGuiKey_Escape, ImGuiInputFlags_RouteFocused);
-    if (ImGui::Button("Save", ImVec2(120.0f, 0.0f))) {
-      if (SavePendingKit()) {
-        ImGui::CloseCurrentPopup();
-      }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) || requestClose) {
-      createKitError_.clear();
-      pendingKitFormIDs_.clear();
-      pendingKitName_.fill('\0');
-      pendingKitCollection_.fill('\0');
-      createKitDialogOpen_ = false;
-      createKitDialogCancelRequested_ = false;
-      ImGui::CloseCurrentPopup();
-    }
-
-    ImGui::EndPopup();
-  } else {
-    createKitDialogOpen_ = false;
-    createKitDialogCancelRequested_ = false;
-  }
 }
 
 void Menu::DrawCatalogFilters() {
@@ -2060,6 +1814,15 @@ bool Menu::DrawKitTab() {
           if (ImGui::MenuItem("Add Override")) {
             AddKitEntryToWorkbench(kit);
           }
+          ImGui::Separator();
+          ImGui::PushStyleColor(
+              ImGuiCol_Text,
+              ImGui::ColorConvertU32ToFloat4(
+                  ThemeConfig::GetSingleton()->GetColorU32("DECLINE")));
+          if (ImGui::MenuItem("Delete Kit")) {
+            OpenDeleteKitDialog(kit);
+          }
+          ImGui::PopStyleColor();
           ImGui::EndPopup();
         }
         ImGui::SetCursorScreenPos(rowContentPos);

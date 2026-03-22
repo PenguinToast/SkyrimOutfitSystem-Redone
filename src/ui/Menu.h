@@ -93,6 +93,7 @@ private:
   [[nodiscard]] bool DrawKitTab();
   void DrawOptionsTab();
   void DrawCreateKitDialog();
+  void DrawDeleteKitDialog();
   void AcceptOverridePayload(int a_targetRowIndex);
   void ApplyRowReorder(const DraggedEquipmentPayload &a_dragPayload,
                        int a_targetRowIndex, bool a_insertAfter);
@@ -119,7 +120,9 @@ private:
   void AddOutfitEntryToWorkbench(const OutfitEntry &a_entry);
   void AddKitEntryToWorkbench(const KitEntry &a_entry);
   void OpenCreateKitDialog(KitCreationSource a_source);
+  void OpenDeleteKitDialog(const KitEntry &a_entry);
   [[nodiscard]] bool SavePendingKit();
+  [[nodiscard]] bool DeletePendingKit();
   void PreviewGearEntry(const GearEntry &a_entry);
   void PreviewOutfitEntry(const OutfitEntry &a_entry);
   void PreviewKitEntry(const KitEntry &a_entry);
@@ -181,6 +184,13 @@ private:
   std::array<char, 256> pendingKitName_{};
   std::array<char, 256> pendingKitCollection_{};
   std::string createKitError_;
+  bool openDeleteKitDialog_{false};
+  bool deleteKitDialogOpen_{false};
+  bool deleteKitDialogCancelRequested_{false};
+  std::string pendingDeleteKitId_;
+  std::string pendingDeleteKitName_;
+  std::string pendingDeleteKitPath_;
+  std::string deleteKitError_;
   bool favoritesOnly_{false};
   bool inventoryOnly_{false};
   std::unordered_set<std::string> favoriteKeys_;
