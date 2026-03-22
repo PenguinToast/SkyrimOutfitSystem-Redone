@@ -14,9 +14,7 @@ DATA_SRC_DIR="${REPO_ROOT}/data"
 FOMOD_SRC_DIR="${REPO_ROOT}/fomod"
 DIST_DIR="${REPO_ROOT}/dist"
 STAGE_DIR="${DIST_DIR}/.stage"
-BUILD_DIR="${REPO_ROOT}/build/windows/x64/${MODE}"
-PLUGIN_SRC="${BUILD_DIR}/${PLUGIN_NAME}.dll"
-PDB_SRC="${BUILD_DIR}/${PLUGIN_NAME}.pdb"
+BUILD_ROOT="${REPO_ROOT}/build/package"
 
 while (($#)); do
     case "$1" in
@@ -64,24 +62,33 @@ WIN_ARCHIVE_PATH="$(wslpath -w "${ARCHIVE_PATH}")"
 WIN_STAGE_DIR="$(wslpath -w "${STAGE_DIR}")"
 
 build_variant() {
+    local variant_name="$1"
+    shift
     local skyrim_se="$1"
     local skyrim_ae="$2"
     local skyrim_vr="$3"
+    local variant_build_dir="${BUILD_ROOT}/${variant_name}"
+    local variant_plugin_src="${variant_build_dir}/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
+    local variant_pdb_src="${variant_build_dir}/windows/x64/${MODE}/${PLUGIN_NAME}.pdb"
+    local win_variant_build_dir
+    win_variant_build_dir="$(wslpath -w "${variant_build_dir}")"
 
     local powershell_cmd="
 \$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath '$WIN_REPO_ROOT'
 \$env:SOSR_BUILD_VERSION = '$SOSR_BUILD_VERSION'
 \$env:SOSR_BUILD_VERSION_STRING = '$SOSR_BUILD_VERSION_STRING'
-xmake f -y -c --skyrim_se=${skyrim_se} --skyrim_ae=${skyrim_ae} --skyrim_vr=${skyrim_vr} -m '$MODE'
+xmake f -y --builddir='$win_variant_build_dir' --skyrim_se=${skyrim_se} --skyrim_ae=${skyrim_ae} --skyrim_vr=${skyrim_vr} -m '$MODE'
 xmake build -y
 "
     powershell.exe -NoProfile -Command "${powershell_cmd}"
 
-    if [[ ! -f "${PLUGIN_SRC}" ]]; then
-        echo "Build succeeded but ${PLUGIN_SRC} was not found." >&2
+    if [[ ! -f "${variant_plugin_src}" ]]; then
+        echo "Build succeeded but ${variant_plugin_src} was not found." >&2
         exit 1
     fi
+
+    printf '%s\n%s\n' "${variant_plugin_src}" "${variant_pdb_src}"
 }
 
 rm -rf "${STAGE_DIR}"
@@ -98,16 +105,16 @@ if [[ -d "${FOMOD_SRC_DIR}" ]]; then
     cp -R "${FOMOD_SRC_DIR}/." "${STAGE_DIR}/fomod/"
 fi
 
-build_variant y y n
-cp "${PLUGIN_SRC}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.dll"
-if [[ -f "${PDB_SRC}" ]]; then
-    cp "${PDB_SRC}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.pdb"
+mapfile -t flat_outputs < <(build_variant flat y y n)
+cp "${flat_outputs[0]}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.dll"
+if [[ -f "${flat_outputs[1]}" ]]; then
+    cp "${flat_outputs[1]}" "${STAGE_DIR}/SkyrimSE/SKSE/Plugins/${PLUGIN_NAME}.pdb"
 fi
 
-build_variant n n y
-cp "${PLUGIN_SRC}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.dll"
-if [[ -f "${PDB_SRC}" ]]; then
-    cp "${PDB_SRC}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.pdb"
+mapfile -t vr_outputs < <(build_variant vr n n y)
+cp "${vr_outputs[0]}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.dll"
+if [[ -f "${vr_outputs[1]}" ]]; then
+    cp "${vr_outputs[1]}" "${STAGE_DIR}/SkyrimVR/SKSE/Plugins/${PLUGIN_NAME}.pdb"
 fi
 
 python3 - <<'PY' "${STAGE_DIR}/fomod"
