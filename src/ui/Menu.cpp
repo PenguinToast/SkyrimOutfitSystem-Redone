@@ -167,8 +167,8 @@ std::string TruncateTextToWidth(std::string_view a_text, float a_width) {
   return truncated;
 }
 
-void CopyLegacyFileIfNeeded(const std::filesystem::path &a_newPath,
-                            const std::filesystem::path &a_legacyPath) {
+void MigrateLegacyFileIfNeeded(const std::filesystem::path &a_newPath,
+                               const std::filesystem::path &a_legacyPath) {
   if (std::filesystem::exists(a_newPath) ||
       !std::filesystem::exists(a_legacyPath)) {
     return;
@@ -188,7 +188,19 @@ void CopyLegacyFileIfNeeded(const std::filesystem::path &a_newPath,
   if (error) {
     logger::warn("Failed to migrate legacy settings file {} to {}: {}",
                  a_legacyPath.string(), a_newPath.string(), error.message());
+    return;
   }
+
+  std::filesystem::remove(a_legacyPath, error);
+  if (error) {
+    logger::warn("Migrated legacy settings file {} to {} but failed to delete "
+                 "the old file: {}",
+                 a_legacyPath.string(), a_newPath.string(), error.message());
+    return;
+  }
+
+  logger::info("Migrated legacy settings file {} to {}", a_legacyPath.string(),
+               a_newPath.string());
 }
 
 void DrawOutfitTooltip(const sosr::OutfitEntry &a_outfit,
@@ -302,13 +314,13 @@ void Menu::Init(IDXGISwapChain *a_swapChain, ID3D11Device *a_device,
   }
 
   settingsDirectory_ = kSettingsDirectory;
-  CopyLegacyFileIfNeeded(
+  MigrateLegacyFileIfNeeded(
       std::filesystem::path(settingsDirectory_) / kImGuiIniFilename,
       std::filesystem::path(kLegacySettingsDirectory) / kImGuiIniFilename);
-  CopyLegacyFileIfNeeded(
+  MigrateLegacyFileIfNeeded(
       std::filesystem::path(settingsDirectory_) / kUserSettingsFilename,
       std::filesystem::path(kLegacySettingsDirectory) / kUserSettingsFilename);
-  CopyLegacyFileIfNeeded(
+  MigrateLegacyFileIfNeeded(
       std::filesystem::path(settingsDirectory_) / kFavoritesFilename,
       std::filesystem::path(kLegacySettingsDirectory) / kFavoritesFilename);
   imguiIniPath_ =
