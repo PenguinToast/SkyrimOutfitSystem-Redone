@@ -41,27 +41,6 @@ if ! command -v wslpath >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
-    echo "Refusing to package from a dirty worktree." >&2
-    exit 1
-fi
-
-mapfile -t HEAD_TAGS < <(git -C "${REPO_ROOT}" tag --points-at HEAD)
-if (( ${#HEAD_TAGS[@]} != 1 )); then
-    echo "Expected exactly one git tag on HEAD, found ${#HEAD_TAGS[@]}." >&2
-    exit 1
-fi
-
-TAG="${HEAD_TAGS[0]}"
-SEMVER_REGEX='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
-if [[ ! "${TAG}" =~ ${SEMVER_REGEX} ]]; then
-    echo "Current git tag '${TAG}' is not valid semver." >&2
-    exit 1
-fi
-
-VERSION="${TAG#v}"
-ARCHIVE_NAME="${MOD_NAME} v${VERSION}.zip"
-ARCHIVE_PATH="${DIST_DIR}/${ARCHIVE_NAME}"
 normalize_repo_url() {
     local remote_url="$1"
     if [[ "${remote_url}" =~ ^git@github\.com:(.+)/(.+)\.git$ ]]; then
@@ -76,6 +55,9 @@ normalize_repo_url() {
 REMOTE_URL="$(normalize_repo_url "$(git -C "${REPO_ROOT}" remote get-url upstream 2>/dev/null || git -C "${REPO_ROOT}" remote get-url origin)")"
 SOSR_BUILD_VERSION="$("${SCRIPT_DIR}/version.sh" --numeric)"
 SOSR_BUILD_VERSION_STRING="$("${SCRIPT_DIR}/version.sh" --display)"
+VERSION="${SOSR_BUILD_VERSION_STRING}"
+ARCHIVE_NAME="${MOD_NAME} v${VERSION}.zip"
+ARCHIVE_PATH="${DIST_DIR}/${ARCHIVE_NAME}"
 
 WIN_REPO_ROOT="$(wslpath -w "${REPO_ROOT}")"
 WIN_ARCHIVE_PATH="$(wslpath -w "${ARCHIVE_PATH}")"

@@ -44,22 +44,27 @@ for tag in "${HEAD_TAGS[@]}"; do
     fi
 done
 
-if [[ -n "${HEAD_TAG}" ]]; then
+DIRTY_SUFFIX=""
+if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
+    DIRTY_SUFFIX=".dirty"
+fi
+SHORT_SHA="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
+
+if [[ -n "${HEAD_TAG}" && -z "${DIRTY_SUFFIX}" ]]; then
     BASE_VERSION="${HEAD_TAG#v}"
     DISPLAY_VERSION="${BASE_VERSION}"
 else
-    LAST_TAG="$(find_latest_release_tag || true)"
+    if [[ -n "${HEAD_TAG}" ]]; then
+        LAST_TAG="${HEAD_TAG}"
+    else
+        LAST_TAG="$(find_latest_release_tag || true)"
+    fi
     if [[ -z "${LAST_TAG}" ]]; then
         BASE_VERSION="0.0.0"
     else
         BASE_VERSION="${LAST_TAG#v}"
     fi
 
-    SHORT_SHA="$(git -C "${REPO_ROOT}" rev-parse --short HEAD)"
-    DIRTY_SUFFIX=""
-    if [[ -n "$(git -C "${REPO_ROOT}" status --porcelain)" ]]; then
-        DIRTY_SUFFIX=".dirty"
-    fi
     DISPLAY_VERSION="${BASE_VERSION}-dev+${SHORT_SHA}${DIRTY_SUFFIX}"
 fi
 
