@@ -153,7 +153,8 @@ bool BuildEquipmentTooltipItem(const RE::FormID a_formID, const char *a_key,
 
 void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
                               const bool a_hoveredSource,
-                              const workbench::EquipmentWidgetItem &a_item) {
+                              const workbench::EquipmentWidgetItem &a_item,
+                              const std::function<void()> &a_drawExtras) {
   if (!ShouldDrawPinnableTooltip(a_tooltipId, a_hoveredSource)) {
     return;
   }
@@ -178,6 +179,10 @@ void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
       mode != PinnableTooltipMode::None) {
     DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin, formID,
                                  identifier, slotLabels);
+    if (a_drawExtras) {
+      ImGui::Spacing();
+      a_drawExtras();
+    }
     EndPinnableTooltip(a_tooltipId, mode);
   }
 }
@@ -270,7 +275,8 @@ DrawEquipmentWidget(const char *a_id,
   const auto tooltipId = "equipment:" + a_item.key;
   if (a_item.SupportsInfoTooltip() && !result.deleteHovered &&
       !ImGui::IsDragDropActive()) {
-    DrawEquipmentInfoTooltip(tooltipId, result.hovered, a_item);
+    DrawEquipmentInfoTooltip(tooltipId, result.hovered, a_item,
+                             a_options.drawTooltipExtras);
   }
 
   ImGui::PopID();

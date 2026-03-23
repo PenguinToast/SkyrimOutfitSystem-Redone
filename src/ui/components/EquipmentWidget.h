@@ -2,10 +2,13 @@
 
 #include "VariantWorkbench.h"
 
+#include <functional>
+
 namespace sosr::ui::components {
 struct EquipmentWidgetOptions {
   bool showDeleteButton{false};
   bool conflict{false};
+  std::function<void()> drawTooltipExtras{};
 };
 
 struct EquipmentWidgetResult {
@@ -20,7 +23,8 @@ BuildEquipmentTooltipItem(RE::FormID a_formID, const char *a_key,
                           workbench::EquipmentWidgetItem &a_item);
 void DrawEquipmentInfoTooltip(std::string_view a_tooltipId,
                               bool a_hoveredSource,
-                              const workbench::EquipmentWidgetItem &a_item);
+                              const workbench::EquipmentWidgetItem &a_item,
+                              const std::function<void()> &a_drawExtras = {});
 [[nodiscard]] EquipmentWidgetResult
 DrawEquipmentWidget(const char *a_id,
                     const workbench::EquipmentWidgetItem &a_item,

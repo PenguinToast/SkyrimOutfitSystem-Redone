@@ -53,12 +53,6 @@ struct VariantWorkbenchRow {
   GetOverrideVisualSlotMask(const EquipmentWidgetItem &a_item) const {
     return a_item.slotMask;
   }
-
-  [[nodiscard]] std::string_view
-  GetOverrideTargetLabel(const EquipmentWidgetItem &a_item) const {
-    return IsSlotRow() ? std::string_view{equipped.name}
-                       : std::string_view{a_item.slotText};
-  }
 };
 
 class VariantWorkbench {

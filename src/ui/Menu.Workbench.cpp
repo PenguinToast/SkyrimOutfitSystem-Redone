@@ -17,24 +17,113 @@ constexpr float kWorkbenchOverrideGapY = 5.0f;
 
 struct ActiveWorkbenchVisual {
   std::string widgetId;
-  std::string description;
+  std::string primaryName;
+  std::string secondaryName;
+  bool isOverride{false};
+  std::string slotText;
   std::uint64_t slotMask{0};
   int rowIndex{-1};
 };
 
 struct OverrideConflictInfo {
   std::vector<std::string> targetWidgetIds;
-  std::vector<std::string> targetDescriptions;
+  struct TargetDescription {
+    std::string primaryName;
+    std::string secondaryName;
+    bool isOverride{false};
+    std::string targetLabel;
+  };
+  std::vector<TargetDescription> targetDescriptions;
 };
 
-std::string DescribeActiveWorkbenchVisual(
-    const sosr::workbench::VariantWorkbenchRow &a_row,
-    const sosr::workbench::EquipmentWidgetItem &a_item, bool a_isOverride) {
-  if (a_isOverride) {
-    return a_item.name + " override on " + a_row.equipped.name;
+struct ColoredTextRun {
+  std::string_view text;
+  ImU32 color{0};
+};
+
+void DrawWrappedColoredTextRuns(
+    const std::initializer_list<ColoredTextRun> &a_runs) {
+  const auto wrapWidth = ImGui::GetContentRegionAvail().x;
+  const auto lineHeight = ImGui::GetTextLineHeight();
+  const auto origin = ImGui::GetCursorScreenPos();
+  auto *drawList = ImGui::GetWindowDrawList();
+
+  float x = 0.0f;
+  float y = 0.0f;
+
+  const auto advanceLine = [&]() {
+    x = 0.0f;
+    y += lineHeight;
+  };
+
+  for (const auto &run : a_runs) {
+    std::size_t index = 0;
+    while (index < run.text.size()) {
+      const char current = run.text[index];
+      if (current == '\n') {
+        advanceLine();
+        ++index;
+        continue;
+      }
+
+      const bool isSpace = current == ' ' || current == '\t';
+      std::size_t end = index;
+      while (end < run.text.size()) {
+        const char ch = run.text[end];
+        if (ch == '\n') {
+          break;
+        }
+        const bool sameClass = ((ch == ' ' || ch == '\t') == isSpace);
+        if (!sameClass) {
+          break;
+        }
+        ++end;
+      }
+
+      const auto token = run.text.substr(index, end - index);
+      const auto tokenSize = ImGui::CalcTextSize(token.data(),
+                                                 token.data() + token.size());
+
+      if (isSpace) {
+        if (x > 0.0f) {
+          if (x + tokenSize.x > wrapWidth) {
+            advanceLine();
+          } else {
+            x += tokenSize.x;
+          }
+        }
+      } else {
+        if (x > 0.0f && x + tokenSize.x > wrapWidth) {
+          advanceLine();
+        }
+
+        drawList->AddText(ImVec2(origin.x + x, origin.y + y), run.color,
+                          token.data(), token.data() + token.size());
+        x += tokenSize.x;
+      }
+
+      index = end;
+    }
   }
 
-  return a_row.equipped.name + " (equipped)";
+  ImGui::Dummy(ImVec2(wrapWidth, y + lineHeight));
+}
+
+void DrawConflictEntry(const OverrideConflictInfo::TargetDescription &a_desc,
+                       const sosr::ThemeConfig *a_theme) {
+  ImGui::Bullet();
+  ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+  ImGui::BeginGroup();
+  DrawWrappedColoredTextRuns(
+      {{a_desc.primaryName, a_theme->GetColorU32("TEXT")},
+       {a_desc.isOverride ? " override on " : " ",
+        a_theme->GetColorU32("TEXT_DISABLED")},
+       {a_desc.secondaryName, a_theme->GetColorU32("PRIMARY")},
+       {a_desc.targetLabel.empty() ? "" : "  [", a_theme->GetColorU32("TEXT")},
+       {a_desc.targetLabel, a_theme->GetColorU32("TEXT_HEADER", 0.92f)},
+       {a_desc.targetLabel.empty() ? "" : "]", a_theme->GetColorU32("TEXT")}});
+
+  ImGui::EndGroup();
 }
 
 void DrawSimplePinnableTooltip(const std::string_view a_id,
@@ -263,14 +352,17 @@ void Menu::DrawVariantWorkbenchPane() {
         activeVisuals.push_back(
             {.widgetId = "override:" + std::to_string(rowIndex) + ":" +
                          std::to_string(overrideIndex),
-             .description = DescribeActiveWorkbenchVisual(row, item, true),
+             .primaryName = item.name,
+             .secondaryName = row.equipped.name,
+             .isOverride = true,
+             .slotText = item.slotText,
              .slotMask = row.GetOverrideVisualSlotMask(item),
              .rowIndex = rowIndex});
       }
     } else if (!row.hideEquipped && row.isEquipped) {
       activeVisuals.push_back({.widgetId = row.key,
-                               .description = DescribeActiveWorkbenchVisual(
-                                   row, row.equipped, false),
+                               .primaryName = row.equipped.name,
+                               .slotText = row.equipped.slotText,
                                .slotMask = row.equipped.slotMask,
                                .rowIndex = rowIndex});
     }
@@ -303,8 +395,10 @@ void Menu::DrawVariantWorkbenchPane() {
 
         info.targetWidgetIds.push_back(activeVisual.widgetId);
         info.targetDescriptions.push_back(
-            activeVisual.description + " [" +
-            std::string(row.GetOverrideTargetLabel(item)) + "]");
+            {.primaryName = activeVisual.primaryName,
+             .secondaryName = activeVisual.secondaryName,
+             .isOverride = activeVisual.isOverride,
+             .targetLabel = activeVisual.slotText});
       }
 
       if (!info.targetWidgetIds.empty()) {
@@ -524,7 +618,28 @@ void Menu::DrawVariantWorkbenchPane() {
                 rows[static_cast<std::size_t>(rowIndex)]
                     .overrides[static_cast<std::size_t>(overrideIndex)],
                 {.showDeleteButton = true,
-                 .conflict = overrideConflicts.contains(widgetId)});
+                 .conflict = overrideConflicts.contains(widgetId),
+                 .drawTooltipExtras =
+                     overrideConflicts.contains(widgetId)
+                         ? std::function<void()>{[&, widgetId]() {
+                             const auto *theme = ThemeConfig::GetSingleton();
+                             ImGui::PushStyleColor(
+                                 ImGuiCol_Separator,
+                                 theme->GetColorU32("WARN"));
+                             ImGui::Separator();
+                             ImGui::PopStyleColor();
+                             ImGui::Spacing();
+                             ImGui::TextColored(
+                                 theme->GetColor("WARN"),
+                                 "Warning: Conflicting visuals.");
+                             ImGui::Spacing();
+                             for (const auto &description :
+                                  overrideConflicts.at(widgetId)
+                                      .targetDescriptions) {
+                               DrawConflictEntry(description, theme);
+                             }
+                           }}
+                         : std::function<void()>{}});
             if (!overrideWidget.deleteHovered && ImGui::BeginDragDropSource()) {
               DraggedEquipmentPayload payload{};
               payload.sourceKind =
@@ -554,20 +669,8 @@ void Menu::DrawVariantWorkbenchPane() {
             widgetRects.insert_or_assign(
                 widgetId,
                 ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
-            if (overrideConflicts.contains(widgetId) &&
-                overrideWidget.hovered) {
+            if (overrideConflicts.contains(widgetId) && overrideWidget.hovered) {
               hoveredConflictWidgetId = widgetId;
-              DrawSimplePinnableTooltip(
-                  "workbench:conflict:" + widgetId, overrideWidget.hovered,
-                  [&]() {
-                    ImGui::TextWrapped("This override shares equipment slots "
-                                       "with currently active visuals.");
-                    ImGui::Separator();
-                    for (const auto &description :
-                         overrideConflicts.at(widgetId).targetDescriptions) {
-                      ImGui::BulletText("%s", description.c_str());
-                    }
-                  });
             }
           }
           ImGui::PopStyleVar();
