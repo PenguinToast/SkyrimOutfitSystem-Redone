@@ -75,6 +75,26 @@ void Menu::AcceptOverridePayload(int a_targetRowIndex) {
   }
 }
 
+bool Menu::ApplyWorkbenchRowDrop(const DraggedEquipmentPayload &a_dragPayload,
+                                 const int a_targetRowIndex,
+                                 const bool a_insertAfter) {
+  if (a_targetRowIndex < 0) {
+    if (a_dragPayload.sourceKind ==
+        static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
+      return workbench_.AddCatalogSelectionAsRows(
+          std::vector<RE::FormID>{a_dragPayload.formID});
+    }
+    if (a_dragPayload.sourceKind ==
+        static_cast<std::uint32_t>(DragSourceKind::SlotCatalog)) {
+      return workbench_.AddSlotRow(a_dragPayload.slotMask);
+    }
+    return false;
+  }
+
+  ApplyRowReorder(a_dragPayload, a_targetRowIndex, a_insertAfter);
+  return true;
+}
+
 void Menu::ApplyRowReorder(const DraggedEquipmentPayload &a_dragPayload,
                            int a_targetRowIndex, bool a_insertAfter) {
   if (a_dragPayload.sourceKind ==
@@ -209,14 +229,7 @@ void Menu::DrawVariantWorkbenchPane() {
               payload->DataSize == sizeof(DraggedEquipmentPayload)) {
             DraggedEquipmentPayload dragPayload{};
             std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
-            if (dragPayload.sourceKind ==
-                static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
-              workbench_.AddCatalogSelectionAsRows(
-                  std::vector<RE::FormID>{dragPayload.formID});
-            } else if (dragPayload.sourceKind ==
-                       static_cast<std::uint32_t>(DragSourceKind::SlotCatalog)) {
-              workbench_.AddSlotRow(dragPayload.slotMask);
-            }
+            ApplyWorkbenchRowDrop(dragPayload);
           }
           ImGui::EndDragDropTarget();
         }
@@ -651,8 +664,9 @@ void Menu::DrawVariantWorkbenchPane() {
       ImGui::EndTable();
 
       if (acceptedRowReorderPayload && acceptedRowReorderIndex >= 0) {
-        ApplyRowReorder(*acceptedRowReorderPayload, acceptedRowReorderIndex,
-                        acceptedRowInsertAfter);
+        ApplyWorkbenchRowDrop(*acceptedRowReorderPayload,
+                              acceptedRowReorderIndex,
+                              acceptedRowInsertAfter);
       }
     }
     ImGui::EndChild();

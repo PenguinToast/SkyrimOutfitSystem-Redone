@@ -273,6 +273,27 @@ void AllowTextInput([[maybe_unused]] RE::ControlMap *a_controlMap,
 } // namespace
 
 namespace sosr {
+void Menu::DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
+                                 const DragSourceKind a_sourceKind,
+                                 const bool a_showTooltip) {
+  [[maybe_unused]] const auto widgetResult = ui::components::DrawEquipmentWidget(
+      a_item.key.c_str(), a_item, {.showTooltip = a_showTooltip});
+  if (!ImGui::BeginDragDropSource()) {
+    return;
+  }
+
+  DraggedEquipmentPayload payload{};
+  payload.sourceKind = static_cast<std::uint32_t>(a_sourceKind);
+  payload.rowIndex = -1;
+  payload.itemIndex = -1;
+  payload.formID = a_item.formID;
+  payload.slotMask = a_item.slotMask;
+  ImGui::SetDragDropPayload("SOSR_VARIANT_ITEM", &payload, sizeof(payload));
+  ImGui::TextUnformatted(a_item.name.c_str());
+  ImGui::Text("%s", a_item.slotText.c_str());
+  ImGui::EndDragDropSource();
+}
+
 Menu *Menu::GetSingleton() {
   static Menu singleton;
   return std::addressof(singleton);
@@ -1595,21 +1616,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           ImGui::EndPopup();
         }
         ImGui::SetCursorScreenPos(rowContentPos);
-        [[maybe_unused]] const auto widgetResult =
-            ui::components::DrawEquipmentWidget(item.key.c_str(), item);
-        if (ImGui::BeginDragDropSource()) {
-          DraggedEquipmentPayload payload{};
-          payload.sourceKind =
-              static_cast<std::uint32_t>(DragSourceKind::Catalog);
-          payload.rowIndex = -1;
-          payload.itemIndex = -1;
-          payload.formID = item.formID;
-          ImGui::SetDragDropPayload("SOSR_VARIANT_ITEM", &payload,
-                                    sizeof(payload));
-          ImGui::TextUnformatted(item.name.c_str());
-          ImGui::Text("%s", item.slotText.c_str());
-          ImGui::EndDragDropSource();
-        }
+        DrawCatalogDragWidget(item, DragSourceKind::Catalog);
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(entry.plugin.data());

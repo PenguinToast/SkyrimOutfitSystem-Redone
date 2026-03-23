@@ -87,6 +87,9 @@ private:
   void HandleCancel();
   void DrawWindow();
   void DrawCatalogFilters();
+  void DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
+                             DragSourceKind a_sourceKind,
+                             bool a_showTooltip = true);
   [[nodiscard]] bool DrawGearTab();
   [[nodiscard]] bool
   DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);
@@ -98,6 +101,9 @@ private:
   void DrawCreateKitDialog();
   void DrawDeleteKitDialog();
   void AcceptOverridePayload(int a_targetRowIndex);
+  bool ApplyWorkbenchRowDrop(const DraggedEquipmentPayload &a_dragPayload,
+                             int a_targetRowIndex = -1,
+                             bool a_insertAfter = false);
   void ApplyRowReorder(const DraggedEquipmentPayload &a_dragPayload,
                        int a_targetRowIndex, bool a_insertAfter);
   void AcceptOverrideDeletePayload();

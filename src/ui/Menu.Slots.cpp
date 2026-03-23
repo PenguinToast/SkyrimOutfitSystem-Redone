@@ -5,10 +5,6 @@
 
 #include <algorithm>
 
-namespace {
-constexpr char kVariantItemPayloadType[] = "SOSR_VARIANT_ITEM";
-}
-
 namespace sosr {
 bool Menu::DrawSlotTab() {
   struct SlotCatalogRow {
@@ -95,21 +91,7 @@ bool Menu::DrawSlotTab() {
               ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
         }
 
-        [[maybe_unused]] const auto slotWidget =
-            ui::components::DrawEquipmentWidget(
-            row.slotItem.key.c_str(), row.slotItem, {.showTooltip = false});
-        if (ImGui::BeginDragDropSource()) {
-          DraggedEquipmentPayload payload{};
-          payload.sourceKind =
-              static_cast<std::uint32_t>(DragSourceKind::SlotCatalog);
-          payload.formID = 0;
-          payload.slotMask = row.slotItem.slotMask;
-          ImGui::SetDragDropPayload(kVariantItemPayloadType, &payload,
-                                    sizeof(payload));
-          ImGui::TextUnformatted(row.slotItem.name.c_str());
-          ImGui::TextUnformatted(row.slotItem.slotText.c_str());
-          ImGui::EndDragDropSource();
-        }
+        DrawCatalogDragWidget(row.slotItem, DragSourceKind::SlotCatalog, false);
 
         if (clicked) {
           rowClicked = true;
