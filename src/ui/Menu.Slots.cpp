@@ -91,7 +91,7 @@ bool Menu::DrawSlotTab() {
               ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
         }
 
-        DrawCatalogDragWidget(row.slotItem, DragSourceKind::SlotCatalog, false);
+        DrawCatalogDragWidget(row.slotItem, DragSourceKind::SlotCatalog);
 
         if (clicked) {
           rowClicked = true;

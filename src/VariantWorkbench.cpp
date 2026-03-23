@@ -237,6 +237,7 @@ void VariantWorkbench::SyncRowsFromPlayer() {
     row.isEquipped = false;
   }
 
+  std::uint64_t occupiedSlotMask = 0;
   std::unordered_set<RE::FormID> seenArmorForms;
   std::vector<VariantWorkbenchRow> newlyEquippedRows;
   std::vector<std::string> newlyEquippedRowKeys;
@@ -288,6 +289,7 @@ void VariantWorkbench::SyncRowsFromPlayer() {
     if (!BuildCatalogItem(formID, equipped)) {
       continue;
     }
+    occupiedSlotMask |= equipped.slotMask;
 
     const auto rowKey = "armor:" + armor::FormatFormID(formID);
     const auto existingIt =
@@ -318,6 +320,12 @@ void VariantWorkbench::SyncRowsFromPlayer() {
                      std::make_move_iterator(newlyEquippedRowKeys.begin()),
                      std::make_move_iterator(newlyEquippedRowKeys.end()));
   }
+
+  for (auto &row : rows_) {
+    if (row.equipped.IsSlot()) {
+      row.isEquipped = (row.equipped.slotMask & occupiedSlotMask) != 0;
+    }
+  }
 }
 
 bool VariantWorkbench::BuildCatalogItem(RE::FormID a_formID,
@@ -328,6 +336,7 @@ bool VariantWorkbench::BuildCatalogItem(RE::FormID a_formID,
   }
 
   a_item = {};
+  a_item.kind = EquipmentWidgetItemKind::Armor;
   a_item.formID = form->GetFormID();
   a_item.key = "form:" + armor::FormatFormID(form->GetFormID());
   a_item.name = armor::GetDisplayName(form);
@@ -350,6 +359,7 @@ bool VariantWorkbench::BuildSlotItem(const std::uint64_t a_slotMask,
   }
 
   a_item = {};
+  a_item.kind = EquipmentWidgetItemKind::Slot;
   a_item.formID = 0;
   a_item.key = BuildSlotKey(a_slotMask);
   a_item.name = armor::JoinStrings(armor::GetArmorSlotLabels(a_slotMask));
@@ -506,7 +516,6 @@ VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask) const {
 
   VariantWorkbenchRow row{};
   row.key = rowKey;
-  row.kind = VariantWorkbenchRowKind::EquipmentSlot;
   row.equipped = std::move(slotItem);
   row.equipped.key = rowKey;
   return row;

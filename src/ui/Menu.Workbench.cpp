@@ -404,9 +404,7 @@ void Menu::DrawVariantWorkbenchPane() {
             rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
             rows[static_cast<std::size_t>(rowIndex)].equipped,
             {.showDeleteButton =
-                 !rows[static_cast<std::size_t>(rowIndex)].isEquipped,
-             .showTooltip =
-                 !rows[static_cast<std::size_t>(rowIndex)].IsSlotRow()});
+                 !rows[static_cast<std::size_t>(rowIndex)].isEquipped});
         if (!equippedWidget.deleteHovered && ImGui::BeginDragDropSource()) {
           DraggedEquipmentPayload payload{};
           payload.sourceKind = static_cast<std::uint32_t>(DragSourceKind::Row);

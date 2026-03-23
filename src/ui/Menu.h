@@ -88,8 +88,7 @@ private:
   void DrawWindow();
   void DrawCatalogFilters();
   void DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
-                             DragSourceKind a_sourceKind,
-                             bool a_showTooltip = true);
+                             DragSourceKind a_sourceKind);
   [[nodiscard]] bool DrawGearTab();
   [[nodiscard]] bool
   DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);

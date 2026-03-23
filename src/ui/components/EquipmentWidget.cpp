@@ -136,6 +136,7 @@ bool BuildEquipmentTooltipItem(const RE::FormID a_formID, const char *a_key,
   }
 
   a_item.formID = a_formID;
+  a_item.kind = workbench::EquipmentWidgetItemKind::Armor;
   a_item.key = a_key ? a_key : "";
   a_item.name = sosr::armor::GetDisplayName(form);
   if (const auto *armor = form->As<RE::TESObjectARMO>()) {
@@ -267,7 +268,7 @@ DrawEquipmentWidget(const char *a_id,
   }
 
   const auto tooltipId = "equipment:" + a_item.key;
-  if (a_options.showTooltip && !result.deleteHovered &&
+  if (a_item.SupportsInfoTooltip() && !result.deleteHovered &&
       !ImGui::IsDragDropActive()) {
     DrawEquipmentInfoTooltip(tooltipId, result.hovered, a_item);
   }

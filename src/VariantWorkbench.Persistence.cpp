@@ -231,7 +231,6 @@ bool DeserializeRowSource(
       return false;
     }
 
-    a_row.kind = sosr::workbench::VariantWorkbenchRowKind::EquipmentSlot;
     a_row.key = slotItem.key;
     a_row.equipped = std::move(slotItem);
     a_row.equipped.key = a_row.key;

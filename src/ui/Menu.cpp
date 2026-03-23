@@ -274,10 +274,9 @@ void AllowTextInput([[maybe_unused]] RE::ControlMap *a_controlMap,
 
 namespace sosr {
 void Menu::DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
-                                 const DragSourceKind a_sourceKind,
-                                 const bool a_showTooltip) {
-  [[maybe_unused]] const auto widgetResult = ui::components::DrawEquipmentWidget(
-      a_item.key.c_str(), a_item, {.showTooltip = a_showTooltip});
+                                 const DragSourceKind a_sourceKind) {
+  [[maybe_unused]] const auto widgetResult =
+      ui::components::DrawEquipmentWidget(a_item.key.c_str(), a_item);
   if (!ImGui::BeginDragDropSource()) {
     return;
   }
