@@ -13,6 +13,8 @@ std::vector<std::uint64_t> GetAllArmorSlotMasks();
 std::uint64_t GetArmorSlotMask(std::uint32_t a_slotNumber);
 std::uint32_t GetArmorSlotNumber(std::uint64_t a_slotMask);
 std::vector<std::string> GetArmorSlotLabels(std::uint64_t a_slotMask);
+std::uint64_t GetArmorAddonSlotMask(const RE::TESObjectARMO *a_armor);
+std::vector<std::string> GetArmorAddonSlotLabels(const RE::TESObjectARMO *a_armor);
 std::string GetPluginName(const RE::TESForm *a_form);
 std::string GetFormIdentifier(const RE::TESForm *a_form);
 std::string GetReplacementIdentifier(const RE::TESObjectARMO *a_armor,

@@ -106,6 +106,20 @@ int ScoreFallbackTargetRow(const std::uint64_t a_itemMask,
 }
 } // namespace
 
+std::uint64_t VariantWorkbenchRow::GetSelectionConflictSlotMask() const {
+  if (equipped.IsSlot()) {
+    return equipped.slotMask;
+  }
+
+  const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(equipped.formID);
+  if (!armor) {
+    return equipped.slotMask;
+  }
+
+  const auto addonSlotMask = armor::GetArmorAddonSlotMask(armor);
+  return addonSlotMask != 0 ? addonSlotMask : equipped.slotMask;
+}
+
 bool VariantWorkbench::ResolveCatalogArmors(
     const std::vector<RE::FormID> &a_formIDs,
     std::vector<const RE::TESObjectARMO *> &a_armors) const {
@@ -289,7 +303,8 @@ void VariantWorkbench::SyncRowsFromPlayer() {
     if (!BuildCatalogItem(formID, equipped)) {
       continue;
     }
-    occupiedSlotMask |= equipped.slotMask;
+    const auto addonSlotMask = armor::GetArmorAddonSlotMask(armor);
+    occupiedSlotMask |= addonSlotMask != 0 ? addonSlotMask : equipped.slotMask;
 
     const auto rowKey = "armor:" + armor::FormatFormID(formID);
     const auto existingIt =

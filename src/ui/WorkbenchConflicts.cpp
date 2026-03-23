@@ -19,6 +19,12 @@ bool HasVariantSelectionConflictSource(
          (a_row.hideEquipped || !a_row.overrides.empty());
 }
 
+bool IsVariantSelectionConflictPair(
+    const sosr::workbench::VariantWorkbenchRow &a_left,
+    const sosr::workbench::VariantWorkbenchRow &a_right) {
+  return a_left.IsSlotRow() || a_right.IsSlotRow();
+}
+
 std::string
 DescribeRowSelectionReason(const sosr::workbench::VariantWorkbenchRow &a_row) {
   if (a_row.hideEquipped) {
@@ -62,8 +68,11 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
       }
 
       const auto &otherRow = a_rows[static_cast<std::size_t>(otherRowIndex)];
+      const auto rowSlotMask = row.GetSelectionConflictSlotMask();
+      const auto otherRowSlotMask = otherRow.GetSelectionConflictSlotMask();
       if (!HasVariantSelectionConflictSource(otherRow) ||
-          (row.equipped.slotMask & otherRow.equipped.slotMask) == 0) {
+          !IsVariantSelectionConflictPair(row, otherRow) ||
+          (rowSlotMask & otherRowSlotMask) == 0) {
         continue;
       }
 

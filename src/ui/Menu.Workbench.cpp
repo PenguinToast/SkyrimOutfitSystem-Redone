@@ -430,6 +430,7 @@ void Menu::DrawVariantWorkbenchPane() {
             rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
             rows[static_cast<std::size_t>(rowIndex)].equipped,
             {.showDeleteButton =
+                 rows[static_cast<std::size_t>(rowIndex)].equipped.IsSlot() ||
                  !rows[static_cast<std::size_t>(rowIndex)].isEquipped,
              .conflict = rowConflicts.contains(
                  rows[static_cast<std::size_t>(rowIndex)].key),

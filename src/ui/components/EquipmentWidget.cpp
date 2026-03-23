@@ -50,7 +50,8 @@ float ComputeEquipmentTooltipWidth(
     const std::string &a_displayName, const std::string &a_editorID,
     const std::string &a_plugin, const std::string &a_formID,
     const std::string &a_identifier,
-    const std::vector<std::string> &a_slotLabels) {
+    const std::vector<std::string> &a_slotLabels,
+    const std::vector<std::string> &a_addonSlotLabels) {
   float widestValueWidth = ImGui::CalcTextSize(a_displayName.c_str()).x;
   for (const auto *value : {a_editorID.c_str(), a_plugin.c_str(),
                             a_formID.c_str(), a_identifier.c_str()}) {
@@ -58,6 +59,10 @@ float ComputeEquipmentTooltipWidth(
         (std::max)(widestValueWidth, ImGui::CalcTextSize(value).x);
   }
   for (const auto &slotLabel : a_slotLabels) {
+    widestValueWidth =
+        (std::max)(widestValueWidth, ImGui::CalcTextSize(slotLabel.c_str()).x);
+  }
+  for (const auto &slotLabel : a_addonSlotLabels) {
     widestValueWidth =
         (std::max)(widestValueWidth, ImGui::CalcTextSize(slotLabel.c_str()).x);
   }
@@ -102,7 +107,8 @@ void DrawEquipmentInfoTooltipBody(
     const std::string &a_displayName, const std::string &a_editorID,
     const std::string &a_plugin, const std::string &a_formID,
     const std::string &a_identifier,
-    const std::vector<std::string> &a_slotLabels) {
+    const std::vector<std::string> &a_slotLabels,
+    const std::vector<std::string> &a_addonSlotLabels) {
   const auto *form = RE::TESForm::LookupByID(a_item.formID);
   if (!form) {
     return;
@@ -114,7 +120,7 @@ void DrawEquipmentInfoTooltipBody(
                         ImGuiTableFlags_NoSavedSettings |
                             ImGuiTableFlags_SizingFixedFit)) {
     ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed,
-                            122.0f);
+                            138.0f);
     ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
 
     DrawTooltipInfoRow(kIconEditorId, "Editor ID", a_editorID);
@@ -124,6 +130,11 @@ void DrawEquipmentInfoTooltipBody(
     for (std::size_t index = 0; index < a_slotLabels.size(); ++index) {
       DrawTooltipInfoRow(index == 0 ? kIconSlot : "", index == 0 ? "Slots" : "",
                          a_slotLabels[index]);
+    }
+    for (std::size_t index = 0; index < a_addonSlotLabels.size(); ++index) {
+      DrawTooltipInfoRow(index == 0 ? kIconSlot : "",
+                         index == 0 ? "Addon Slots" : "",
+                         a_addonSlotLabels[index]);
     }
 
     ImGui::EndTable();
@@ -181,10 +192,15 @@ void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
   const auto slotLabels =
       hasInfoBody ? sosr::armor::GetArmorSlotLabels(a_item.slotMask)
                   : std::vector<std::string>{};
+  const auto addonSlotLabels =
+      hasInfoBody && form && form->As<RE::TESObjectARMO>()
+          ? sosr::armor::GetArmorAddonSlotLabels(form->As<RE::TESObjectARMO>())
+          : std::vector<std::string>{};
   const auto tooltipContentWidth =
       hasInfoBody
           ? ComputeEquipmentTooltipWidth(displayName, editorID, plugin, formID,
-                                        identifier, slotLabels)
+                                        identifier, slotLabels,
+                                        addonSlotLabels)
           : 360.0f;
   ImGui::SetNextWindowSize(
       ImVec2(tooltipContentWidth + ImGui::GetStyle().WindowPadding.x * 2.0f,
@@ -194,7 +210,8 @@ void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
       mode != PinnableTooltipMode::None) {
     if (hasInfoBody) {
       DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin,
-                                   formID, identifier, slotLabels);
+                                   formID, identifier, slotLabels,
+                                   addonSlotLabels);
     } else {
       DrawEquipmentTooltipHeader(displayName);
     }

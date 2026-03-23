@@ -49,6 +49,8 @@ struct VariantWorkbenchRow {
     return IsSlotRow() || isEquipped;
   }
 
+  [[nodiscard]] std::uint64_t GetSelectionConflictSlotMask() const;
+
   [[nodiscard]] std::uint64_t
   GetOverrideVisualSlotMask(const EquipmentWidgetItem &a_item) const {
     return a_item.slotMask;

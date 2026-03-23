@@ -153,6 +153,28 @@ std::vector<std::string> GetArmorSlotLabels(std::uint64_t a_slotMask) {
   return labels;
 }
 
+std::uint64_t GetArmorAddonSlotMask(const RE::TESObjectARMO *a_armor) {
+  if (!a_armor) {
+    return 0;
+  }
+
+  std::uint64_t slotMask = 0;
+  for (const auto *armorAddon : a_armor->armorAddons) {
+    if (!armorAddon) {
+      continue;
+    }
+
+    slotMask |= armorAddon->GetSlotMask().underlying();
+  }
+
+  return slotMask;
+}
+
+std::vector<std::string> GetArmorAddonSlotLabels(
+    const RE::TESObjectARMO *a_armor) {
+  return GetArmorSlotLabels(GetArmorAddonSlotMask(a_armor));
+}
+
 std::string GetPluginName(const RE::TESForm *a_form) {
   if (!a_form) {
     return {};

@@ -5,11 +5,43 @@
 
 #include <algorithm>
 
+namespace {
+enum class SlotColumn : ImGuiID { Slot = 1, Occupied };
+
+int CompareText(std::string_view a_left, std::string_view a_right) {
+  const auto leftSize = a_left.size();
+  const auto rightSize = a_right.size();
+  const auto count = (std::min)(leftSize, rightSize);
+
+  for (std::size_t index = 0; index < count; ++index) {
+    const auto left = static_cast<unsigned char>(
+        std::tolower(static_cast<unsigned char>(a_left[index])));
+    const auto right = static_cast<unsigned char>(
+        std::tolower(static_cast<unsigned char>(a_right[index])));
+    if (left < right) {
+      return -1;
+    }
+    if (left > right) {
+      return 1;
+    }
+  }
+
+  if (leftSize < rightSize) {
+    return -1;
+  }
+  if (leftSize > rightSize) {
+    return 1;
+  }
+  return 0;
+}
+} // namespace
+
 namespace sosr {
 bool Menu::DrawSlotTab() {
   struct SlotCatalogRow {
     workbench::EquipmentWidgetItem slotItem;
     std::vector<workbench::EquipmentWidgetItem> occupantItems;
+    std::string occupantSortText;
   };
 
   std::vector<SlotCatalogRow> rows;
@@ -22,13 +54,32 @@ bool Menu::DrawSlotTab() {
     }
 
     for (const auto &workbenchRow : workbench_.GetRows()) {
-      if (!workbenchRow.isEquipped ||
-          (workbenchRow.equipped.slotMask & slotMask) == 0 ||
-          workbenchRow.equipped.formID == 0) {
+      if (!workbenchRow.isEquipped || workbenchRow.equipped.formID == 0) {
+        continue;
+      }
+
+      const auto *armor =
+          RE::TESForm::LookupByID<RE::TESObjectARMO>(workbenchRow.equipped.formID);
+      if (!armor ||
+          (armor::GetArmorAddonSlotMask(armor) & slotMask) == 0) {
         continue;
       }
 
       row.occupantItems.push_back(workbenchRow.equipped);
+    }
+
+    std::ranges::sort(row.occupantItems, [](const auto &a_left,
+                                            const auto &a_right) {
+      return CompareText(a_left.name, a_right.name) < 0;
+    });
+    for (const auto &item : row.occupantItems) {
+      if (!row.occupantSortText.empty()) {
+        row.occupantSortText.append(", ");
+      }
+      row.occupantSortText.append(item.name);
+    }
+    if (row.occupantSortText.empty()) {
+      row.occupantSortText = "Empty";
     }
 
     rows.push_back(std::move(row));
@@ -39,13 +90,43 @@ bool Menu::DrawSlotTab() {
 
   if (ImGui::BeginTable("##slot-table", 2,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                            ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+                            ImGuiTableFlags_Resizable |
+                            ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY,
                         ImVec2(0.0f, 0.0f))) {
-    ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthStretch, 0.68f);
+    ImGui::TableSetupColumn("Slot",
+                            ImGuiTableColumnFlags_WidthStretch |
+                                ImGuiTableColumnFlags_DefaultSort,
+                            0.68f, static_cast<ImGuiID>(SlotColumn::Slot));
     ImGui::TableSetupColumn("Occupied", ImGuiTableColumnFlags_WidthStretch,
-                            1.00f);
+                            1.00f, static_cast<ImGuiID>(SlotColumn::Occupied));
     ImGui::TableSetupScrollFreeze(0, 1);
     ImGui::TableHeadersRow();
+
+    if (auto *sortSpecs = ImGui::TableGetSortSpecs();
+        sortSpecs && sortSpecs->SpecsCount > 0) {
+      const auto &spec = sortSpecs->Specs[0];
+      const auto ascending = spec.SortDirection == ImGuiSortDirection_Ascending;
+      std::ranges::sort(rows, [&](const auto &a_left, const auto &a_right) {
+        int compare = 0;
+        switch (static_cast<SlotColumn>(spec.ColumnUserID)) {
+        case SlotColumn::Occupied:
+          compare =
+              CompareText(a_left.occupantSortText, a_right.occupantSortText);
+          break;
+        case SlotColumn::Slot:
+        default:
+          compare = CompareText(a_left.slotItem.name, a_right.slotItem.name);
+          break;
+        }
+
+        if (compare == 0) {
+          compare = CompareText(a_left.slotItem.name, a_right.slotItem.name);
+        }
+
+        return ascending ? compare < 0 : compare > 0;
+      });
+      sortSpecs->SpecsDirty = false;
+    }
 
     ImGuiListClipper clipper;
     clipper.Begin(static_cast<int>(rows.size()));
