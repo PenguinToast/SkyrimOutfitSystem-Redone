@@ -75,10 +75,17 @@ bool Menu::DrawSlotTab() {
         const bool clicked = ImGui::Selectable(
             ("##slot-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
             ImGuiSelectableFlags_SpanAllColumns |
-                ImGuiSelectableFlags_AllowOverlap,
+                ImGuiSelectableFlags_AllowOverlap |
+                ImGuiSelectableFlags_AllowDoubleClick,
             ImVec2(0.0f, rowHeight));
         const bool rowHovered = ImGui::IsItemHovered();
         ImGui::PopStyleColor(3);
+        if (ImGui::BeginPopupContextItem()) {
+          if (ImGui::MenuItem("Add to Workbench")) {
+            workbench_.AddSlotRow(row.slotItem.slotMask);
+          }
+          ImGui::EndPopup();
+        }
         ImGui::SetCursorScreenPos(rowContentPos);
 
         if (selected) {
@@ -101,6 +108,11 @@ bool Menu::DrawSlotTab() {
             selectedCatalogKey_ = row.slotItem.key;
             workbench_.ClearPreview();
           }
+        }
+
+        if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+          rowClicked = true;
+          workbench_.AddSlotRow(row.slotItem.slotMask);
         }
 
         ImGui::TableSetColumnIndex(1);
