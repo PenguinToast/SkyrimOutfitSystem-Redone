@@ -125,16 +125,7 @@ void DrawConflictTooltipSection(const char *a_title, TDrawEntry &&a_drawEntry) {
 void DrawSimplePinnableTooltip(const std::string_view a_id,
                                const bool a_hoveredSource,
                                const std::function<void()> &a_drawBody) {
-  if (!sosr::ui::components::ShouldDrawPinnableTooltip(a_id, a_hoveredSource)) {
-    return;
-  }
-
-  if (const auto mode =
-          sosr::ui::components::BeginPinnableTooltip(a_id, a_hoveredSource);
-      mode != sosr::ui::components::PinnableTooltipMode::None) {
-    a_drawBody();
-    sosr::ui::components::EndPinnableTooltip(a_id, mode);
-  }
+  sosr::ui::components::DrawPinnableTooltip(a_id, a_hoveredSource, a_drawBody);
 }
 } // namespace
 

@@ -1,13 +1,15 @@
 #pragma once
 
+#include "imgui.h"
+
+#include <functional>
 #include <string_view>
 
 namespace sosr::ui::components {
-enum class PinnableTooltipMode : std::uint8_t {
-  None,
-  Hovered,
-  HoveredOverlay,
-  Pinned
+struct HoveredTooltipOptions {
+  bool useCustomPlacement{false};
+  ImVec2 pos{};
+  ImVec2 pivot{0.0f, 0.0f};
 };
 
 void BeginPinnableTooltipFrame();
@@ -16,7 +18,7 @@ void EndPinnableTooltipFrame();
 void ClearPinnedTooltips();
 [[nodiscard]] bool ShouldDrawPinnableTooltip(std::string_view a_id,
                                              bool a_hoveredSource);
-[[nodiscard]] PinnableTooltipMode BeginPinnableTooltip(std::string_view a_id,
-                                                       bool a_hoveredSource);
-void EndPinnableTooltip(std::string_view a_id, PinnableTooltipMode a_mode);
+void DrawPinnableTooltip(std::string_view a_id, bool a_hoveredSource,
+                         const std::function<void()> &a_drawBody,
+                         const HoveredTooltipOptions &a_hoveredOptions = {});
 } // namespace sosr::ui::components

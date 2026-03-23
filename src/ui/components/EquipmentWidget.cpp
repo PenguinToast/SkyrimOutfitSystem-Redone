@@ -206,8 +206,7 @@ void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
       ImVec2(tooltipContentWidth + ImGui::GetStyle().WindowPadding.x * 2.0f,
              0.0f),
       ImGuiCond_Always);
-  if (const auto mode = BeginPinnableTooltip(a_tooltipId, a_hoveredSource);
-      mode != PinnableTooltipMode::None) {
+  DrawPinnableTooltip(a_tooltipId, a_hoveredSource, [&]() {
     if (hasInfoBody) {
       DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin,
                                    formID, identifier, slotLabels,
@@ -221,8 +220,7 @@ void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
       }
       a_drawExtras();
     }
-    EndPinnableTooltip(a_tooltipId, mode);
-  }
+  });
 }
 
 EquipmentWidgetResult

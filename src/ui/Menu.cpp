@@ -213,16 +213,34 @@ void DrawKitTooltip(const sosr::KitEntry &a_kit, const bool a_hoveredSource) {
 void DrawSimplePinnableTooltip(const std::string_view a_id,
                                const bool a_hoveredSource,
                                const std::function<void()> &a_drawBody) {
-  if (!sosr::ui::components::ShouldDrawPinnableTooltip(a_id, a_hoveredSource)) {
-    return;
-  }
+  sosr::ui::components::DrawPinnableTooltip(a_id, a_hoveredSource, a_drawBody);
+}
 
-  if (const auto mode =
-          sosr::ui::components::BeginPinnableTooltip(a_id, a_hoveredSource);
-      mode != sosr::ui::components::PinnableTooltipMode::None) {
-    a_drawBody();
-    sosr::ui::components::EndPinnableTooltip(a_id, mode);
-  }
+void DrawCatalogTabHelpTooltip(const std::string_view a_id,
+                               const bool a_hoveredSource,
+                               const std::initializer_list<const char *> a_lines) {
+  const auto mousePos = ImGui::GetIO().MousePos;
+  sosr::ui::components::HoveredTooltipOptions tooltipOptions;
+  tooltipOptions.useCustomPlacement = true;
+  tooltipOptions.pos = ImVec2(mousePos.x - 2.0f, mousePos.y + 12.0f);
+  tooltipOptions.pivot = ImVec2(1.0f, 0.0f);
+  sosr::ui::components::DrawPinnableTooltip(a_id, a_hoveredSource, [&]() {
+    bool first = true;
+    for (const auto *line : a_lines) {
+      if (!first) {
+        ImGui::Spacing();
+      }
+      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 420.0f);
+      ImGui::TextUnformatted(line);
+      ImGui::PopTextWrapPos();
+      first = false;
+    }
+  }, tooltipOptions);
+}
+
+bool IsDelayedTabHover() {
+  return ImGui::IsItemHovered() &&
+         ImGui::GetCurrentContext()->HoveredIdTimer >= 0.45f;
 }
 
 std::optional<std::string> GetDavAvailabilityMessage() {
@@ -1007,7 +1025,15 @@ void Menu::DrawWindow() {
     };
 
     if (ImGui::BeginTabBar("##catalog-tabs")) {
-      if (ImGui::BeginTabItem("Gear")) {
+      const bool gearTabOpen = ImGui::BeginTabItem("Gear");
+      DrawCatalogTabHelpTooltip(
+          "catalog:gear-tab",
+          IsDelayedTabHover(),
+          {"Browse individual armor pieces from the equipment catalog.",
+           "Double-click to add an override using Skyrim Vanity System's "
+           "default target selection, or use the context menu to add a new "
+           "workbench row instead."});
+      if (gearTabOpen) {
         if (activeTab_ != BrowserTab::Gear) {
           ClearCatalogSelection();
         }
@@ -1015,7 +1041,14 @@ void Menu::DrawWindow() {
         ImGui::EndTabItem();
       }
 
-      if (ImGui::BeginTabItem("Outfits")) {
+      const bool outfitsTabOpen = ImGui::BeginTabItem("Outfits");
+      DrawCatalogTabHelpTooltip(
+          "catalog:outfits-tab",
+          IsDelayedTabHover(),
+          {"Browse full outfits from plugins in the catalog.",
+           "Double-click to add the outfit's items as overrides, or use the "
+           "context menu to add the outfit as workbench rows instead."});
+      if (outfitsTabOpen) {
         if (activeTab_ != BrowserTab::Outfits) {
           ClearCatalogSelection();
         }
@@ -1023,15 +1056,17 @@ void Menu::DrawWindow() {
         ImGui::EndTabItem();
       }
 
-      if (ImGui::BeginTabItem("Kits")) {
-        DrawSimplePinnableTooltip(
-            "catalog:kits-tab",
-            ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort), []() {
-              ImGui::TextUnformatted("These are Modex kits loaded from "
-                                     "data/interface/modex/user/kits.");
-              ImGui::TextUnformatted(
-                  "Kits that refer to non-existent items are not shown.");
-            });
+      const bool kitsTabOpen = ImGui::BeginTabItem("Kits");
+      DrawCatalogTabHelpTooltip(
+          "catalog:kits-tab",
+          IsDelayedTabHover(),
+          {"Browse Mod Explorer kits loaded from "
+           "data/interface/modex/user/kits.",
+           "Kits behave like outfits: double-click adds their items as "
+           "overrides, the context menu can add rows to the workbench, and "
+           "the context menu can also delete kits.",
+           "Kits that refer to non-existent items are not shown."});
+      if (kitsTabOpen) {
         if (activeTab_ != BrowserTab::Kits) {
           ClearCatalogSelection();
         }
@@ -1039,7 +1074,18 @@ void Menu::DrawWindow() {
         ImGui::EndTabItem();
       }
 
-      if (ImGui::BeginTabItem("Equipment Slots")) {
+      const bool slotsTabOpen = ImGui::BeginTabItem("Equipment Slots");
+      DrawCatalogTabHelpTooltip(
+          "catalog:slots-tab",
+          IsDelayedTabHover(),
+          {"Browse slot-based overrides that target armor addon slots.",
+           "Armor addons are sub-components of an armor, and Dynamic Armor "
+           "Variants Extended resolves slot overrides against the union of "
+           "those addon slots rather than only the slots declared on the "
+           "armor form itself.",
+           "Double-click to add a slot row to the workbench, or use the "
+           "context menu to add it manually."});
+      if (slotsTabOpen) {
         if (activeTab_ != BrowserTab::Slots) {
           ClearCatalogSelection();
         }

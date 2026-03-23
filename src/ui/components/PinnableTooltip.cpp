@@ -5,10 +5,18 @@
 #include "ui/ThemeConfig.h"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace {
+enum class PinnableTooltipMode : std::uint8_t {
+  None,
+  Hovered,
+  HoveredOverlay,
+  Pinned
+};
+
 struct PinnedTooltipState {
   std::string id;
   ImVec2 pos{};
@@ -41,6 +49,11 @@ auto FindPinnedTooltip(std::vector<PinnedTooltipState> &a_stack,
 } // namespace
 
 namespace sosr::ui::components {
+[[nodiscard]] PinnableTooltipMode
+BeginPinnableTooltip(std::string_view a_id, bool a_hoveredSource,
+                     const HoveredTooltipOptions &a_hoveredOptions);
+void EndPinnableTooltip(std::string_view a_id, PinnableTooltipMode a_mode);
+
 void BeginPinnableTooltipFrame() {
   auto &manager = GetPinnedTooltipManager();
   const bool altDownThisFrame = ImGui::GetIO().KeyAlt;
@@ -100,8 +113,22 @@ bool ShouldDrawPinnableTooltip(const std::string_view a_id,
          FindPinnedTooltip(manager.stack, a_id) != manager.stack.end();
 }
 
+void DrawPinnableTooltip(const std::string_view a_id,
+                         const bool a_hoveredSource,
+                         const std::function<void()> &a_drawBody,
+                         const HoveredTooltipOptions &a_hoveredOptions) {
+  if (const auto mode =
+          BeginPinnableTooltip(a_id, a_hoveredSource, a_hoveredOptions);
+      mode != PinnableTooltipMode::None) {
+    a_drawBody();
+    EndPinnableTooltip(a_id, mode);
+  }
+}
+
 PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
-                                         const bool a_hoveredSource) {
+                                         const bool a_hoveredSource,
+                                         const HoveredTooltipOptions
+                                             &a_hoveredOptions) {
   auto &manager = GetPinnedTooltipManager();
   const auto pinnedIt = FindPinnedTooltip(manager.stack, a_id);
   if (pinnedIt != manager.stack.end()) {
@@ -133,31 +160,19 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
     return PinnableTooltipMode::None;
   }
 
-  if (manager.stack.empty()) {
-    const auto &style = ImGui::GetStyle();
-    const auto *theme = sosr::ThemeConfig::GetSingleton();
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.WindowBorderSize);
-    ImGui::PushStyleColor(ImGuiCol_Border, theme->GetColorU32("BORDER"));
-    if (!ImGui::BeginTooltip()) {
-      ImGui::PopStyleColor();
-      ImGui::PopStyleVar();
-      return PinnableTooltipMode::None;
-    }
-    ++manager.currentDepth;
-    return PinnableTooltipMode::Hovered;
-  }
-
   const auto windowName = "##HoveredTooltip_" + std::string(a_id);
-  const auto mousePos = ImGui::GetIO().MousePos;
   const auto &style = ImGui::GetStyle();
   const auto *theme = sosr::ThemeConfig::GetSingleton();
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, style.WindowBorderSize);
   ImGui::PushStyleColor(ImGuiCol_Border, theme->GetColorU32("BORDER"));
-  ImGui::SetNextWindowPos(ImVec2(mousePos.x + 16.0f, mousePos.y + 16.0f),
-                          ImGuiCond_Always);
+  if (a_hoveredOptions.useCustomPlacement) {
+    ImGui::SetNextWindowPos(a_hoveredOptions.pos, ImGuiCond_Always,
+                            a_hoveredOptions.pivot);
+  }
   if (!ImGui::Begin(windowName.c_str(), nullptr,
-                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                        ImGuiWindowFlags_NoResize |
+                    ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs |
+                        ImGuiWindowFlags_NoTitleBar |
+                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
                         ImGuiWindowFlags_NoSavedSettings |
                         ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::End();
@@ -167,7 +182,8 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
   }
   ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
   ++manager.currentDepth;
-  return PinnableTooltipMode::HoveredOverlay;
+  return manager.stack.empty() ? PinnableTooltipMode::Hovered
+                               : PinnableTooltipMode::HoveredOverlay;
 }
 
 void EndPinnableTooltip(const std::string_view a_id,
@@ -196,11 +212,7 @@ void EndPinnableTooltip(const std::string_view a_id,
       manager.stack.push_back(std::move(state));
     }
 
-    if (a_mode == PinnableTooltipMode::Hovered) {
-      ImGui::EndTooltip();
-    } else {
-      ImGui::End();
-    }
+    ImGui::End();
     ImGui::PopStyleColor();
     ImGui::PopStyleVar();
     if (manager.currentDepth > 0) {
