@@ -65,17 +65,7 @@ float ComputeEquipmentTooltipWidth(
   return (std::max)(330.0f, widestValueWidth + 190.0f);
 }
 
-void DrawEquipmentInfoTooltipBody(
-    const sosr::workbench::EquipmentWidgetItem &a_item,
-    const std::string &a_displayName, const std::string &a_editorID,
-    const std::string &a_plugin, const std::string &a_formID,
-    const std::string &a_identifier,
-    const std::vector<std::string> &a_slotLabels) {
-  const auto *form = RE::TESForm::LookupByID(a_item.formID);
-  if (!form) {
-    return;
-  }
-
+void DrawEquipmentTooltipHeader(const std::string &a_displayName) {
   const auto *theme = sosr::ThemeConfig::GetSingleton();
   const auto headerMin = ImGui::GetCursorScreenPos();
   const auto headerWidth = ImGui::GetContentRegionAvail().x;
@@ -105,6 +95,20 @@ void DrawEquipmentInfoTooltipBody(
   ImGui::Separator();
   ImGui::PopStyleColor();
   ImGui::Spacing();
+}
+
+void DrawEquipmentInfoTooltipBody(
+    const sosr::workbench::EquipmentWidgetItem &a_item,
+    const std::string &a_displayName, const std::string &a_editorID,
+    const std::string &a_plugin, const std::string &a_formID,
+    const std::string &a_identifier,
+    const std::vector<std::string> &a_slotLabels) {
+  const auto *form = RE::TESForm::LookupByID(a_item.formID);
+  if (!form) {
+    return;
+  }
+
+  DrawEquipmentTooltipHeader(a_displayName);
 
   if (ImGui::BeginTable("##equipment-info-tooltip", 2,
                         ImGuiTableFlags_NoSavedSettings |
@@ -159,28 +163,45 @@ void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
     return;
   }
 
-  const auto *form = RE::TESForm::LookupByID(a_item.formID);
+  const bool hasInfoBody = a_item.SupportsInfoTooltip();
+  const auto *form =
+      hasInfoBody ? RE::TESForm::LookupByID(a_item.formID) : nullptr;
   const auto displayName =
       form ? sosr::armor::GetDisplayName(form) : a_item.name;
-  const auto editorID = form ? sosr::armor::GetEditorID(form) : std::string{};
-  const auto plugin = form ? sosr::armor::GetPluginName(form) : std::string{};
-  const auto formID = form ? sosr::armor::FormatFormID(form->GetFormID())
-                           : sosr::armor::FormatFormID(a_item.formID);
+  const auto editorID =
+      hasInfoBody && form ? sosr::armor::GetEditorID(form) : std::string{};
+  const auto plugin =
+      hasInfoBody && form ? sosr::armor::GetPluginName(form) : std::string{};
+  const auto formID = hasInfoBody
+                          ? (form ? sosr::armor::FormatFormID(form->GetFormID())
+                                  : sosr::armor::FormatFormID(a_item.formID))
+                          : std::string{};
   const auto identifier =
-      form ? sosr::armor::GetFormIdentifier(form) : std::string{};
-  const auto slotLabels = sosr::armor::GetArmorSlotLabels(a_item.slotMask);
-  const auto tooltipContentWidth = ComputeEquipmentTooltipWidth(
-      displayName, editorID, plugin, formID, identifier, slotLabels);
+      hasInfoBody && form ? sosr::armor::GetFormIdentifier(form) : std::string{};
+  const auto slotLabels =
+      hasInfoBody ? sosr::armor::GetArmorSlotLabels(a_item.slotMask)
+                  : std::vector<std::string>{};
+  const auto tooltipContentWidth =
+      hasInfoBody
+          ? ComputeEquipmentTooltipWidth(displayName, editorID, plugin, formID,
+                                        identifier, slotLabels)
+          : 360.0f;
   ImGui::SetNextWindowSize(
       ImVec2(tooltipContentWidth + ImGui::GetStyle().WindowPadding.x * 2.0f,
              0.0f),
       ImGuiCond_Always);
   if (const auto mode = BeginPinnableTooltip(a_tooltipId, a_hoveredSource);
       mode != PinnableTooltipMode::None) {
-    DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin, formID,
-                                 identifier, slotLabels);
+    if (hasInfoBody) {
+      DrawEquipmentInfoTooltipBody(a_item, displayName, editorID, plugin,
+                                   formID, identifier, slotLabels);
+    } else {
+      DrawEquipmentTooltipHeader(displayName);
+    }
     if (a_drawExtras) {
-      ImGui::Spacing();
+      if (hasInfoBody || !displayName.empty()) {
+        ImGui::Spacing();
+      }
       a_drawExtras();
     }
     EndPinnableTooltip(a_tooltipId, mode);
@@ -273,7 +294,9 @@ DrawEquipmentWidget(const char *a_id,
   }
 
   const auto tooltipId = "equipment:" + a_item.key;
-  if (a_item.SupportsInfoTooltip() && !result.deleteHovered &&
+  if ((a_item.SupportsInfoTooltip() || a_item.IsSlot() ||
+       a_options.drawTooltipExtras) &&
+      !result.deleteHovered &&
       !ImGui::IsDragDropActive()) {
     DrawEquipmentInfoTooltip(tooltipId, result.hovered, a_item,
                              a_options.drawTooltipExtras);
