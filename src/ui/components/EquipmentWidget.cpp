@@ -267,7 +267,8 @@ DrawEquipmentWidget(const char *a_id,
   }
 
   const auto tooltipId = "equipment:" + a_item.key;
-  if (!result.deleteHovered && !ImGui::IsDragDropActive()) {
+  if (a_options.showTooltip && !result.deleteHovered &&
+      !ImGui::IsDragDropActive()) {
     DrawEquipmentInfoTooltip(tooltipId, result.hovered, a_item);
   }
 

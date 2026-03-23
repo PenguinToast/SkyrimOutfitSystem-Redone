@@ -6,6 +6,7 @@ namespace sosr::ui::components {
 struct EquipmentWidgetOptions {
   bool showDeleteButton{false};
   bool conflict{false};
+  bool showTooltip{true};
 };
 
 struct EquipmentWidgetResult {

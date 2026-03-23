@@ -4,10 +4,16 @@
 #include <SKSE/SKSE.h>
 
 #include <string>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
 namespace sosr::workbench {
+enum class VariantWorkbenchRowKind : std::uint8_t {
+  EquippedArmor,
+  EquipmentSlot
+};
+
 struct EquipmentWidgetItem {
   RE::FormID formID{0};
   std::string key;
@@ -18,16 +24,22 @@ struct EquipmentWidgetItem {
 
 struct VariantWorkbenchRow {
   std::string key;
+  VariantWorkbenchRowKind kind{VariantWorkbenchRowKind::EquippedArmor};
   EquipmentWidgetItem equipped;
   std::vector<EquipmentWidgetItem> overrides;
   bool hideEquipped{false};
   bool isEquipped{false};
+
+  [[nodiscard]] bool IsSlotRow() const {
+    return kind == VariantWorkbenchRowKind::EquipmentSlot;
+  }
 };
 
 class VariantWorkbench {
 public:
   void SyncRowsFromPlayer();
   bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
+  bool BuildSlotItem(std::uint64_t a_slotMask, EquipmentWidgetItem &a_item) const;
   [[nodiscard]] bool
   IsPreviewingSelection(std::string_view a_selectionKey) const;
   [[nodiscard]] bool CanAcceptOverride(int a_targetRowIndex,
@@ -37,6 +49,7 @@ public:
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
   bool AddCatalogSelectionToWorkbench(const std::vector<RE::FormID> &a_formIDs);
   bool AddCatalogSelectionAsRows(const std::vector<RE::FormID> &a_formIDs);
+  bool AddSlotRow(std::uint64_t a_slotMask);
   bool ApplyCatalogPreview(std::string_view a_selectionKey,
                            const std::vector<RE::FormID> &a_formIDs);
   void ClearPreview();
@@ -54,6 +67,8 @@ public:
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   bool InsertCatalogRow(RE::FormID a_formID, int a_targetRowIndex,
                         bool a_insertAfter);
+  bool InsertSlotRow(std::uint64_t a_slotMask, int a_targetRowIndex,
+                     bool a_insertAfter);
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
   void SyncDynamicArmorVariantsExtended();
@@ -86,6 +101,8 @@ private:
       std::vector<PlannedCatalogAssignment> &a_assignments) const;
   [[nodiscard]] std::vector<VariantWorkbenchRow>
   BuildCatalogRows(const std::vector<RE::FormID> &a_formIDs) const;
+  [[nodiscard]] std::optional<VariantWorkbenchRow>
+  BuildSlotRow(std::uint64_t a_slotMask) const;
   [[nodiscard]] int
   FindBestCatalogTargetRowIndex(const EquipmentWidgetItem &a_item,
                                 bool a_requireAcceptable) const;

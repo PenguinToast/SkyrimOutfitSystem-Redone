@@ -630,6 +630,9 @@ std::string Menu::BuildFavoriteKey(const BrowserTab a_tab,
   case BrowserTab::Kits:
     prefix = "kit:";
     break;
+  case BrowserTab::Slots:
+    prefix = "slot:";
+    break;
   case BrowserTab::Options:
     prefix = "options:";
     break;
@@ -978,6 +981,8 @@ void Menu::DrawWindow() {
         if (entry != EquipmentCatalog::Get().GetKits().end()) {
           workbench_.ApplyCatalogPreview(entry->id, entry->armorFormIDs);
         }
+      } else if (activeTab_ == BrowserTab::Slots) {
+        workbench_.ClearPreview();
       }
     };
 
@@ -1014,16 +1019,26 @@ void Menu::DrawWindow() {
         ImGui::EndTabItem();
       }
 
+      if (ImGui::BeginTabItem("Equipment Slots")) {
+        if (activeTab_ != BrowserTab::Slots) {
+          ClearCatalogSelection();
+        }
+        activeTab_ = BrowserTab::Slots;
+        ImGui::EndTabItem();
+      }
+
       ImGui::EndTabBar();
     }
 
     ImGui::Separator();
     DrawCatalogFilters();
-    ImGui::Spacing();
-    if (ImGui::Checkbox("Favorites Only", &favoritesOnly_) && favoritesOnly_ &&
-        !selectedCatalogKey_.empty() &&
-        !IsFavorite(activeTab_, selectedCatalogKey_)) {
-      ClearCatalogSelection();
+    if (activeTab_ != BrowserTab::Slots) {
+      ImGui::Spacing();
+      if (ImGui::Checkbox("Favorites Only", &favoritesOnly_) && favoritesOnly_ &&
+          !selectedCatalogKey_.empty() &&
+          !IsFavorite(activeTab_, selectedCatalogKey_)) {
+        ClearCatalogSelection();
+      }
     }
     if (activeTab_ == BrowserTab::Gear) {
       ImGui::SameLine();
@@ -1040,12 +1055,14 @@ void Menu::DrawWindow() {
         }
       }
     }
-    ImGui::SameLine();
-    if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
-      if (!previewSelected_) {
-        workbench_.ClearPreview();
-      } else {
-        applySelectedPreview();
+    if (activeTab_ != BrowserTab::Slots) {
+      ImGui::SameLine();
+      if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
+        if (!previewSelected_) {
+          workbench_.ClearPreview();
+        } else {
+          applySelectedPreview();
+        }
       }
     }
     ImGui::Spacing();
@@ -1068,8 +1085,10 @@ void Menu::DrawWindow() {
           catalogRowClicked = DrawGearTab();
         } else if (activeTab_ == BrowserTab::Outfits) {
           catalogRowClicked = DrawOutfitTab();
-        } else {
+        } else if (activeTab_ == BrowserTab::Kits) {
           catalogRowClicked = DrawKitTab();
+        } else {
+          catalogRowClicked = DrawSlotTab();
         }
 
         if (!selectedCatalogKey_.empty() &&
@@ -1369,6 +1388,10 @@ void Menu::SortKitRows(std::vector<const KitEntry *> &a_rows,
 }
 
 void Menu::DrawCatalogFilters() {
+  if (activeTab_ == BrowserTab::Slots) {
+    return;
+  }
+
   const auto &catalog = EquipmentCatalog::Get();
   SyncSelectedSlotFilters();
   const auto itemSpacingX = ImGui::GetStyle().ItemSpacing.x;

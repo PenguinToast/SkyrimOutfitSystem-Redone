@@ -59,6 +59,37 @@ std::string GetPo3EditorID(RE::FormID a_formID) {
 } // namespace
 
 namespace sosr::armor {
+std::vector<std::uint64_t> GetAllArmorSlotMasks() {
+  std::vector<std::uint64_t> masks;
+  masks.reserve(kArmorSlotNames.size());
+  for (const auto &[slot, _] : kArmorSlotNames) {
+    masks.push_back(static_cast<std::uint64_t>(std::to_underlying(slot)));
+  }
+  return masks;
+}
+
+std::uint64_t GetArmorSlotMask(const std::uint32_t a_slotNumber) {
+  for (std::size_t index = 0; index < kArmorSlotNames.size(); ++index) {
+    if ((index + 30) == a_slotNumber) {
+      return static_cast<std::uint64_t>(
+          std::to_underlying(kArmorSlotNames[index].first));
+    }
+  }
+
+  return 0;
+}
+
+std::uint32_t GetArmorSlotNumber(const std::uint64_t a_slotMask) {
+  for (std::size_t index = 0; index < kArmorSlotNames.size(); ++index) {
+    if (static_cast<std::uint64_t>(
+            std::to_underlying(kArmorSlotNames[index].first)) == a_slotMask) {
+      return static_cast<std::uint32_t>(index + 30);
+    }
+  }
+
+  return 0;
+}
+
 std::string FormatFormID(RE::FormID a_formID) {
   std::array<char, 16> buffer{};
   std::snprintf(buffer.data(), buffer.size(), "%08X", a_formID);

@@ -68,7 +68,7 @@ void Menu::AcceptOverridePayload(int a_targetRowIndex) {
     workbench_.MoveOverride(dragPayload.rowIndex, dragPayload.itemIndex,
                             a_targetRowIndex);
   } else if (dragPayload.sourceKind ==
-                 static_cast<std::uint32_t>(DragSourceKind::Catalog) ||
+             static_cast<std::uint32_t>(DragSourceKind::Catalog) ||
              dragPayload.sourceKind ==
                  static_cast<std::uint32_t>(DragSourceKind::Row)) {
     workbench_.AddCatalogOverride(a_targetRowIndex, dragPayload.formID);
@@ -85,6 +85,10 @@ void Menu::ApplyRowReorder(const DraggedEquipmentPayload &a_dragPayload,
              static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
     workbench_.InsertCatalogRow(a_dragPayload.formID, a_targetRowIndex,
                                 a_insertAfter);
+  } else if (a_dragPayload.sourceKind ==
+             static_cast<std::uint32_t>(DragSourceKind::SlotCatalog)) {
+    workbench_.InsertSlotRow(a_dragPayload.slotMask, a_targetRowIndex,
+                             a_insertAfter);
   }
 }
 
@@ -168,7 +172,64 @@ void Menu::DrawVariantWorkbenchPane() {
 
   const auto &rows = workbench_.GetRows();
   if (rows.empty()) {
-    ImGui::TextWrapped("No equipped armor pieces were found on the player.");
+    ImGui::TextWrapped("No workbench rows yet. Drag equipment or slot entries "
+                       "to the Equipped column to create one.");
+
+    if (ImGui::BeginTable("##variant-workbench-empty", 3,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_Resizable,
+                          ImVec2(0.0f, 180.0f))) {
+      ImGui::TableSetupColumn("Equipped", ImGuiTableColumnFlags_WidthStretch,
+                              0.80f);
+      ImGui::TableSetupColumn("Overrides", ImGuiTableColumnFlags_WidthStretch,
+                              1.05f);
+      ImGui::TableSetupColumn("Hide",
+                              ImGuiTableColumnFlags_WidthFixed |
+                                  ImGuiTableColumnFlags_NoResize,
+                              72.0f);
+      ImGui::TableHeadersRow();
+      ImGui::TableNextRow(ImGuiTableRowFlags_None, 116.0f);
+
+      ImGui::TableSetColumnIndex(0);
+      if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
+        const ImRect leftCellRect = ImGui::TableGetCellBgRect(table, 0);
+        ImGui::SetCursorScreenPos(
+            ImVec2(leftCellRect.Min.x + ImGui::GetStyle().CellPadding.x,
+                   leftCellRect.Min.y + ImGui::GetStyle().CellPadding.y));
+        ImGui::PushTextWrapPos(leftCellRect.Max.x -
+                               ImGui::GetStyle().CellPadding.x);
+        ImGui::TextDisabled("Drop equipment or equipment slots here.");
+        ImGui::PopTextWrapPos();
+
+        if (ImGui::BeginDragDropTargetCustom(
+                leftCellRect, ImGui::GetID("##empty-workbench-row-target"))) {
+          if (const auto *payload =
+                  ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
+              payload && payload->Data != nullptr &&
+              payload->DataSize == sizeof(DraggedEquipmentPayload)) {
+            DraggedEquipmentPayload dragPayload{};
+            std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
+            if (dragPayload.sourceKind ==
+                static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
+              workbench_.AddCatalogSelectionAsRows(
+                  std::vector<RE::FormID>{dragPayload.formID});
+            } else if (dragPayload.sourceKind ==
+                       static_cast<std::uint32_t>(DragSourceKind::SlotCatalog)) {
+              workbench_.AddSlotRow(dragPayload.slotMask);
+            }
+          }
+          ImGui::EndDragDropTarget();
+        }
+      }
+
+      ImGui::TableSetColumnIndex(1);
+      ImGui::TextDisabled("Add a row first, then drop equipment overrides here.");
+
+      ImGui::TableSetColumnIndex(2);
+      ImGui::TextDisabled("-");
+
+      ImGui::EndTable();
+    }
     return;
   }
 
@@ -176,11 +237,13 @@ void Menu::DrawVariantWorkbenchPane() {
   activeVisuals.reserve(rows.size() * 2);
   for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
     const auto &row = rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.isEquipped) {
+    if (!row.IsSlotRow() && !row.isEquipped) {
       continue;
     }
 
     if (!row.overrides.empty()) {
+      const auto activeSlotMask =
+          row.IsSlotRow() ? row.equipped.slotMask : 0;
       for (int overrideIndex = 0;
            overrideIndex < static_cast<int>(row.overrides.size());
            ++overrideIndex) {
@@ -190,10 +253,10 @@ void Menu::DrawVariantWorkbenchPane() {
             {.widgetId = "override:" + std::to_string(rowIndex) + ":" +
                          std::to_string(overrideIndex),
              .description = DescribeActiveWorkbenchVisual(row, item, true),
-             .slotMask = item.slotMask,
+             .slotMask = row.IsSlotRow() ? activeSlotMask : item.slotMask,
              .rowIndex = rowIndex});
       }
-    } else if (!row.hideEquipped) {
+    } else if (!row.hideEquipped && row.isEquipped) {
       activeVisuals.push_back({.widgetId = row.key,
                                .description = DescribeActiveWorkbenchVisual(
                                    row, row.equipped, false),
@@ -206,7 +269,7 @@ void Menu::DrawVariantWorkbenchPane() {
   overrideConflicts.reserve(rows.size() * 2);
   for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
     const auto &row = rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.isEquipped) {
+    if (!row.IsSlotRow() && !row.isEquipped) {
       continue;
     }
 
@@ -214,16 +277,20 @@ void Menu::DrawVariantWorkbenchPane() {
          overrideIndex < static_cast<int>(row.overrides.size());
          ++overrideIndex) {
       const auto &item = row.overrides[static_cast<std::size_t>(overrideIndex)];
+      const auto affectedSlotMask =
+          row.IsSlotRow() ? row.equipped.slotMask : item.slotMask;
       OverrideConflictInfo info{};
       for (const auto &activeVisual : activeVisuals) {
         if (activeVisual.rowIndex == rowIndex ||
-            (activeVisual.slotMask & item.slotMask) == 0) {
+            (activeVisual.slotMask & affectedSlotMask) == 0) {
           continue;
         }
 
         info.targetWidgetIds.push_back(activeVisual.widgetId);
         info.targetDescriptions.push_back(activeVisual.description + " [" +
-                                          item.slotText + "]");
+                                          (row.IsSlotRow() ? row.equipped.name
+                                                           : item.slotText) +
+                                          "]");
       }
 
       if (!info.targetWidgetIds.empty()) {
@@ -264,7 +331,9 @@ void Menu::DrawVariantWorkbenchPane() {
             return a_payload->sourceKind ==
                        static_cast<std::uint32_t>(DragSourceKind::Row) ||
                    a_payload->sourceKind ==
-                       static_cast<std::uint32_t>(DragSourceKind::Catalog);
+                       static_cast<std::uint32_t>(DragSourceKind::Catalog) ||
+                   a_payload->sourceKind ==
+                       static_cast<std::uint32_t>(DragSourceKind::SlotCatalog);
           })(static_cast<const DraggedEquipmentPayload *>(activePayload->Data));
       float insertionLineY = -1.0f;
       float insertionLineX1 = -1.0f;
@@ -326,7 +395,9 @@ void Menu::DrawVariantWorkbenchPane() {
             rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
             rows[static_cast<std::size_t>(rowIndex)].equipped,
             {.showDeleteButton =
-                 !rows[static_cast<std::size_t>(rowIndex)].isEquipped});
+                 !rows[static_cast<std::size_t>(rowIndex)].isEquipped,
+             .showTooltip =
+                 !rows[static_cast<std::size_t>(rowIndex)].IsSlotRow()});
         if (!equippedWidget.deleteHovered && ImGui::BeginDragDropSource()) {
           DraggedEquipmentPayload payload{};
           payload.sourceKind = static_cast<std::uint32_t>(DragSourceKind::Row);
@@ -334,6 +405,8 @@ void Menu::DrawVariantWorkbenchPane() {
           payload.itemIndex = -1;
           payload.formID =
               rows[static_cast<std::size_t>(rowIndex)].equipped.formID;
+          payload.slotMask =
+              rows[static_cast<std::size_t>(rowIndex)].equipped.slotMask;
           ImGui::SetDragDropPayload(kVariantItemPayloadType, &payload,
                                     sizeof(payload));
           ImGui::TextUnformatted(
@@ -378,7 +451,9 @@ void Menu::DrawVariantWorkbenchPane() {
               if (dragPayload.sourceKind ==
                       static_cast<std::uint32_t>(DragSourceKind::Row) ||
                   dragPayload.sourceKind ==
-                      static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
+                      static_cast<std::uint32_t>(DragSourceKind::Catalog) ||
+                  dragPayload.sourceKind ==
+                      static_cast<std::uint32_t>(DragSourceKind::SlotCatalog)) {
                 acceptedRowReorderPayload = dragPayload;
                 acceptedRowReorderIndex = rowIndex;
                 acceptedRowInsertAfter = insertAfter;

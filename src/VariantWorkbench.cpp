@@ -15,6 +15,15 @@ constexpr std::uint64_t SlotBit(const BipedSlot a_slot) {
   return static_cast<std::uint64_t>(std::to_underlying(a_slot));
 }
 
+std::string BuildSlotKey(const std::uint64_t a_slotMask) {
+  const auto slotNumber = sosr::armor::GetArmorSlotNumber(a_slotMask);
+  if (slotNumber == 0) {
+    return {};
+  }
+
+  return "slot:" + std::to_string(slotNumber);
+}
+
 int ScorePreferredTargetSlots(
     const std::uint64_t a_itemMask, const std::uint64_t a_targetMask,
     const std::initializer_list<BipedSlot> &a_sourceSlots,
@@ -333,6 +342,22 @@ bool VariantWorkbench::BuildCatalogItem(RE::FormID a_formID,
   return false;
 }
 
+bool VariantWorkbench::BuildSlotItem(const std::uint64_t a_slotMask,
+                                     EquipmentWidgetItem &a_item) const {
+  const auto slotNumber = armor::GetArmorSlotNumber(a_slotMask);
+  if (slotNumber == 0) {
+    return false;
+  }
+
+  a_item = {};
+  a_item.formID = 0;
+  a_item.key = BuildSlotKey(a_slotMask);
+  a_item.name = armor::JoinStrings(armor::GetArmorSlotLabels(a_slotMask));
+  a_item.slotText = "Equipment slot override";
+  a_item.slotMask = a_slotMask;
+  return true;
+}
+
 bool VariantWorkbench::IsPreviewingSelection(
     std::string_view a_selectionKey) const {
   return previewSelectionKey_ == a_selectionKey && !previewDavVariants_.empty();
@@ -412,6 +437,17 @@ bool VariantWorkbench::AddCatalogSelectionAsRows(
   return addedAny;
 }
 
+bool VariantWorkbench::AddSlotRow(const std::uint64_t a_slotMask) {
+  auto row = BuildSlotRow(a_slotMask);
+  if (!row) {
+    return false;
+  }
+
+  rowOrder_.push_back(row->key);
+  rows_.push_back(std::move(*row));
+  return true;
+}
+
 std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
     const std::vector<RE::FormID> &a_formIDs) const {
   std::vector<VariantWorkbenchRow> newRows;
@@ -449,6 +485,31 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
   }
 
   return newRows;
+}
+
+std::optional<VariantWorkbenchRow>
+VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask) const {
+  const auto rowKey = BuildSlotKey(a_slotMask);
+  if (rowKey.empty()) {
+    return std::nullopt;
+  }
+
+  if (std::ranges::find(rows_, rowKey, &VariantWorkbenchRow::key) !=
+      rows_.end()) {
+    return std::nullopt;
+  }
+
+  EquipmentWidgetItem slotItem{};
+  if (!BuildSlotItem(a_slotMask, slotItem)) {
+    return std::nullopt;
+  }
+
+  VariantWorkbenchRow row{};
+  row.key = rowKey;
+  row.kind = VariantWorkbenchRowKind::EquipmentSlot;
+  row.equipped = std::move(slotItem);
+  row.equipped.key = rowKey;
+  return row;
 }
 
 bool VariantWorkbench::MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
@@ -590,6 +651,27 @@ bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
   auto insertIndex = a_targetRowIndex + (a_insertAfter ? 1 : 0);
   insertIndex = std::clamp(insertIndex, 0, static_cast<int>(rows_.size()));
   rows_.insert(rows_.begin() + insertIndex, std::move(newRows.front()));
+
+  RebuildRowOrder();
+  return true;
+}
+
+bool VariantWorkbench::InsertSlotRow(const std::uint64_t a_slotMask,
+                                     int a_targetRowIndex,
+                                     bool a_insertAfter) {
+  if (a_targetRowIndex < 0 ||
+      a_targetRowIndex >= static_cast<int>(rows_.size())) {
+    return false;
+  }
+
+  auto row = BuildSlotRow(a_slotMask);
+  if (!row) {
+    return false;
+  }
+
+  auto insertIndex = a_targetRowIndex + (a_insertAfter ? 1 : 0);
+  insertIndex = std::clamp(insertIndex, 0, static_cast<int>(rows_.size()));
+  rows_.insert(rows_.begin() + insertIndex, std::move(*row));
 
   RebuildRowOrder();
   return true;

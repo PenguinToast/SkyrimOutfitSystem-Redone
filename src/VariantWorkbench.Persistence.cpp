@@ -8,7 +8,7 @@
 
 namespace {
 constexpr std::uint32_t kSerializationType = 'ROWS';
-constexpr std::uint32_t kSerializationVersion = 2;
+constexpr std::uint32_t kSerializationVersion = 3;
 
 auto GetDynamicArmorVariantsExtendedClient()
     -> DynamicArmorVariantsExtendedAPI::
@@ -28,6 +28,15 @@ std::string BuildDavVariantName(const RE::TESObjectARMO *a_sourceArmor) {
 
 std::string BuildPreviewVariantName(const std::string &a_rowKey) {
   return "SOSR|PreviewSelected|" + a_rowKey;
+}
+
+std::string BuildDavSlotVariantName(const std::uint64_t a_slotMask) {
+  const auto slotNumber = sosr::armor::GetArmorSlotNumber(a_slotMask);
+  if (slotNumber == 0) {
+    return {};
+  }
+
+  return "SOSR|Slot|" + std::to_string(slotNumber);
 }
 
 auto BuildDavConditionsJson() -> std::string {
@@ -106,6 +115,70 @@ auto BuildDavVariantJson(
            : (displayName.empty() ? sosr::armor::GetDisplayName(a_sourceArmor)
                                   : displayName)},
       {"replaceByForm", replaceByForm}};
+  return root.dump();
+}
+
+auto BuildDavSlotVariantJson(
+    const std::uint64_t a_slotMask,
+    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
+    const bool a_hideEquipped) -> std::string {
+  const auto slotNumber = sosr::armor::GetArmorSlotNumber(a_slotMask);
+  if (slotNumber == 0) {
+    return {};
+  }
+
+  std::vector<std::string> replacements;
+  std::unordered_set<std::string> replacementSet;
+  std::string displayName;
+
+  for (const auto *overrideArmor : a_overrideArmors) {
+    if (!overrideArmor) {
+      continue;
+    }
+
+    if (!displayName.empty()) {
+      displayName.append(" + ");
+    }
+    displayName.append(sosr::armor::GetDisplayName(overrideArmor));
+
+    for (const auto *overrideAddon : overrideArmor->armorAddons) {
+      if (!overrideAddon) {
+        continue;
+      }
+
+      const auto identifier =
+          sosr::armor::GetReplacementIdentifier(overrideArmor, overrideAddon);
+      if (identifier.empty()) {
+        continue;
+      }
+
+      if (replacementSet.insert(identifier).second) {
+        replacements.push_back(identifier);
+      }
+    }
+  }
+
+  if (replacements.empty() && !a_hideEquipped) {
+    return {};
+  }
+
+  nlohmann::json replaceBySlot = nlohmann::json::object();
+  if (a_hideEquipped) {
+    replaceBySlot[std::to_string(slotNumber)] = nlohmann::json::array();
+  } else if (replacements.size() == 1) {
+    replaceBySlot[std::to_string(slotNumber)] = replacements.front();
+  } else {
+    replaceBySlot[std::to_string(slotNumber)] = replacements;
+  }
+
+  const auto slotLabel =
+      sosr::armor::JoinStrings(sosr::armor::GetArmorSlotLabels(a_slotMask));
+  nlohmann::json root{
+      {"displayName",
+       a_hideEquipped
+           ? "Hidden " + slotLabel
+           : (displayName.empty() ? slotLabel : displayName)},
+      {"replaceBySlot", replaceBySlot}};
   return root.dump();
 }
 } // namespace
@@ -275,12 +348,6 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended() {
   desiredVariants.reserve(rows_.size());
 
   for (const auto &row : rows_) {
-    const auto *sourceArmor =
-        RE::TESForm::LookupByID<RE::TESObjectARMO>(row.equipped.formID);
-    if (!sourceArmor) {
-      continue;
-    }
-
     std::vector<const RE::TESObjectARMO *> overrideArmors;
     overrideArmors.reserve(row.overrides.size());
     for (const auto &overrideItem : row.overrides) {
@@ -294,13 +361,28 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended() {
       continue;
     }
 
-    const auto variantName = BuildDavVariantName(sourceArmor);
+    std::string variantName;
+    std::string variantJson;
+    if (row.IsSlotRow()) {
+      variantName = BuildDavSlotVariantName(row.equipped.slotMask);
+      variantJson = BuildDavSlotVariantJson(row.equipped.slotMask,
+                                            overrideArmors, row.hideEquipped);
+    } else {
+      const auto *sourceArmor =
+          RE::TESForm::LookupByID<RE::TESObjectARMO>(row.equipped.formID);
+      if (!sourceArmor) {
+        continue;
+      }
+
+      variantName = BuildDavVariantName(sourceArmor);
+      variantJson =
+          BuildDavVariantJson(sourceArmor, overrideArmors, row.hideEquipped);
+    }
+
     if (variantName.empty()) {
       continue;
     }
 
-    const auto variantJson =
-        BuildDavVariantJson(sourceArmor, overrideArmors, row.hideEquipped);
     if (variantJson.empty()) {
       continue;
     }
@@ -369,8 +451,13 @@ void VariantWorkbench::Serialize(SKSE::SerializationInterface *a_skse) const {
     }
 
     nlohmann::json serializedRow;
-    serializedRow["equipped"] =
-        armor::GetFormIdentifier(RE::TESForm::LookupByID(row.equipped.formID));
+    serializedRow["type"] = row.IsSlotRow() ? "slot" : "armor";
+    if (row.IsSlotRow()) {
+      serializedRow["slot"] = armor::GetArmorSlotNumber(row.equipped.slotMask);
+    } else {
+      serializedRow["equipped"] = armor::GetFormIdentifier(
+          RE::TESForm::LookupByID(row.equipped.formID));
+    }
     serializedRow["hideEquipped"] = row.hideEquipped;
     serializedRow["overrides"] = nlohmann::json::array();
     for (const auto &overrideItem : row.overrides) {
@@ -403,7 +490,7 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
     return;
   }
 
-  if (version != kSerializationVersion) {
+  if (version != 2 && version != kSerializationVersion) {
     logger::warn("Skipping SOSR serialized rows from unsupported version {}",
                  version);
     return;
@@ -426,18 +513,33 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
       continue;
     }
 
-    const auto *equippedForm = armor::LookupByIdentifier<RE::TESObjectARMO>(
-        serializedRow.value("equipped", std::string{}));
-    EquipmentWidgetItem equipped{};
-    if (!equippedForm ||
-        !BuildCatalogItem(equippedForm->GetFormID(), equipped)) {
-      continue;
-    }
-
     VariantWorkbenchRow row{};
-    row.key = "armor:" + armor::FormatFormID(equippedForm->GetFormID());
-    row.equipped = std::move(equipped);
-    row.equipped.key = row.key;
+    const auto rowType = serializedRow.value("type", std::string{"armor"});
+    if (rowType == "slot") {
+      const auto slotMask =
+          armor::GetArmorSlotMask(serializedRow.value("slot", 0));
+      EquipmentWidgetItem slotItem{};
+      if (slotMask == 0 || !BuildSlotItem(slotMask, slotItem)) {
+        continue;
+      }
+
+      row.kind = VariantWorkbenchRowKind::EquipmentSlot;
+      row.key = slotItem.key;
+      row.equipped = std::move(slotItem);
+      row.equipped.key = row.key;
+    } else {
+      const auto *equippedForm = armor::LookupByIdentifier<RE::TESObjectARMO>(
+          serializedRow.value("equipped", std::string{}));
+      EquipmentWidgetItem equipped{};
+      if (!equippedForm ||
+          !BuildCatalogItem(equippedForm->GetFormID(), equipped)) {
+        continue;
+      }
+
+      row.key = "armor:" + armor::FormatFormID(equippedForm->GetFormID());
+      row.equipped = std::move(equipped);
+      row.equipped.key = row.key;
+    }
     row.hideEquipped = serializedRow.value("hideEquipped", false);
 
     std::unordered_set<RE::FormID> seenOverrideForms;

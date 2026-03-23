@@ -53,7 +53,8 @@ private:
   enum class DragSourceKind : std::uint32_t {
     Catalog = 1,
     Override = 2,
-    Row = 3
+    Row = 3,
+    SlotCatalog = 4
   };
 
   struct DraggedEquipmentPayload {
@@ -61,9 +62,10 @@ private:
     std::int32_t rowIndex{-1};
     std::int32_t itemIndex{-1};
     RE::FormID formID{0};
+    std::uint64_t slotMask{0};
   };
 
-  enum class BrowserTab { Gear, Outfits, Kits, Options };
+  enum class BrowserTab { Gear, Outfits, Kits, Slots, Options };
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
 
@@ -91,6 +93,7 @@ private:
   void DrawVariantWorkbenchPane();
   [[nodiscard]] bool DrawOutfitTab();
   [[nodiscard]] bool DrawKitTab();
+  [[nodiscard]] bool DrawSlotTab();
   void DrawOptionsTab();
   void DrawCreateKitDialog();
   void DrawDeleteKitDialog();
