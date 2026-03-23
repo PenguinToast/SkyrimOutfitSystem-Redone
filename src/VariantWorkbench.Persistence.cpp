@@ -45,24 +45,26 @@ auto BuildDavConditionsJson() -> std::string {
   return root.dump();
 }
 
-auto BuildDavVariantJson(
-    const RE::TESObjectARMO *a_sourceArmor,
-    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
-    bool a_hideEquipped) -> std::string {
-  nlohmann::json replaceByForm = nlohmann::json::object();
+struct DavReplacementData {
   std::vector<std::string> replacements;
-  std::unordered_set<std::string> replacementSet;
   std::string displayName;
+};
+
+auto CollectDavReplacementData(
+    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors)
+    -> DavReplacementData {
+  DavReplacementData data;
+  std::unordered_set<std::string> replacementSet;
 
   for (const auto *overrideArmor : a_overrideArmors) {
     if (!overrideArmor) {
       continue;
     }
 
-    if (!displayName.empty()) {
-      displayName.append(" + ");
+    if (!data.displayName.empty()) {
+      data.displayName.append(" + ");
     }
-    displayName.append(sosr::armor::GetDisplayName(overrideArmor));
+    data.displayName.append(sosr::armor::GetDisplayName(overrideArmor));
 
     for (const auto *overrideAddon : overrideArmor->armorAddons) {
       if (!overrideAddon) {
@@ -76,12 +78,21 @@ auto BuildDavVariantJson(
       }
 
       if (replacementSet.insert(identifier).second) {
-        replacements.push_back(identifier);
+        data.replacements.push_back(identifier);
       }
     }
   }
 
-  if (replacements.empty() && !a_hideEquipped) {
+  return data;
+}
+
+auto BuildDavVariantJson(
+    const RE::TESObjectARMO *a_sourceArmor,
+    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
+    bool a_hideEquipped) -> std::string {
+  nlohmann::json replaceByForm = nlohmann::json::object();
+  const auto replacementData = CollectDavReplacementData(a_overrideArmors);
+  if (replacementData.replacements.empty() && !a_hideEquipped) {
     return {};
   }
 
@@ -97,10 +108,10 @@ auto BuildDavVariantJson(
 
     if (a_hideEquipped) {
       replaceByForm[sourceIdentifier] = nlohmann::json::array();
-    } else if (replacements.size() == 1) {
-      replaceByForm[sourceIdentifier] = replacements.front();
+    } else if (replacementData.replacements.size() == 1) {
+      replaceByForm[sourceIdentifier] = replacementData.replacements.front();
     } else {
-      replaceByForm[sourceIdentifier] = replacements;
+      replaceByForm[sourceIdentifier] = replacementData.replacements;
     }
   }
 
@@ -112,8 +123,9 @@ auto BuildDavVariantJson(
       {"displayName",
        a_hideEquipped
            ? "Hidden " + sosr::armor::GetDisplayName(a_sourceArmor)
-           : (displayName.empty() ? sosr::armor::GetDisplayName(a_sourceArmor)
-                                  : displayName)},
+           : (replacementData.displayName.empty()
+                  ? sosr::armor::GetDisplayName(a_sourceArmor)
+                  : replacementData.displayName)},
       {"replaceByForm", replaceByForm}};
   return root.dump();
 }
@@ -127,48 +139,19 @@ auto BuildDavSlotVariantJson(
     return {};
   }
 
-  std::vector<std::string> replacements;
-  std::unordered_set<std::string> replacementSet;
-  std::string displayName;
-
-  for (const auto *overrideArmor : a_overrideArmors) {
-    if (!overrideArmor) {
-      continue;
-    }
-
-    if (!displayName.empty()) {
-      displayName.append(" + ");
-    }
-    displayName.append(sosr::armor::GetDisplayName(overrideArmor));
-
-    for (const auto *overrideAddon : overrideArmor->armorAddons) {
-      if (!overrideAddon) {
-        continue;
-      }
-
-      const auto identifier =
-          sosr::armor::GetReplacementIdentifier(overrideArmor, overrideAddon);
-      if (identifier.empty()) {
-        continue;
-      }
-
-      if (replacementSet.insert(identifier).second) {
-        replacements.push_back(identifier);
-      }
-    }
-  }
-
-  if (replacements.empty() && !a_hideEquipped) {
+  const auto replacementData = CollectDavReplacementData(a_overrideArmors);
+  if (replacementData.replacements.empty() && !a_hideEquipped) {
     return {};
   }
 
   nlohmann::json replaceBySlot = nlohmann::json::object();
   if (a_hideEquipped) {
     replaceBySlot[std::to_string(slotNumber)] = nlohmann::json::array();
-  } else if (replacements.size() == 1) {
-    replaceBySlot[std::to_string(slotNumber)] = replacements.front();
+  } else if (replacementData.replacements.size() == 1) {
+    replaceBySlot[std::to_string(slotNumber)] =
+        replacementData.replacements.front();
   } else {
-    replaceBySlot[std::to_string(slotNumber)] = replacements;
+    replaceBySlot[std::to_string(slotNumber)] = replacementData.replacements;
   }
 
   const auto slotLabel =
@@ -177,7 +160,8 @@ auto BuildDavSlotVariantJson(
       {"displayName",
        a_hideEquipped
            ? "Hidden " + slotLabel
-           : (displayName.empty() ? slotLabel : displayName)},
+           : (replacementData.displayName.empty() ? slotLabel
+                                                  : replacementData.displayName)},
       {"replaceBySlot", replaceBySlot}};
   return root.dump();
 }
