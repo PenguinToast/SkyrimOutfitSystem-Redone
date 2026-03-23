@@ -50,8 +50,8 @@ struct VariantWorkbenchRow {
   }
 
   [[nodiscard]] std::uint64_t
-  GetOverrideTargetSlotMask(const EquipmentWidgetItem &a_item) const {
-    return IsSlotRow() ? equipped.slotMask : a_item.slotMask;
+  GetOverrideVisualSlotMask(const EquipmentWidgetItem &a_item) const {
+    return a_item.slotMask;
   }
 
   [[nodiscard]] std::string_view

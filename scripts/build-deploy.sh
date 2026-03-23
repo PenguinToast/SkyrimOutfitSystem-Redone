@@ -10,17 +10,21 @@ CLEAN=0
 PLUGIN_NAME="SkyrimVanitySystem"
 DEFAULT_MOD_DIR="/mnt/f/games/skyrim/modlists/pt_test/mods/Skyrim Vanity System"
 MOD_DIR="${MOD_DIR:-$DEFAULT_MOD_DIR}"
+BUILD_ALL=0
 
 while (($#)); do
     case "$1" in
         --clean)
             CLEAN=1
             ;;
+        --all)
+            BUILD_ALL=1
+            ;;
         release|debug|releasedbg)
             MODE="$1"
             ;;
         *)
-            echo "Usage: $0 [--clean] [release|debug|releasedbg]" >&2
+            echo "Usage: $0 [--clean] [--all] [release|debug|releasedbg]" >&2
             exit 2
             ;;
     esac
@@ -52,6 +56,9 @@ BUILD_ARGS=()
 if ((CLEAN)); then
     BUILD_ARGS+=("--clean")
 fi
+if ((BUILD_ALL)); then
+    BUILD_ARGS+=("--all")
+fi
 BUILD_ARGS+=("$MODE")
 
 "${SCRIPT_DIR}/build.sh" "${BUILD_ARGS[@]}"
@@ -60,11 +67,6 @@ if [[ ! -f "$PLUGIN_SRC" ]]; then
     echo "Build succeeded but ${PLUGIN_SRC} was not found." >&2
     exit 1
 fi
-if [[ ! -f "$VR_PLUGIN_SRC" ]]; then
-    echo "Build succeeded but ${VR_PLUGIN_SRC} was not found." >&2
-    exit 1
-fi
-
 mkdir -p "$PLUGIN_DST_DIR"
 
 copy_file "$PLUGIN_SRC" "${PLUGIN_DST_DIR}/${PLUGIN_NAME}.dll"

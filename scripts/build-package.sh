@@ -86,6 +86,7 @@ BUILD_ARGS=()
 if ((CLEAN)); then
     BUILD_ARGS+=("--clean")
 fi
+BUILD_ARGS+=("--all")
 BUILD_ARGS+=("$MODE")
 "${SCRIPT_DIR}/build.sh" "${BUILD_ARGS[@]}"
 

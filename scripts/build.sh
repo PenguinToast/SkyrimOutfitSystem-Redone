@@ -9,17 +9,24 @@ MODE="releasedbg"
 CLEAN=0
 PLUGIN_NAME="SkyrimVanitySystem"
 BUILD_ROOT="${REPO_ROOT}/build/runtime"
+BUILD_TARGET="flat"
 
 while (($#)); do
     case "$1" in
         --clean)
             CLEAN=1
             ;;
+        --all)
+            BUILD_TARGET="all"
+            ;;
+        --vr)
+            BUILD_TARGET="vr"
+            ;;
         release|debug|releasedbg)
             MODE="$1"
             ;;
         *)
-            echo "Usage: $0 [--clean] [release|debug|releasedbg]" >&2
+            echo "Usage: $0 [--clean] [--all|--vr] [release|debug|releasedbg]" >&2
             exit 2
             ;;
     esac
@@ -71,10 +78,24 @@ xmake build -y
     fi
 }
 
-build_variant flat y y n
-build_variant vr n n y
+case "$BUILD_TARGET" in
+    flat)
+        build_variant flat y y n
+        ;;
+    vr)
+        build_variant vr n n y
+        ;;
+    all)
+        build_variant flat y y n
+        build_variant vr n n y
+        ;;
+esac
 
 echo "Built ${PLUGIN_NAME} (${MODE})"
 echo "Version ${SVS_BUILD_VERSION_STRING}"
-echo "Flat build: ${BUILD_ROOT}/flat/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
-echo "VR build: ${BUILD_ROOT}/vr/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
+if [[ "$BUILD_TARGET" == "flat" || "$BUILD_TARGET" == "all" ]]; then
+    echo "Flat build: ${BUILD_ROOT}/flat/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
+fi
+if [[ "$BUILD_TARGET" == "vr" || "$BUILD_TARGET" == "all" ]]; then
+    echo "VR build: ${BUILD_ROOT}/vr/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
+fi
