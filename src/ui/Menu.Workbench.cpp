@@ -61,8 +61,8 @@ void DrawWrappedColoredTextRuns(
       }
 
       const auto token = run.text.substr(index, end - index);
-      const auto tokenSize = ImGui::CalcTextSize(token.data(),
-                                                 token.data() + token.size());
+      const auto tokenSize =
+          ImGui::CalcTextSize(token.data(), token.data() + token.size());
 
       if (isSpace) {
         if (x > 0.0f) {
@@ -89,17 +89,17 @@ void DrawWrappedColoredTextRuns(
   ImGui::Dummy(ImVec2(wrapWidth, y + lineHeight));
 }
 
-void DrawConflictEntry(const sosr::ui::workbench_conflicts::ConflictEntry &a_desc,
-                       const sosr::ThemeConfig *a_theme) {
+void DrawConflictEntry(
+    const sosr::ui::workbench_conflicts::ConflictEntry &a_desc,
+    const sosr::ThemeConfig *a_theme) {
   ImGui::Bullet();
   ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
   ImGui::BeginGroup();
   DrawWrappedColoredTextRuns(
       {{a_desc.primaryName,
         a_theme->GetColorU32(a_desc.isHideConflict ? "WARN" : "TEXT")},
-       {a_desc.isHideConflict
-            ? " hide equipped on "
-            : (a_desc.isOverride ? " override on " : " "),
+       {a_desc.isHideConflict ? " hide equipped on "
+                              : (a_desc.isOverride ? " override on " : " "),
         a_theme->GetColorU32("TEXT_DISABLED")},
        {a_desc.secondaryName,
         a_theme->GetColorU32(a_desc.isHideConflict ? "TEXT" : "PRIMARY")},
@@ -153,7 +153,7 @@ void Menu::AcceptOverridePayload(int a_targetRowIndex) {
     workbench_.MoveOverride(dragPayload.rowIndex, dragPayload.itemIndex,
                             a_targetRowIndex);
   } else if (dragPayload.sourceKind ==
-             static_cast<std::uint32_t>(DragSourceKind::Catalog) ||
+                 static_cast<std::uint32_t>(DragSourceKind::Catalog) ||
              dragPayload.sourceKind ==
                  static_cast<std::uint32_t>(DragSourceKind::Row)) {
     workbench_.AddCatalogOverride(a_targetRowIndex, dragPayload.formID);
@@ -321,7 +321,8 @@ void Menu::DrawVariantWorkbenchPane() {
       }
 
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextDisabled("Add a row first, then drop equipment overrides here.");
+      ImGui::TextDisabled(
+          "Add a row first, then drop equipment overrides here.");
 
       ImGui::TableSetColumnIndex(2);
       ImGui::TextDisabled("-");
@@ -433,7 +434,8 @@ void Menu::DrawVariantWorkbenchPane() {
              .conflict = rowConflicts.contains(
                  rows[static_cast<std::size_t>(rowIndex)].key),
              .drawTooltipExtras =
-                 rowConflicts.contains(rows[static_cast<std::size_t>(rowIndex)].key)
+                 rowConflicts.contains(
+                     rows[static_cast<std::size_t>(rowIndex)].key)
                      ? std::function<void()>{[&, rowIndex]() {
                          const auto &row =
                              rows[static_cast<std::size_t>(rowIndex)];
@@ -451,26 +453,22 @@ void Menu::DrawVariantWorkbenchPane() {
                                  DrawWrappedColoredTextRuns(
                                      {{description.primaryName,
                                        theme->GetColorU32("TEXT")},
-                                      {description.secondaryName.empty()
-                                           ? ""
-                                           : " (",
+                                      {description.secondaryName.empty() ? ""
+                                                                         : " (",
                                        theme->GetColorU32("TEXT_DISABLED")},
                                       {description.secondaryName,
                                        theme->GetColorU32("TEXT_DISABLED")},
-                                      {description.secondaryName.empty()
-                                           ? ""
-                                           : ")",
+                                      {description.secondaryName.empty() ? ""
+                                                                         : ")",
                                        theme->GetColorU32("TEXT_DISABLED")},
-                                      {description.targetLabel.empty()
-                                           ? ""
-                                           : "  [",
+                                      {description.targetLabel.empty() ? ""
+                                                                       : "  [",
                                        theme->GetColorU32("TEXT")},
                                       {description.targetLabel,
                                        theme->GetColorU32("TEXT_HEADER",
                                                           0.92f)},
-                                      {description.targetLabel.empty()
-                                           ? ""
-                                           : "]",
+                                      {description.targetLabel.empty() ? ""
+                                                                       : "]",
                                        theme->GetColorU32("TEXT")}});
                                  ImGui::EndGroup();
                                }
@@ -501,7 +499,8 @@ void Menu::DrawVariantWorkbenchPane() {
         widgetRects.insert_or_assign(
             rows[static_cast<std::size_t>(rowIndex)].key,
             ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
-        if (rowConflicts.contains(rows[static_cast<std::size_t>(rowIndex)].key) &&
+        if (rowConflicts.contains(
+                rows[static_cast<std::size_t>(rowIndex)].key) &&
             equippedWidget.hovered) {
           hoveredConflictWidgetIds =
               rowConflicts.at(rows[static_cast<std::size_t>(rowIndex)].key)
@@ -555,23 +554,23 @@ void Menu::DrawVariantWorkbenchPane() {
                          : ImRect(ImGui::GetCursorScreenPos(),
                                   ImGui::GetCursorScreenPos());
         const auto cellPadding = ImGui::GetStyle().CellPadding;
-        const auto overrideDropMin = ImVec2(overrideCellRect.Min.x + cellPadding.x,
-                                            overrideCellRect.Min.y + cellPadding.y);
+        const auto overrideDropMin =
+            ImVec2(overrideCellRect.Min.x + cellPadding.x,
+                   overrideCellRect.Min.y + cellPadding.y);
         const auto overrideDropMaxX = overrideCellRect.Max.x - cellPadding.x;
         const auto overrideCellContentHeight =
             (overrideCellRect.Max.y - overrideCellRect.Min.y) -
             (cellPadding.y * 2.0f);
-        const auto overrideCellContentOffsetY =
-            (std::max)(0.0f, (overrideCellContentHeight - contentHeight) * 0.5f);
-        ImGui::SetCursorScreenPos(
-            ImVec2(overrideCellRect.Min.x + cellPadding.x,
-                   overrideCellRect.Min.y + cellPadding.y +
-                       overrideCellContentOffsetY));
+        const auto overrideCellContentOffsetY = (std::max)(
+            0.0f, (overrideCellContentHeight - contentHeight) * 0.5f);
+        ImGui::SetCursorScreenPos(ImVec2(overrideCellRect.Min.x + cellPadding.x,
+                                         overrideCellRect.Min.y +
+                                             cellPadding.y +
+                                             overrideCellContentOffsetY));
 
         if (overrideCount == 0) {
-          const auto wrappedWidth =
-              (overrideCellRect.Max.x - cellPadding.x) -
-              (overrideCellRect.Min.x + cellPadding.x);
+          const auto wrappedWidth = (overrideCellRect.Max.x - cellPadding.x) -
+                                    (overrideCellRect.Min.x + cellPadding.x);
           const auto textSize = ImGui::CalcTextSize(
               "Drop equipment overrides here.", nullptr, false, wrappedWidth);
           ImGui::SetCursorScreenPos(
@@ -584,9 +583,8 @@ void Menu::DrawVariantWorkbenchPane() {
           ImGui::PopTextWrapPos();
         } else {
           const auto oldItemSpacing = ImGui::GetStyle().ItemSpacing;
-          ImGui::PushStyleVar(
-              ImGuiStyleVar_ItemSpacing,
-              ImVec2(oldItemSpacing.x, kWorkbenchOverrideGapY));
+          ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+                              ImVec2(oldItemSpacing.x, kWorkbenchOverrideGapY));
           for (int overrideIndex = 0;
                overrideIndex < static_cast<int>(overrideCount);
                ++overrideIndex) {
@@ -641,7 +639,8 @@ void Menu::DrawVariantWorkbenchPane() {
             widgetRects.insert_or_assign(
                 widgetId,
                 ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
-            if (overrideConflicts.contains(widgetId) && overrideWidget.hovered) {
+            if (overrideConflicts.contains(widgetId) &&
+                overrideWidget.hovered) {
               hoveredConflictWidgetIds =
                   overrideConflicts.at(widgetId).targetWidgetIds;
             }
@@ -681,14 +680,12 @@ void Menu::DrawVariantWorkbenchPane() {
 
         const ImRect overrideDropRect(
             overrideDropMin,
-            ImVec2(overrideDropMaxX,
-                   rowBottomY.back() - cellPadding.y));
+            ImVec2(overrideDropMaxX, rowBottomY.back() - cellPadding.y));
         ImGui::TableSetColumnIndex(1);
         if (ImGui::BeginDragDropTargetCustom(
-                overrideDropRect,
-                ImGui::GetID(
-                    ("##override-cell-target-" + std::to_string(rowIndex))
-                        .c_str()))) {
+                overrideDropRect, ImGui::GetID(("##override-cell-target-" +
+                                                std::to_string(rowIndex))
+                                                   .c_str()))) {
           AcceptOverridePayload(rowIndex);
           ImGui::EndDragDropTarget();
         }
@@ -709,16 +706,16 @@ void Menu::DrawVariantWorkbenchPane() {
         if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
           drawList->PushClipRect(table->OuterRect.Min, table->OuterRect.Max,
                                  false);
-          drawList->AddLine(
-              ImVec2(insertionLineX1, insertionLineY),
-              ImVec2(insertionLineX2, insertionLineY),
-              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"), 2.0f);
+          drawList->AddLine(ImVec2(insertionLineX1, insertionLineY),
+                            ImVec2(insertionLineX2, insertionLineY),
+                            ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"),
+                            2.0f);
           drawList->PopClipRect();
         } else {
-          drawList->AddLine(
-              ImVec2(insertionLineX1, insertionLineY),
-              ImVec2(insertionLineX2, insertionLineY),
-              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"), 2.0f);
+          drawList->AddLine(ImVec2(insertionLineX1, insertionLineY),
+                            ImVec2(insertionLineX2, insertionLineY),
+                            ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"),
+                            2.0f);
         }
       }
 
@@ -727,10 +724,9 @@ void Menu::DrawVariantWorkbenchPane() {
         for (const auto &targetWidgetId : hoveredConflictWidgetIds) {
           if (const auto rectIt = widgetRects.find(targetWidgetId);
               rectIt != widgetRects.end()) {
-            drawList->AddRect(
-                rectIt->second.Min, rectIt->second.Max,
-                ThemeConfig::GetSingleton()->GetColorU32("WARN"), 8.0f, 0,
-                3.0f);
+            drawList->AddRect(rectIt->second.Min, rectIt->second.Max,
+                              ThemeConfig::GetSingleton()->GetColorU32("WARN"),
+                              8.0f, 0, 3.0f);
           }
         }
       }
@@ -739,8 +735,7 @@ void Menu::DrawVariantWorkbenchPane() {
 
       if (acceptedRowReorderPayload && acceptedRowReorderIndex >= 0) {
         ApplyWorkbenchRowDrop(*acceptedRowReorderPayload,
-                              acceptedRowReorderIndex,
-                              acceptedRowInsertAfter);
+                              acceptedRowReorderIndex, acceptedRowInsertAfter);
       }
     }
     ImGui::EndChild();

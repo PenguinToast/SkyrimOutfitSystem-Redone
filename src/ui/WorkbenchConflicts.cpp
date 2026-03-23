@@ -19,8 +19,8 @@ bool HasVariantSelectionConflictSource(
          (a_row.hideEquipped || !a_row.overrides.empty());
 }
 
-std::string DescribeRowSelectionReason(
-    const sosr::workbench::VariantWorkbenchRow &a_row) {
+std::string
+DescribeRowSelectionReason(const sosr::workbench::VariantWorkbenchRow &a_row) {
   if (a_row.hideEquipped) {
     return "hide equipped";
   }
@@ -133,19 +133,17 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
           continue;
         }
 
-        AppendConflictTarget(
-            info, activeVisual.widgetId,
-            {.primaryName = activeVisual.primaryName,
-             .secondaryName = activeVisual.secondaryName,
-             .isOverride = activeVisual.isOverride,
-             .targetLabel = activeVisual.slotText});
+        AppendConflictTarget(info, activeVisual.widgetId,
+                             {.primaryName = activeVisual.primaryName,
+                              .secondaryName = activeVisual.secondaryName,
+                              .isOverride = activeVisual.isOverride,
+                              .targetLabel = activeVisual.slotText});
       }
 
       if (!info.targetWidgetIds.empty()) {
-        state.overrideConflicts.emplace(
-            "override:" + std::to_string(rowIndex) + ":" +
-                std::to_string(overrideIndex),
-            std::move(info));
+        state.overrideConflicts.emplace("override:" + std::to_string(rowIndex) +
+                                            ":" + std::to_string(overrideIndex),
+                                        std::move(info));
       }
     }
   }
