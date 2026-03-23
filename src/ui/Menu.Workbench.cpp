@@ -1,6 +1,7 @@
 #include "Menu.h"
 
 #include "imgui_internal.h"
+#include "ui/WorkbenchConflicts.h"
 #include "ui/components/EquipmentWidget.h"
 #include "ui/components/PinnableTooltip.h"
 
@@ -14,34 +15,6 @@ namespace {
 constexpr char kVariantItemPayloadType[] = "SOSR_VARIANT_ITEM";
 constexpr float kWorkbenchRowGapY = 20.0f;
 constexpr float kWorkbenchOverrideGapY = 5.0f;
-
-struct ActiveWorkbenchVisual {
-  std::string widgetId;
-  std::string primaryName;
-  std::string secondaryName;
-  bool isOverride{false};
-  std::string slotText;
-  std::uint64_t slotMask{0};
-  int rowIndex{-1};
-};
-
-struct ConflictEntry {
-  std::string primaryName;
-  std::string secondaryName;
-  bool isOverride{false};
-  bool isHideConflict{false};
-  std::string targetLabel;
-};
-
-struct RowConflictInfo {
-  std::vector<std::string> targetWidgetIds;
-  std::vector<ConflictEntry> targetDescriptions;
-};
-
-struct OverrideConflictInfo {
-  std::vector<std::string> targetWidgetIds;
-  std::vector<ConflictEntry> targetDescriptions;
-};
 
 struct ColoredTextRun {
   std::string_view text;
@@ -116,38 +89,7 @@ void DrawWrappedColoredTextRuns(
   ImGui::Dummy(ImVec2(wrapWidth, y + lineHeight));
 }
 
-bool CanHideEquippedVisual(const sosr::workbench::VariantWorkbenchRow &a_row) {
-  return a_row.hideEquipped && a_row.isEquipped;
-}
-
-bool HasVariantSelectionConflictSource(
-    const sosr::workbench::VariantWorkbenchRow &a_row) {
-  return a_row.IsVisualConflictSource() &&
-         (a_row.hideEquipped || !a_row.overrides.empty());
-}
-
-std::string DescribeRowSelectionReason(
-    const sosr::workbench::VariantWorkbenchRow &a_row) {
-  if (a_row.hideEquipped) {
-    return "hide equipped";
-  }
-  return a_row.IsSlotRow() ? "slot override" : "item override";
-}
-
-template <class TConflictInfo>
-void AppendConflictTarget(TConflictInfo &a_info,
-                          const std::string_view a_widgetId,
-                          ConflictEntry a_desc) {
-  if (std::find(a_info.targetWidgetIds.begin(), a_info.targetWidgetIds.end(),
-                a_widgetId) != a_info.targetWidgetIds.end()) {
-    return;
-  }
-
-  a_info.targetWidgetIds.emplace_back(a_widgetId);
-  a_info.targetDescriptions.push_back(std::move(a_desc));
-}
-
-void DrawConflictEntry(const ConflictEntry &a_desc,
+void DrawConflictEntry(const sosr::ui::workbench_conflicts::ConflictEntry &a_desc,
                        const sosr::ThemeConfig *a_theme) {
   ImGui::Bullet();
   ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
@@ -166,6 +108,18 @@ void DrawConflictEntry(const ConflictEntry &a_desc,
        {a_desc.targetLabel.empty() ? "" : "]", a_theme->GetColorU32("TEXT")}});
 
   ImGui::EndGroup();
+}
+
+template <class TDrawEntry>
+void DrawConflictTooltipSection(const char *a_title, TDrawEntry &&a_drawEntry) {
+  const auto *theme = sosr::ThemeConfig::GetSingleton();
+  ImGui::PushStyleColor(ImGuiCol_Separator, theme->GetColorU32("WARN"));
+  ImGui::Separator();
+  ImGui::PopStyleColor();
+  ImGui::Spacing();
+  ImGui::TextColored(theme->GetColor("WARN"), "%s", a_title);
+  ImGui::Spacing();
+  a_drawEntry(theme);
 }
 
 void DrawSimplePinnableTooltip(const std::string_view a_id,
@@ -377,107 +331,9 @@ void Menu::DrawVariantWorkbenchPane() {
     return;
   }
 
-  std::unordered_map<std::string, RowConflictInfo> rowConflicts;
-  rowConflicts.reserve(rows.size());
-  for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
-    const auto &row = rows[static_cast<std::size_t>(rowIndex)];
-    if (!HasVariantSelectionConflictSource(row)) {
-      continue;
-    }
-
-    RowConflictInfo info{};
-    for (int otherRowIndex = 0; otherRowIndex < static_cast<int>(rows.size());
-         ++otherRowIndex) {
-      if (otherRowIndex == rowIndex) {
-        continue;
-      }
-
-      const auto &otherRow = rows[static_cast<std::size_t>(otherRowIndex)];
-      if (!HasVariantSelectionConflictSource(otherRow) ||
-          (row.equipped.slotMask & otherRow.equipped.slotMask) == 0) {
-        continue;
-      }
-
-      AppendConflictTarget(
-          info, otherRow.key,
-          {.primaryName = otherRow.equipped.name,
-           .secondaryName = DescribeRowSelectionReason(otherRow),
-           .targetLabel = otherRow.equipped.slotText});
-    }
-
-    if (!info.targetWidgetIds.empty()) {
-      rowConflicts.emplace(row.key, std::move(info));
-    }
-  }
-
-  std::vector<ActiveWorkbenchVisual> activeVisuals;
-  activeVisuals.reserve(rows.size() * 2);
-  for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
-    const auto &row = rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.IsVisualConflictSource()) {
-      continue;
-    }
-
-    if (!row.overrides.empty()) {
-      for (int overrideIndex = 0;
-           overrideIndex < static_cast<int>(row.overrides.size());
-           ++overrideIndex) {
-        const auto &item =
-            row.overrides[static_cast<std::size_t>(overrideIndex)];
-        activeVisuals.push_back(
-            {.widgetId = "override:" + std::to_string(rowIndex) + ":" +
-                         std::to_string(overrideIndex),
-             .primaryName = item.name,
-             .secondaryName = row.equipped.name,
-             .isOverride = true,
-             .slotText = item.slotText,
-             .slotMask = row.GetOverrideVisualSlotMask(item),
-             .rowIndex = rowIndex});
-      }
-    } else if (!row.IsSlotRow() && !row.hideEquipped && row.isEquipped) {
-      activeVisuals.push_back({.widgetId = row.key,
-                               .primaryName = row.equipped.name,
-                               .slotText = row.equipped.slotText,
-                               .slotMask = row.equipped.slotMask,
-                               .rowIndex = rowIndex});
-    }
-  }
-
-  std::unordered_map<std::string, OverrideConflictInfo> overrideConflicts;
-  overrideConflicts.reserve(rows.size() * 2);
-  for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
-    const auto &row = rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.IsVisualConflictSource()) {
-      continue;
-    }
-
-    for (int overrideIndex = 0;
-         overrideIndex < static_cast<int>(row.overrides.size());
-         ++overrideIndex) {
-      const auto &item = row.overrides[static_cast<std::size_t>(overrideIndex)];
-      const auto affectedSlotMask = row.GetOverrideVisualSlotMask(item);
-      OverrideConflictInfo info{};
-      for (const auto &activeVisual : activeVisuals) {
-        if (activeVisual.rowIndex == rowIndex ||
-            (activeVisual.slotMask & affectedSlotMask) == 0) {
-          continue;
-        }
-
-        AppendConflictTarget(
-            info, activeVisual.widgetId,
-            {.primaryName = activeVisual.primaryName,
-             .secondaryName = activeVisual.secondaryName,
-             .isOverride = activeVisual.isOverride,
-             .targetLabel = activeVisual.slotText});
-      }
-
-      if (!info.targetWidgetIds.empty()) {
-        overrideConflicts.emplace("override:" + std::to_string(rowIndex) + ":" +
-                                      std::to_string(overrideIndex),
-                                  std::move(info));
-      }
-    }
-  }
+  const auto conflictState = ui::workbench_conflicts::BuildConflictState(rows);
+  const auto &rowConflicts = conflictState.rowConflicts;
+  const auto &overrideConflicts = conflictState.overrideConflicts;
 
   constexpr float deletePaneHeight = 86.0f;
   const auto tableHeight =
@@ -579,42 +435,46 @@ void Menu::DrawVariantWorkbenchPane() {
              .drawTooltipExtras =
                  rowConflicts.contains(rows[static_cast<std::size_t>(rowIndex)].key)
                      ? std::function<void()>{[&, rowIndex]() {
-                         const auto *theme = ThemeConfig::GetSingleton();
                          const auto &row =
                              rows[static_cast<std::size_t>(rowIndex)];
                          const auto &info = rowConflicts.at(row.key);
-                         ImGui::PushStyleColor(
-                             ImGuiCol_Separator,
-                             theme->GetColorU32("WARN"));
-                         ImGui::Separator();
-                         ImGui::PopStyleColor();
-                         ImGui::Spacing();
-                         ImGui::TextColored(
-                             theme->GetColor("WARN"),
-                             "Warning: Variant selection conflict.");
-                         ImGui::Spacing();
-                         for (const auto &description : info.targetDescriptions) {
-                           ImGui::Bullet();
-                           ImGui::SameLine(0.0f,
-                                           ImGui::GetStyle().ItemInnerSpacing.x);
-                           ImGui::BeginGroup();
-                           DrawWrappedColoredTextRuns(
-                               {{description.primaryName,
-                                 theme->GetColorU32("TEXT")},
-                                {description.secondaryName.empty() ? "" : " (",
-                                 theme->GetColorU32("TEXT_DISABLED")},
-                                {description.secondaryName,
-                                 theme->GetColorU32("TEXT_DISABLED")},
-                                {description.secondaryName.empty() ? "" : ")",
-                                 theme->GetColorU32("TEXT_DISABLED")},
-                                {description.targetLabel.empty() ? "" : "  [",
-                                 theme->GetColorU32("TEXT")},
-                                {description.targetLabel,
-                                 theme->GetColorU32("TEXT_HEADER", 0.92f)},
-                                {description.targetLabel.empty() ? "" : "]",
-                                 theme->GetColorU32("TEXT")}});
-                           ImGui::EndGroup();
-                         }
+                         DrawConflictTooltipSection(
+                             "Warning: Variant selection conflict.",
+                             [&](const ThemeConfig *theme) {
+                               for (const auto &description :
+                                    info.targetDescriptions) {
+                                 ImGui::Bullet();
+                                 ImGui::SameLine(
+                                     0.0f,
+                                     ImGui::GetStyle().ItemInnerSpacing.x);
+                                 ImGui::BeginGroup();
+                                 DrawWrappedColoredTextRuns(
+                                     {{description.primaryName,
+                                       theme->GetColorU32("TEXT")},
+                                      {description.secondaryName.empty()
+                                           ? ""
+                                           : " (",
+                                       theme->GetColorU32("TEXT_DISABLED")},
+                                      {description.secondaryName,
+                                       theme->GetColorU32("TEXT_DISABLED")},
+                                      {description.secondaryName.empty()
+                                           ? ""
+                                           : ")",
+                                       theme->GetColorU32("TEXT_DISABLED")},
+                                      {description.targetLabel.empty()
+                                           ? ""
+                                           : "  [",
+                                       theme->GetColorU32("TEXT")},
+                                      {description.targetLabel,
+                                       theme->GetColorU32("TEXT_HEADER",
+                                                          0.92f)},
+                                      {description.targetLabel.empty()
+                                           ? ""
+                                           : "]",
+                                       theme->GetColorU32("TEXT")}});
+                                 ImGui::EndGroup();
+                               }
+                             });
                        }}
                      : std::function<void()>{}});
         if (!equippedWidget.deleteHovered && ImGui::BeginDragDropSource()) {
@@ -741,22 +601,15 @@ void Menu::DrawVariantWorkbenchPane() {
                  .drawTooltipExtras =
                      overrideConflicts.contains(widgetId)
                          ? std::function<void()>{[&, widgetId]() {
-                             const auto *theme = ThemeConfig::GetSingleton();
-                             ImGui::PushStyleColor(
-                                 ImGuiCol_Separator,
-                                 theme->GetColorU32("WARN"));
-                             ImGui::Separator();
-                             ImGui::PopStyleColor();
-                             ImGui::Spacing();
-                             ImGui::TextColored(
-                                 theme->GetColor("WARN"),
-                                 "Warning: Conflicting visuals.");
-                             ImGui::Spacing();
-                             for (const auto &description :
-                                  overrideConflicts.at(widgetId)
-                                      .targetDescriptions) {
-                               DrawConflictEntry(description, theme);
-                             }
+                             DrawConflictTooltipSection(
+                                 "Warning: Conflicting visuals.",
+                                 [&](const ThemeConfig *theme) {
+                                   for (const auto &description :
+                                        overrideConflicts.at(widgetId)
+                                            .targetDescriptions) {
+                                     DrawConflictEntry(description, theme);
+                                   }
+                                 });
                            }}
                          : std::function<void()>{}});
             if (!overrideWidget.deleteHovered && ImGui::BeginDragDropSource()) {
