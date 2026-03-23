@@ -3,8 +3,9 @@
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 
-#include <string>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -32,6 +33,21 @@ struct VariantWorkbenchRow {
 
   [[nodiscard]] bool IsSlotRow() const {
     return kind == VariantWorkbenchRowKind::EquipmentSlot;
+  }
+
+  [[nodiscard]] bool IsVisualConflictSource() const {
+    return IsSlotRow() || isEquipped;
+  }
+
+  [[nodiscard]] std::uint64_t
+  GetOverrideTargetSlotMask(const EquipmentWidgetItem &a_item) const {
+    return IsSlotRow() ? equipped.slotMask : a_item.slotMask;
+  }
+
+  [[nodiscard]] std::string_view
+  GetOverrideTargetLabel(const EquipmentWidgetItem &a_item) const {
+    return IsSlotRow() ? std::string_view{equipped.name}
+                       : std::string_view{a_item.slotText};
   }
 };
 

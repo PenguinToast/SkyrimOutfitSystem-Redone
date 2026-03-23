@@ -237,13 +237,11 @@ void Menu::DrawVariantWorkbenchPane() {
   activeVisuals.reserve(rows.size() * 2);
   for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
     const auto &row = rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.IsSlotRow() && !row.isEquipped) {
+    if (!row.IsVisualConflictSource()) {
       continue;
     }
 
     if (!row.overrides.empty()) {
-      const auto activeSlotMask =
-          row.IsSlotRow() ? row.equipped.slotMask : 0;
       for (int overrideIndex = 0;
            overrideIndex < static_cast<int>(row.overrides.size());
            ++overrideIndex) {
@@ -253,7 +251,7 @@ void Menu::DrawVariantWorkbenchPane() {
             {.widgetId = "override:" + std::to_string(rowIndex) + ":" +
                          std::to_string(overrideIndex),
              .description = DescribeActiveWorkbenchVisual(row, item, true),
-             .slotMask = row.IsSlotRow() ? activeSlotMask : item.slotMask,
+             .slotMask = row.GetOverrideTargetSlotMask(item),
              .rowIndex = rowIndex});
       }
     } else if (!row.hideEquipped && row.isEquipped) {
@@ -269,7 +267,7 @@ void Menu::DrawVariantWorkbenchPane() {
   overrideConflicts.reserve(rows.size() * 2);
   for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
     const auto &row = rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.IsSlotRow() && !row.isEquipped) {
+    if (!row.IsVisualConflictSource()) {
       continue;
     }
 
@@ -277,8 +275,7 @@ void Menu::DrawVariantWorkbenchPane() {
          overrideIndex < static_cast<int>(row.overrides.size());
          ++overrideIndex) {
       const auto &item = row.overrides[static_cast<std::size_t>(overrideIndex)];
-      const auto affectedSlotMask =
-          row.IsSlotRow() ? row.equipped.slotMask : item.slotMask;
+      const auto affectedSlotMask = row.GetOverrideTargetSlotMask(item);
       OverrideConflictInfo info{};
       for (const auto &activeVisual : activeVisuals) {
         if (activeVisual.rowIndex == rowIndex ||
@@ -287,10 +284,9 @@ void Menu::DrawVariantWorkbenchPane() {
         }
 
         info.targetWidgetIds.push_back(activeVisual.widgetId);
-        info.targetDescriptions.push_back(activeVisual.description + " [" +
-                                          (row.IsSlotRow() ? row.equipped.name
-                                                           : item.slotText) +
-                                          "]");
+        info.targetDescriptions.push_back(
+            activeVisual.description + " [" +
+            std::string(row.GetOverrideTargetLabel(item)) + "]");
       }
 
       if (!info.targetWidgetIds.empty()) {
