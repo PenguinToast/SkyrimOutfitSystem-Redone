@@ -141,6 +141,9 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
             (activeVisual.slotMask & affectedSlotMask) == 0) {
           continue;
         }
+        if (row.IsSlotRow() && !activeVisual.isOverride) {
+          continue;
+        }
 
         AppendConflictTarget(info, activeVisual.widgetId,
                              {.primaryName = activeVisual.primaryName,

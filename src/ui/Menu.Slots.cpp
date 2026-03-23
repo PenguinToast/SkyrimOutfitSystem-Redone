@@ -82,6 +82,10 @@ bool Menu::DrawSlotTab() {
       row.occupantSortText = "Empty";
     }
 
+    if (!showAllSlots_ && row.occupantItems.empty()) {
+      continue;
+    }
+
     rows.push_back(std::move(row));
   }
 

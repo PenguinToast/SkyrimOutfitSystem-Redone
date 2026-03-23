@@ -378,7 +378,7 @@ bool VariantWorkbench::BuildSlotItem(const std::uint64_t a_slotMask,
   a_item.formID = 0;
   a_item.key = BuildSlotKey(a_slotMask);
   a_item.name = armor::JoinStrings(armor::GetArmorSlotLabels(a_slotMask));
-  a_item.slotText = "Equipment slot override";
+  a_item.slotText = "Equipment slot";
   a_item.slotMask = a_slotMask;
   return true;
 }

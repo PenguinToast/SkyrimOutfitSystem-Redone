@@ -238,9 +238,9 @@ void DrawCatalogTabHelpTooltip(const std::string_view a_id,
   }, tooltipOptions);
 }
 
-bool IsDelayedTabHover() {
+bool IsDelayedHover(const float a_delaySeconds = 0.45f) {
   return ImGui::IsItemHovered() &&
-         ImGui::GetCurrentContext()->HoveredIdTimer >= 0.45f;
+         ImGui::GetCurrentContext()->HoveredIdTimer >= a_delaySeconds;
 }
 
 std::optional<std::string> GetDavAvailabilityMessage() {
@@ -1030,8 +1030,9 @@ void Menu::DrawWindow() {
       const bool gearTabOpen = ImGui::BeginTabItem("Gear");
       DrawCatalogTabHelpTooltip(
           "catalog:gear-tab",
-          IsDelayedTabHover(),
-          {"Browse individual armor pieces from the equipment catalog.",
+          IsDelayedHover(),
+          {"Use this tab to override a specific equipped gear piece.",
+           "Browse individual armor pieces from the equipment catalog.",
            "Double-click to add an override using Skyrim Vanity System's "
            "default target selection, or use the context menu to add a new "
            "workbench row instead."});
@@ -1046,7 +1047,7 @@ void Menu::DrawWindow() {
       const bool outfitsTabOpen = ImGui::BeginTabItem("Outfits");
       DrawCatalogTabHelpTooltip(
           "catalog:outfits-tab",
-          IsDelayedTabHover(),
+          IsDelayedHover(),
           {"Browse full outfits from plugins in the catalog.",
            "Double-click to add the outfit's items as overrides, or use the "
            "context menu to add the outfit as workbench rows instead."});
@@ -1061,7 +1062,7 @@ void Menu::DrawWindow() {
       const bool kitsTabOpen = ImGui::BeginTabItem("Kits");
       DrawCatalogTabHelpTooltip(
           "catalog:kits-tab",
-          IsDelayedTabHover(),
+          IsDelayedHover(),
           {"Browse Mod Explorer kits loaded from "
            "data/interface/modex/user/kits.",
            "Kits behave like outfits: double-click adds their items as "
@@ -1079,8 +1080,11 @@ void Menu::DrawWindow() {
       const bool slotsTabOpen = ImGui::BeginTabItem("Equipment Slots");
       DrawCatalogTabHelpTooltip(
           "catalog:slots-tab",
-          IsDelayedTabHover(),
-          {"Browse slot-based overrides that target armor addon slots.",
+          IsDelayedHover(),
+          {"Use this tab to override a specific equipment slot no matter "
+           "which armor you have equipped there, as long as something is "
+           "equipped in that slot.",
+           "Browse slot-based overrides that target armor addon slots.",
            "Armor addons are sub-components of an armor, and Dynamic Armor "
            "Variants Extended resolves slot overrides against the union of "
            "those addon slots rather than only the slots declared on the "
@@ -1122,6 +1126,17 @@ void Menu::DrawWindow() {
           ClearCatalogSelection();
         }
       }
+    }
+    if (activeTab_ == BrowserTab::Slots) {
+      ImGui::Spacing();
+      ImGui::Checkbox("Show all", &showAllSlots_);
+      DrawCatalogTabHelpTooltip(
+          "catalog:slots-show-all",
+          IsDelayedHover(0.55f),
+          {"When unchecked, only slots that currently have equipped items are "
+           "shown.",
+           "Enable this to browse every supported equipment slot, including "
+           "slots that are currently empty."});
     }
     if (activeTab_ != BrowserTab::Slots) {
       ImGui::SameLine();

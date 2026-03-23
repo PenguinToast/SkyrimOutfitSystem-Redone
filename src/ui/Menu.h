@@ -162,6 +162,7 @@ private:
   bool pauseGameWhenOpen_{false};
   bool smoothScroll_{true};
   bool previewSelected_{true};
+  bool showAllSlots_{false};
   std::uint32_t toggleKey_{0x40};
   std::uint32_t toggleModifier_{0};
   std::string selectedCatalogKey_;
