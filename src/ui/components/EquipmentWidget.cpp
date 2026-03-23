@@ -241,6 +241,9 @@ DrawEquipmentWidget(const char *a_id,
   EquipmentWidgetResult result{};
   result.hovered = ImGui::IsItemHovered();
   result.active = ImGui::IsItemActive();
+  result.clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+  result.doubleClicked =
+      result.hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left);
 
   const auto rectMin = ImGui::GetItemRectMin();
   const auto rectMax = ImGui::GetItemRectMax();

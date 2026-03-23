@@ -4,6 +4,7 @@
 #include "Keycode.h"
 #include "ThemeConfig.h"
 #include "VariantWorkbench.h"
+#include "components/EquipmentWidget.h"
 #include "imgui.h"
 
 #include <array>
@@ -87,8 +88,9 @@ private:
   void HandleCancel();
   void DrawWindow();
   void DrawCatalogFilters();
-  void DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
-                             DragSourceKind a_sourceKind);
+  [[nodiscard]] sosr::ui::components::EquipmentWidgetResult
+  DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
+                        DragSourceKind a_sourceKind);
   [[nodiscard]] bool DrawGearTab();
   [[nodiscard]] bool
   DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);

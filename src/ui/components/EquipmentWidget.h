@@ -14,6 +14,8 @@ struct EquipmentWidgetOptions {
 struct EquipmentWidgetResult {
   bool hovered{false};
   bool active{false};
+  bool clicked{false};
+  bool doubleClicked{false};
   bool deleteHovered{false};
   bool deleteClicked{false};
 };

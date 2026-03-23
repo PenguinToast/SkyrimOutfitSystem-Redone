@@ -291,12 +291,13 @@ void AllowTextInput([[maybe_unused]] RE::ControlMap *a_controlMap,
 } // namespace
 
 namespace sosr {
-void Menu::DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
-                                 const DragSourceKind a_sourceKind) {
-  [[maybe_unused]] const auto widgetResult =
+ui::components::EquipmentWidgetResult
+Menu::DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
+                            const DragSourceKind a_sourceKind) {
+  const auto widgetResult =
       ui::components::DrawEquipmentWidget(a_item.key.c_str(), a_item);
   if (!ImGui::BeginDragDropSource()) {
-    return;
+    return widgetResult;
   }
 
   DraggedEquipmentPayload payload{};
@@ -309,6 +310,7 @@ void Menu::DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
   ImGui::TextUnformatted(a_item.name.c_str());
   ImGui::Text("%s", a_item.slotText.c_str());
   ImGui::EndDragDropSource();
+  return widgetResult;
 }
 
 Menu *Menu::GetSingleton() {
@@ -1661,7 +1663,8 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           ImGui::EndPopup();
         }
         ImGui::SetCursorScreenPos(rowContentPos);
-        DrawCatalogDragWidget(item, DragSourceKind::Catalog);
+        const auto widgetResult =
+            DrawCatalogDragWidget(item, DragSourceKind::Catalog);
 
         ImGui::TableSetColumnIndex(1);
         ImGui::TextUnformatted(entry.plugin.data());
@@ -1676,7 +1679,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
               ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
         }
 
-        if (clicked) {
+        if (clicked || widgetResult.clicked) {
           rowClicked = true;
           if (selectedCatalogKey_ == entry.id) {
             ClearCatalogSelection();
@@ -1690,7 +1693,8 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           }
         }
 
-        if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        if ((rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
+            widgetResult.doubleClicked) {
           rowClicked = true;
           AddGearEntryToWorkbench(entry);
         }

@@ -179,9 +179,10 @@ bool Menu::DrawSlotTab() {
               ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
         }
 
-        DrawCatalogDragWidget(row.slotItem, DragSourceKind::SlotCatalog);
+        const auto widgetResult =
+            DrawCatalogDragWidget(row.slotItem, DragSourceKind::SlotCatalog);
 
-        if (clicked) {
+        if (clicked || widgetResult.clicked) {
           rowClicked = true;
           if (selectedCatalogKey_ == row.slotItem.key) {
             ClearCatalogSelection();
@@ -191,7 +192,8 @@ bool Menu::DrawSlotTab() {
           }
         }
 
-        if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+        if ((rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
+            widgetResult.doubleClicked) {
           rowClicked = true;
           workbench_.AddSlotRow(row.slotItem.slotMask);
         }
