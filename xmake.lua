@@ -23,6 +23,7 @@ add_rules("mode.release", "mode.debug", "mode.releasedbg")
 add_rules("plugin.vsxmake.autoupdate")
 
 add_requires("nlohmann_json v3.12.0")
+add_requires("rapidcsv v8.92")
 
 target("SkyrimVanitySystem")
     add_deps("commonlibsse-ng")
