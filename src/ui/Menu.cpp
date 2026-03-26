@@ -1645,7 +1645,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::TableSetColumnIndex(0);
         const auto rowContentPos = ImGui::GetCursorScreenPos();
         const auto rowHeight =
-            18.0f + (ImGui::GetTextLineHeight() * 2.0f) + 14.0f;
+            18.0f + (ImGui::GetTextLineHeight() * 2.0f);
         ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
