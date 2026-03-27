@@ -5,9 +5,12 @@
 #include <functional>
 
 namespace sosr::ui::components {
+enum class EquipmentWidgetConflictStyle { None, Warning, Error };
+
 struct EquipmentWidgetOptions {
   bool showDeleteButton{false};
-  bool conflict{false};
+  EquipmentWidgetConflictStyle conflictStyle{
+      EquipmentWidgetConflictStyle::None};
   std::function<void()> drawTooltipExtras{};
 };
 

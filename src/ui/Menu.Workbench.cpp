@@ -520,8 +520,11 @@ void Menu::DrawVariantWorkbenchPane() {
             {.showDeleteButton =
                  rows[static_cast<std::size_t>(rowIndex)].equipped.IsSlot() ||
                  !rows[static_cast<std::size_t>(rowIndex)].isEquipped,
-             .conflict = rowConflicts.contains(
-                 rows[static_cast<std::size_t>(rowIndex)].key),
+             .conflictStyle =
+                 rowConflicts.contains(
+                     rows[static_cast<std::size_t>(rowIndex)].key)
+                     ? ui::components::EquipmentWidgetConflictStyle::Warning
+                     : ui::components::EquipmentWidgetConflictStyle::None,
              .drawTooltipExtras =
                  rowConflicts.contains(
                      rows[static_cast<std::size_t>(rowIndex)].key)
@@ -684,7 +687,10 @@ void Menu::DrawVariantWorkbenchPane() {
                 rows[static_cast<std::size_t>(rowIndex)]
                     .overrides[static_cast<std::size_t>(overrideIndex)],
                 {.showDeleteButton = true,
-                 .conflict = overrideConflicts.contains(widgetId),
+                 .conflictStyle =
+                     overrideConflicts.contains(widgetId)
+                         ? ui::components::EquipmentWidgetConflictStyle::Error
+                         : ui::components::EquipmentWidgetConflictStyle::None,
                  .drawTooltipExtras =
                      overrideConflicts.contains(widgetId)
                          ? std::function<void()>{[&, widgetId]() {
@@ -810,13 +816,23 @@ void Menu::DrawVariantWorkbenchPane() {
 
       if (!hoveredConflictWidgetIds.empty()) {
         auto *drawList = ImGui::GetWindowDrawList();
+        if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
+          drawList->PushClipRect(table->OuterRect.Min, table->OuterRect.Max,
+                                 false);
+        }
         for (const auto &targetWidgetId : hoveredConflictWidgetIds) {
           if (const auto rectIt = widgetRects.find(targetWidgetId);
               rectIt != widgetRects.end()) {
+            drawList->AddRectFilled(
+                rectIt->second.Min, rectIt->second.Max,
+                ThemeConfig::GetSingleton()->GetColorU32("WARN", 0.18f), 8.0f);
             drawList->AddRect(rectIt->second.Min, rectIt->second.Max,
                               ThemeConfig::GetSingleton()->GetColorU32("WARN"),
                               8.0f, 0, 3.0f);
           }
+        }
+        if (ImGui::GetCurrentTable() != nullptr) {
+          drawList->PopClipRect();
         }
       }
 

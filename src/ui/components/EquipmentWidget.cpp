@@ -249,23 +249,42 @@ DrawEquipmentWidget(const char *a_id,
   const auto rectMax = ImGui::GetItemRectMax();
   auto *drawList = ImGui::GetWindowDrawList();
   const auto *theme = ThemeConfig::GetSingleton();
+  const auto hasWarningConflict =
+      a_options.conflictStyle == EquipmentWidgetConflictStyle::Warning;
+  const auto hasErrorConflict =
+      a_options.conflictStyle == EquipmentWidgetConflictStyle::Error;
 
   ImU32 fillColor = theme->GetColorU32("BG_LIGHT");
   ImU32 borderColor = theme->GetColorU32("BORDER");
-  if (a_options.conflict) {
+  if (hasWarningConflict) {
+    fillColor = theme->GetColorU32("WARN", 0.28f);
+    borderColor = theme->GetColorU32("WARN", 0.88f);
+  } else if (hasErrorConflict) {
     fillColor = theme->GetColorU32("ERROR", 0.45f);
     borderColor = theme->GetColorU32("ERROR");
   }
   if (result.active) {
-    fillColor = a_options.conflict ? theme->GetColorU32("ERROR", 0.75f)
-                                   : theme->GetColorU32("PRIMARY", 0.80f);
-    borderColor = a_options.conflict ? theme->GetColorU32("ERROR")
-                                     : theme->GetColorU32("PRIMARY");
+    if (hasWarningConflict) {
+      fillColor = theme->GetColorU32("WARN", 0.48f);
+      borderColor = theme->GetColorU32("WARN");
+    } else if (hasErrorConflict) {
+      fillColor = theme->GetColorU32("ERROR", 0.75f);
+      borderColor = theme->GetColorU32("ERROR");
+    } else {
+      fillColor = theme->GetColorU32("PRIMARY", 0.80f);
+      borderColor = theme->GetColorU32("PRIMARY");
+    }
   } else if (result.hovered) {
-    fillColor = a_options.conflict ? theme->GetColorU32("ERROR", 0.62f)
-                                   : theme->GetColorU32("BG_LIGHT", 1.0f);
-    borderColor = a_options.conflict ? theme->GetColorU32("ERROR")
-                                     : theme->GetColorU32("PRIMARY", 0.70f);
+    if (hasWarningConflict) {
+      fillColor = theme->GetColorU32("WARN", 0.38f);
+      borderColor = theme->GetColorU32("WARN");
+    } else if (hasErrorConflict) {
+      fillColor = theme->GetColorU32("ERROR", 0.62f);
+      borderColor = theme->GetColorU32("ERROR");
+    } else {
+      fillColor = theme->GetColorU32("BG_LIGHT", 1.0f);
+      borderColor = theme->GetColorU32("PRIMARY", 0.70f);
+    }
   }
 
   drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);

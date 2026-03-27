@@ -61,12 +61,7 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
     }
 
     RowConflictInfo info{};
-    for (int otherRowIndex = 0; otherRowIndex < static_cast<int>(a_rows.size());
-         ++otherRowIndex) {
-      if (otherRowIndex == rowIndex) {
-        continue;
-      }
-
+    for (int otherRowIndex = 0; otherRowIndex < rowIndex; ++otherRowIndex) {
       const auto &otherRow = a_rows[static_cast<std::size_t>(otherRowIndex)];
       const auto rowSlotMask = row.GetSelectionConflictSlotMask();
       const auto otherRowSlotMask = otherRow.GetSelectionConflictSlotMask();
