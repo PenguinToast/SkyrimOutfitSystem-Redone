@@ -189,8 +189,9 @@ bool Menu::SavePendingKit() {
   file << data.dump(4) << '\n';
   file.close();
 
-  EquipmentCatalog::Get().RefreshFromGame();
-  selectedCatalogKey_ = "kit:" + relativePath.generic_string();
+  pendingCatalogSelectionAfterRefresh_ = "kit:" + relativePath.generic_string();
+  QueueCatalogRefresh(CatalogRefreshMode::KitsOnly);
+  selectedCatalogKey_.clear();
   activeTab_ = BrowserTab::Kits;
   openCreateKitDialog_ = false;
   pendingKitFormIDs_.clear();
@@ -223,7 +224,7 @@ bool Menu::DeletePendingKit() {
     ClearCatalogSelection();
   }
 
-  EquipmentCatalog::Get().RefreshFromGame();
+  QueueCatalogRefresh(CatalogRefreshMode::KitsOnly);
   activeTab_ = BrowserTab::Kits;
   pendingDeleteKitId_.clear();
   pendingDeleteKitName_.clear();

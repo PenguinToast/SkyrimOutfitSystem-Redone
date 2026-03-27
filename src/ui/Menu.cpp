@@ -544,6 +544,10 @@ void Menu::Open() {
     return;
   }
 
+  if (!catalogInitialized_) {
+    QueueCatalogRefresh();
+  }
+
   if (auto *messageQueue = RE::UIMessageQueue::GetSingleton();
       messageQueue != nullptr) {
     messageQueue->AddMessage(MenuHost::MENU_NAME, RE::UI_MESSAGE_TYPE::kShow,
@@ -707,6 +711,56 @@ std::string Menu::BuildFavoriteLabel(const std::string_view a_name,
   }
 
   return std::string(kFavoritePrefix) + std::string(a_name);
+}
+
+void Menu::QueueCatalogRefresh(const CatalogRefreshMode a_mode) {
+  catalogRefreshQueued_ = true;
+  queuedCatalogRefreshMode_ = a_mode;
+  if (a_mode == CatalogRefreshMode::Full) {
+    catalogInitialized_ = false;
+    pendingCatalogSelectionAfterRefresh_.clear();
+    ClearCatalogSelection();
+  }
+}
+
+void Menu::UpdateCatalogRefresh() {
+  auto &catalog = EquipmentCatalog::Get();
+  if (catalogRefreshQueued_ && !catalog.IsRefreshing()) {
+    catalog.StartRefreshFromGame(queuedCatalogRefreshMode_ ==
+                                         CatalogRefreshMode::KitsOnly
+                                     ? EquipmentCatalog::RefreshMode::KitsOnly
+                                     : EquipmentCatalog::RefreshMode::Full);
+    catalogRefreshQueued_ = false;
+  }
+
+  if (!catalog.IsRefreshing()) {
+    return;
+  }
+
+  if (!catalog.ContinueRefreshFromGame(16.0)) {
+    catalogInitialized_ = true;
+    if (!pendingCatalogSelectionAfterRefresh_.empty()) {
+      selectedCatalogKey_ = pendingCatalogSelectionAfterRefresh_;
+      pendingCatalogSelectionAfterRefresh_.clear();
+    }
+  }
+}
+
+void Menu::DrawCatalogLoadingPane() const {
+  const auto &catalog = EquipmentCatalog::Get();
+  const auto avail = ImGui::GetContentRegionAvail();
+  const auto barWidth = (std::min)(avail.x, 420.0f);
+  const auto progress = std::clamp(catalog.GetRefreshProgress(), 0.0f, 1.0f);
+  const auto status = catalog.GetRefreshStatus();
+
+  ImGui::Dummy(ImVec2(0.0f, (std::max)(avail.y * 0.30f, 0.0f)));
+  ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + barWidth);
+  ImGui::TextUnformatted(status.data(), status.data() + status.size());
+  ImGui::PopTextWrapPos();
+  ImGui::Spacing();
+  ImGui::ProgressBar(progress, ImVec2(barWidth, 0.0f));
+  ImGui::Spacing();
+  ImGui::TextDisabled("%.0f%%", progress * 100.0f);
 }
 
 void Menu::AddGearEntryToWorkbench(const GearEntry &a_entry) {
@@ -993,8 +1047,12 @@ void Menu::DrawWindow() {
   if (activeTab_ == BrowserTab::Options) {
     DrawOptionsTab();
   } else {
+    UpdateCatalogRefresh();
     workbench_.SyncRowsFromPlayer();
     const auto applySelectedPreview = [&]() {
+      if (EquipmentCatalog::Get().IsRefreshing()) {
+        return;
+      }
       if (!previewSelected_ || selectedCatalogKey_.empty()) {
         return;
       }
@@ -1164,20 +1222,24 @@ void Menu::DrawWindow() {
       if (ImGui::BeginChild("##catalog-pane", ImVec2(0.0f, 0.0f),
                             ImGuiChildFlags_Borders)) {
         bool catalogRowClicked = false;
-        if (activeTab_ == BrowserTab::Gear) {
-          catalogRowClicked = DrawGearTab();
-        } else if (activeTab_ == BrowserTab::Outfits) {
-          catalogRowClicked = DrawOutfitTab();
-        } else if (activeTab_ == BrowserTab::Kits) {
-          catalogRowClicked = DrawKitTab();
+        if (EquipmentCatalog::Get().IsRefreshing()) {
+          DrawCatalogLoadingPane();
         } else {
-          catalogRowClicked = DrawSlotTab();
-        }
+          if (activeTab_ == BrowserTab::Gear) {
+            catalogRowClicked = DrawGearTab();
+          } else if (activeTab_ == BrowserTab::Outfits) {
+            catalogRowClicked = DrawOutfitTab();
+          } else if (activeTab_ == BrowserTab::Kits) {
+            catalogRowClicked = DrawKitTab();
+          } else {
+            catalogRowClicked = DrawSlotTab();
+          }
 
-        if (!selectedCatalogKey_.empty() &&
-            ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
-            !catalogRowClicked) {
-          ClearCatalogSelection();
+          if (!selectedCatalogKey_.empty() &&
+              ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+              !catalogRowClicked) {
+            ClearCatalogSelection();
+          }
         }
       }
       ImGui::EndChild();

@@ -1,5 +1,6 @@
 #include "EquipmentCatalog.h"
 
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -597,9 +598,154 @@ std::vector<std::string> BuildSortedUniqueOptions(const Entries &a_entries,
   return values;
 }
 
+std::optional<sosr::GearEntry> BuildGearEntry(RE::TESObjectARMO *a_armor) {
+  if (!a_armor || a_armor->IsDeleted() || a_armor->IsIgnored() ||
+      !a_armor->GetFile(0)) {
+    return std::nullopt;
+  }
+
+  const auto editorID = GetEditorID(a_armor);
+  auto displayName = GetName(a_armor);
+  if (displayName.empty()) {
+    displayName = editorID;
+  }
+  if (displayName.empty()) {
+    return std::nullopt;
+  }
+
+  sosr::GearEntry entry{};
+  entry.formID = a_armor->GetFormID();
+  entry.id = BuildEntryID(a_armor);
+  entry.name = std::move(displayName);
+  entry.editorID = editorID;
+  entry.plugin = GetPluginName(a_armor);
+  entry.category = GetArmorCategory(a_armor);
+  entry.slots = GetArmorSlots(a_armor);
+  entry.slot = entry.slots.empty() ? std::string{} : entry.slots.front();
+  entry.statValue = static_cast<int>(a_armor->GetArmorRating());
+  entry.weight = a_armor->GetWeight();
+  entry.value = a_armor->GetGoldValue();
+  entry.keywords.insert(entry.keywords.end(), entry.slots.begin(),
+                        entry.slots.end());
+  entry.keywords.push_back(entry.category);
+  SortUniqueStrings(entry.keywords);
+  entry.keywordsText = JoinStrings(entry.keywords);
+  entry.searchText = BuildGearSearchText(entry);
+  return entry;
+}
+
+std::optional<sosr::OutfitEntry> BuildOutfitEntry(
+    const RE::BGSOutfit *a_outfit,
+    std::unordered_map<RE::FormID, sosr::ResolvedReferenceCollection>
+        &a_leveledListCache) {
+  if (!a_outfit || a_outfit->IsDeleted() || a_outfit->IsIgnored() ||
+      !a_outfit->GetFile(0)) {
+    return std::nullopt;
+  }
+
+  auto description = DescribeOutfit(a_outfit, a_leveledListCache);
+  if (description.pieces.empty()) {
+    return std::nullopt;
+  }
+
+  auto editorID = GetEditorID(a_outfit);
+  auto displayName = GetName(a_outfit);
+  if (displayName.empty()) {
+    displayName = editorID;
+  }
+  if (displayName.empty()) {
+    displayName = "Form " + FormatFormID(a_outfit->GetFormID());
+  }
+
+  sosr::OutfitEntry entry{};
+  entry.formID = a_outfit->GetFormID();
+  entry.id = BuildEntryID(a_outfit);
+  entry.name = std::move(displayName);
+  entry.editorID = std::move(editorID);
+  entry.plugin = GetPluginName(a_outfit);
+  entry.summary = BuildOutfitSummary(description);
+  entry.armorFormIDs = std::move(description.armorFormIDs);
+  entry.itemTree = std::move(description.itemTree);
+  entry.pieces = std::move(description.pieces);
+  entry.slots = std::move(description.slots);
+  entry.tags = std::move(description.tags);
+  entry.piecesText = JoinStrings(entry.pieces);
+  entry.slotsText = JoinStrings(entry.slots);
+  entry.tagsText = JoinStrings(entry.tags);
+  entry.searchText = BuildOutfitSearchText(entry);
+  return entry;
+}
+
+std::optional<sosr::KitEntry>
+BuildKitEntry(const std::filesystem::path &a_path) {
+  if (!std::filesystem::is_regular_file(a_path) ||
+      a_path.extension() != ".json") {
+    return std::nullopt;
+  }
+
+  const auto relativePath = a_path.lexically_relative(kModexKitPath);
+  if (relativePath.string().starts_with("..")) {
+    return std::nullopt;
+  }
+
+  const auto json = OpenJsonFile(a_path);
+  if (!json.is_object() || json.size() != 1) {
+    return std::nullopt;
+  }
+
+  const auto kitItem = json.items().begin();
+  const auto &kitData = kitItem.value();
+  if (!kitData.is_object()) {
+    return std::nullopt;
+  }
+
+  const auto description =
+      DescribeKitItems(kitData.value("Items", nlohmann::json::object()));
+  if (description.hasMissingItems || description.armorFormIDs.empty()) {
+    return std::nullopt;
+  }
+
+  auto name = kitItem.key();
+  if (name.empty()) {
+    name = a_path.stem().string();
+  }
+
+  sosr::KitEntry entry{};
+  entry.id = "kit:" + relativePath.generic_string();
+  entry.key = relativePath.generic_string();
+  entry.name = std::move(name);
+  entry.collection = relativePath.parent_path().generic_string();
+  entry.filepath = a_path.string();
+  entry.summary = BuildKitSummary(description);
+  entry.armorFormIDs = description.armorFormIDs;
+  entry.itemTree = std::move(description.itemTree);
+  entry.pieces = description.pieces;
+  entry.slots = description.slots;
+  entry.piecesText = JoinStrings(entry.pieces);
+  entry.slotsText = JoinStrings(entry.slots);
+  entry.searchText = BuildKitSearchText(entry);
+  return entry;
+}
+
 } // namespace
 
 namespace sosr {
+struct EquipmentCatalog::RefreshState {
+  enum class Phase : std::uint8_t { Gear, Outfits, Kits, Finalize };
+  RefreshMode mode{RefreshMode::Full};
+
+  std::vector<RE::TESObjectARMO *> armors;
+  std::vector<RE::BGSOutfit *> outfits;
+  std::vector<std::filesystem::path> kitPaths;
+  std::size_t armorIndex{0};
+  std::size_t outfitIndex{0};
+  std::size_t kitIndex{0};
+  std::size_t completedUnits{0};
+  std::size_t totalUnits{1};
+  Phase phase{Phase::Gear};
+  std::string status{"Preparing catalog..."};
+};
+
 EquipmentCatalog &EquipmentCatalog::Get() {
   static EquipmentCatalog singleton;
   return singleton;
@@ -662,171 +808,175 @@ std::vector<RE::FormID> EquipmentCatalog::ResolveArmorFormIDs(
   return resolved;
 }
 
-void EquipmentCatalog::RefreshFromGame() {
-  gear_.clear();
-  outfits_.clear();
-  kits_.clear();
-  gearPlugins_.clear();
-  gearSlots_.clear();
-  outfitPlugins_.clear();
-  kitCollections_.clear();
-  leveledListCache_.clear();
-  gearIndexByFormID_.clear();
-  outfitIndexByFormID_.clear();
-
-  auto *dataHandler = RE::TESDataHandler::GetSingleton();
-  if (!dataHandler) {
-    source_ = "TESDataHandler unavailable";
-    revision_ = "cache-error";
-    logger::error(
-        "Failed to refresh equipment catalog: TESDataHandler was null");
-    return;
+void EquipmentCatalog::StartRefreshFromGame(const RefreshMode a_mode) {
+  if (a_mode == RefreshMode::Full) {
+    gear_.clear();
+    outfits_.clear();
+    kits_.clear();
+    gearPlugins_.clear();
+    gearSlots_.clear();
+    outfitPlugins_.clear();
+    kitCollections_.clear();
+    leveledListCache_.clear();
+    gearIndexByFormID_.clear();
+    outfitIndexByFormID_.clear();
+  } else {
+    kits_.clear();
+    kitCollections_.clear();
   }
 
-  for (auto *armor : dataHandler->GetFormArray<RE::TESObjectARMO>()) {
-    if (!armor || armor->IsDeleted() || armor->IsIgnored() ||
-        !armor->GetFile(0)) {
-      continue;
+  refreshState_ = std::make_unique<RefreshState>();
+  auto &state = *refreshState_;
+  state.mode = a_mode;
+
+  if (a_mode == RefreshMode::Full) {
+    auto *dataHandler = RE::TESDataHandler::GetSingleton();
+    if (!dataHandler) {
+      refreshState_.reset();
+      source_ = "TESDataHandler unavailable";
+      revision_ = "cache-error";
+      logger::error(
+          "Failed to refresh equipment catalog: TESDataHandler was null");
+      return;
     }
 
-    const auto editorID = GetEditorID(armor);
-    auto displayName = GetName(armor);
-    if (displayName.empty()) {
-      displayName = editorID;
+    for (auto *armor : dataHandler->GetFormArray<RE::TESObjectARMO>()) {
+      state.armors.push_back(armor);
     }
-    if (displayName.empty()) {
-      continue;
+    for (auto *outfit : dataHandler->GetFormArray<RE::BGSOutfit>()) {
+      state.outfits.push_back(outfit);
     }
-
-    GearEntry entry{};
-    entry.formID = armor->GetFormID();
-    entry.id = BuildEntryID(armor);
-    entry.name = std::move(displayName);
-    entry.editorID = editorID;
-    entry.plugin = GetPluginName(armor);
-    entry.category = GetArmorCategory(armor);
-    entry.slots = GetArmorSlots(armor);
-    entry.slot = entry.slots.empty() ? std::string{} : entry.slots.front();
-    entry.statValue = static_cast<int>(armor->GetArmorRating());
-    entry.weight = armor->GetWeight();
-    entry.value = armor->GetGoldValue();
-    entry.keywords = GetKeywords(armor);
-
-    entry.keywords.insert(entry.keywords.end(), entry.slots.begin(),
-                          entry.slots.end());
-    entry.keywords.push_back(entry.category);
-    SortUniqueStrings(entry.keywords);
-    entry.keywordsText = JoinStrings(entry.keywords);
-    entry.searchText = BuildGearSearchText(entry);
-
-    gear_.push_back(std::move(entry));
-    gearIndexByFormID_.emplace(gear_.back().formID, gear_.size() - 1);
   }
-  for (auto *outfit : dataHandler->GetFormArray<RE::BGSOutfit>()) {
-    if (!outfit || outfit->IsDeleted() || outfit->IsIgnored() ||
-        !outfit->GetFile(0)) {
-      continue;
-    }
-
-    auto description = DescribeOutfit(outfit, leveledListCache_);
-    if (description.pieces.empty()) {
-      continue;
-    }
-
-    auto editorID = GetEditorID(outfit);
-    auto displayName = GetName(outfit);
-    if (displayName.empty()) {
-      displayName = editorID;
-    }
-    if (displayName.empty()) {
-      displayName = "Form " + FormatFormID(outfit->GetFormID());
-    }
-
-    OutfitEntry entry{};
-    entry.formID = outfit->GetFormID();
-    entry.id = BuildEntryID(outfit);
-    entry.name = std::move(displayName);
-    entry.editorID = std::move(editorID);
-    entry.plugin = GetPluginName(outfit);
-    entry.summary = BuildOutfitSummary(description);
-    entry.armorFormIDs = std::move(description.armorFormIDs);
-    entry.itemTree = std::move(description.itemTree);
-    entry.pieces = std::move(description.pieces);
-    entry.slots = std::move(description.slots);
-    entry.tags = std::move(description.tags);
-
-    entry.piecesText = JoinStrings(entry.pieces);
-    entry.slotsText = JoinStrings(entry.slots);
-    entry.tagsText = JoinStrings(entry.tags);
-    entry.searchText = BuildOutfitSearchText(entry);
-
-    outfitIndexByFormID_.emplace(entry.formID, outfits_.size());
-    outfits_.push_back(std::move(entry));
-  }
-
   if (std::filesystem::is_directory(kModexKitPath)) {
     for (const auto &entry :
          std::filesystem::recursive_directory_iterator(kModexKitPath)) {
-      if (!entry.is_regular_file() || entry.path().extension() != ".json") {
-        continue;
-      }
-
-      const auto relativePath = entry.path().lexically_relative(kModexKitPath);
-      if (relativePath.string().starts_with("..")) {
-        continue;
-      }
-
-      const auto json = OpenJsonFile(entry.path());
-      if (!json.is_object() || json.size() != 1) {
-        continue;
-      }
-
-      const auto kitItem = json.items().begin();
-      const auto &kitData = kitItem.value();
-      if (!kitData.is_object()) {
-        continue;
-      }
-
-      const auto description =
-          DescribeKitItems(kitData.value("Items", nlohmann::json::object()));
-      if (description.hasMissingItems || description.armorFormIDs.empty()) {
-        continue;
-      }
-
-      auto name = kitItem.key();
-      if (name.empty()) {
-        name = entry.path().stem().string();
-      }
-
-      KitEntry kitEntry{};
-      kitEntry.id = "kit:" + relativePath.generic_string();
-      kitEntry.key = relativePath.generic_string();
-      kitEntry.name = std::move(name);
-      kitEntry.collection = relativePath.parent_path().generic_string();
-      kitEntry.filepath = entry.path().string();
-      kitEntry.summary = BuildKitSummary(description);
-      kitEntry.armorFormIDs = description.armorFormIDs;
-      kitEntry.itemTree = std::move(description.itemTree);
-      kitEntry.pieces = description.pieces;
-      kitEntry.slots = description.slots;
-      kitEntry.piecesText = JoinStrings(kitEntry.pieces);
-      kitEntry.slotsText = JoinStrings(kitEntry.slots);
-      kitEntry.searchText = BuildKitSearchText(kitEntry);
-
-      kits_.push_back(std::move(kitEntry));
+      state.kitPaths.push_back(entry.path());
     }
   }
 
-  RebuildDerivedData();
+  if (a_mode == RefreshMode::Full) {
+    state.totalUnits = state.armors.size() + state.outfits.size() +
+                       state.kitPaths.size() + 1;
+    state.phase = RefreshState::Phase::Gear;
+    state.status = "Building gear catalog...";
+    source_ = "Refreshing runtime cache from TESDataHandler";
+  } else {
+    state.totalUnits = state.kitPaths.size() + 1;
+    state.phase = RefreshState::Phase::Kits;
+    state.status = "Building kit catalog...";
+    source_ = "Refreshing kit cache from disk";
+  }
+  revision_ = "cache-refreshing";
+}
 
-  source_ = "Runtime cache from TESDataHandler";
-  revision_ = "armor=" + std::to_string(gear_.size()) +
-              ", outfits=" + std::to_string(outfits_.size()) +
-              ", kits=" + std::to_string(kits_.size());
+bool EquipmentCatalog::ContinueRefreshFromGame(
+    const double a_maxMillisecondsPerTick) {
+  if (!refreshState_) {
+    return false;
+  }
 
-  logger::info(
-      "Equipment catalog refreshed: {} gear entries, {} outfits, {} kits",
-      gear_.size(), outfits_.size(), kits_.size());
+  using clock = std::chrono::steady_clock;
+  const auto start = clock::now();
+  const auto budget =
+      std::chrono::duration<double, std::milli>(a_maxMillisecondsPerTick);
+  auto &state = *refreshState_;
+
+  while (refreshState_ && (clock::now() - start) < budget) {
+    switch (state.phase) {
+    case RefreshState::Phase::Gear:
+      if (state.armorIndex < state.armors.size()) {
+        if (auto entry = BuildGearEntry(state.armors[state.armorIndex])) {
+          gearIndexByFormID_.emplace(entry->formID, gear_.size());
+          gear_.push_back(std::move(*entry));
+        }
+        ++state.armorIndex;
+        ++state.completedUnits;
+        break;
+      }
+
+      state.phase = RefreshState::Phase::Outfits;
+      state.status = "Building outfit catalog...";
+      break;
+
+    case RefreshState::Phase::Outfits:
+      if (state.outfitIndex < state.outfits.size()) {
+        if (auto entry =
+                BuildOutfitEntry(state.outfits[state.outfitIndex],
+                                 leveledListCache_)) {
+          outfitIndexByFormID_.emplace(entry->formID, outfits_.size());
+          outfits_.push_back(std::move(*entry));
+        }
+        ++state.outfitIndex;
+        ++state.completedUnits;
+        break;
+      }
+
+      state.phase = RefreshState::Phase::Kits;
+      state.status = "Building kit catalog...";
+      break;
+
+    case RefreshState::Phase::Kits:
+      if (state.kitIndex < state.kitPaths.size()) {
+        if (auto entry = BuildKitEntry(state.kitPaths[state.kitIndex])) {
+          kits_.push_back(std::move(*entry));
+        }
+        ++state.kitIndex;
+        ++state.completedUnits;
+        break;
+      }
+
+      state.phase = RefreshState::Phase::Finalize;
+      state.status = "Finalizing catalog...";
+      break;
+
+    case RefreshState::Phase::Finalize:
+      RebuildDerivedData();
+      source_ = "Runtime cache from TESDataHandler";
+      revision_ = "armor=" + std::to_string(gear_.size()) +
+                  ", outfits=" + std::to_string(outfits_.size()) +
+                  ", kits=" + std::to_string(kits_.size());
+      if (state.mode == RefreshMode::Full) {
+        logger::info(
+            "Equipment catalog refreshed: {} gear entries, {} outfits, {} kits",
+            gear_.size(), outfits_.size(), kits_.size());
+      } else {
+        logger::info("Equipment catalog kits refreshed: {} kits",
+                     kits_.size());
+      }
+      refreshState_.reset();
+      return false;
+    }
+  }
+
+  return refreshState_ != nullptr;
+}
+
+void EquipmentCatalog::RefreshFromGame() {
+  StartRefreshFromGame();
+  while (ContinueRefreshFromGame(1000.0)) {
+  }
+}
+
+bool EquipmentCatalog::IsRefreshing() const {
+  return static_cast<bool>(refreshState_);
+}
+
+float EquipmentCatalog::GetRefreshProgress() const {
+  if (!refreshState_) {
+    return 1.0f;
+  }
+
+  const auto totalUnits = (std::max)(refreshState_->totalUnits, std::size_t{1});
+  return static_cast<float>(refreshState_->completedUnits) /
+         static_cast<float>(totalUnits);
+}
+
+std::string_view EquipmentCatalog::GetRefreshStatus() const {
+  if (!refreshState_) {
+    return source_;
+  }
+
+  return refreshState_->status;
 }
 
 void EquipmentCatalog::RebuildDerivedData() {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <unordered_map>
 
 namespace sosr {
@@ -71,9 +72,16 @@ struct KitEntry {
 
 class EquipmentCatalog {
 public:
+  enum class RefreshMode : std::uint8_t { Full, KitsOnly };
+
   static EquipmentCatalog &Get();
 
+  void StartRefreshFromGame(RefreshMode a_mode = RefreshMode::Full);
+  bool ContinueRefreshFromGame(double a_maxMillisecondsPerTick = 12.0);
   void RefreshFromGame();
+  [[nodiscard]] bool IsRefreshing() const;
+  [[nodiscard]] float GetRefreshProgress() const;
+  [[nodiscard]] std::string_view GetRefreshStatus() const;
 
   [[nodiscard]] const std::vector<GearEntry> &GetGear() const { return gear_; }
   [[nodiscard]] const GearEntry *FindGear(RE::FormID a_formID) const;
@@ -104,6 +112,8 @@ public:
   [[nodiscard]] std::string_view GetRevision() const { return revision_; }
 
 private:
+  struct RefreshState;
+
   EquipmentCatalog();
   void RebuildDerivedData();
 
@@ -119,5 +129,6 @@ private:
   std::unordered_map<RE::FormID, std::size_t> outfitIndexByFormID_;
   std::string source_;
   std::string revision_;
+  std::unique_ptr<RefreshState> refreshState_;
 };
 } // namespace sosr

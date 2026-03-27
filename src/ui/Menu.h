@@ -67,6 +67,7 @@ private:
   };
 
   enum class BrowserTab { Gear, Outfits, Kits, Slots, Options };
+  enum class CatalogRefreshMode : std::uint8_t { Full, KitsOnly };
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
 
@@ -87,6 +88,9 @@ private:
   void OnMenuHide();
   void HandleCancel();
   void DrawWindow();
+  void QueueCatalogRefresh(CatalogRefreshMode a_mode = CatalogRefreshMode::Full);
+  void UpdateCatalogRefresh();
+  void DrawCatalogLoadingPane() const;
   void DrawCatalogFilters();
   [[nodiscard]] sosr::ui::components::EquipmentWidgetResult
   DrawCatalogDragWidget(const workbench::EquipmentWidgetItem &a_item,
@@ -149,6 +153,9 @@ private:
   bool initialized_{false};
   bool enabled_{false};
   bool gameDataLoaded_{false};
+  bool catalogInitialized_{false};
+  bool catalogRefreshQueued_{false};
+  CatalogRefreshMode queuedCatalogRefreshMode_{CatalogRefreshMode::Full};
   ID3D11Device *device_{nullptr};
   ID3D11DeviceContext *context_{nullptr};
   BrowserTab activeTab_{BrowserTab::Gear};
@@ -204,6 +211,7 @@ private:
   std::string deleteKitError_;
   bool favoritesOnly_{false};
   bool inventoryOnly_{false};
+  std::string pendingCatalogSelectionAfterRefresh_;
   std::unordered_set<std::string> favoriteKeys_;
   workbench::VariantWorkbench workbench_;
 };
