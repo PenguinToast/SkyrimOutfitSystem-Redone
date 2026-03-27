@@ -6,9 +6,12 @@
 #include "VariantWorkbench.h"
 #include "components/EquipmentWidget.h"
 #include "imgui.h"
+#include "ui/ConditionData.h"
 
 #include <array>
+#include <optional>
 #include <unordered_set>
+#include <vector>
 
 struct IDXGISwapChain;
 struct ID3D11Device;
@@ -82,7 +85,7 @@ private:
     std::uint64_t slotMask{0};
   };
 
-  enum class BrowserTab { Gear, Outfits, Kits, Slots, Options };
+  enum class BrowserTab { Gear, Outfits, Kits, Slots, Conditions, Options };
   enum class CatalogRefreshMode : std::uint8_t { Full, KitsOnly };
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
@@ -106,7 +109,8 @@ private:
   void OnMenuHide();
   void HandleCancel();
   void DrawWindow();
-  void QueueCatalogRefresh(CatalogRefreshMode a_mode = CatalogRefreshMode::Full);
+  void
+  QueueCatalogRefresh(CatalogRefreshMode a_mode = CatalogRefreshMode::Full);
   void UpdateCatalogRefresh();
   void DrawCatalogLoadingPane() const;
   void DrawCatalogFilters();
@@ -120,7 +124,9 @@ private:
   [[nodiscard]] bool DrawOutfitTab();
   [[nodiscard]] bool DrawKitTab();
   [[nodiscard]] bool DrawSlotTab();
+  [[nodiscard]] bool DrawConditionTab();
   void DrawOptionsTab();
+  void DrawConditionEditorDialog();
   void DrawCreateKitDialog();
   void DrawDeleteKitDialog();
   void AcceptOverridePayload(int a_targetRowIndex);
@@ -160,6 +166,10 @@ private:
   void PreviewGearEntry(const GearEntry &a_entry);
   void PreviewOutfitEntry(const OutfitEntry &a_entry);
   void PreviewKitEntry(const KitEntry &a_entry);
+  void EnsureDefaultConditions();
+  void OpenNewConditionDialog();
+  void OpenConditionEditorDialog(std::size_t a_index);
+  [[nodiscard]] bool SavePendingCondition();
   [[nodiscard]] std::vector<const GearEntry *> BuildFilteredGear() const;
   [[nodiscard]] std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
   [[nodiscard]] std::vector<const KitEntry *> BuildFilteredKits() const;
@@ -230,12 +240,21 @@ private:
   std::string pendingDeleteKitName_;
   std::string pendingDeleteKitPath_;
   std::string deleteKitError_;
+  bool openConditionEditorDialog_{false};
+  bool conditionEditorDialogOpen_{false};
+  bool conditionEditorDialogCancelRequested_{false};
+  bool editingConditionIsNew_{false};
+  std::optional<std::size_t> editingConditionIndex_;
+  ui::conditions::Definition editingCondition_;
+  std::string conditionEditorError_;
+  int nextConditionId_{1};
   bool favoritesOnly_{false};
   bool inventoryOnly_{false};
   std::string pendingCatalogSelectionAfterRefresh_;
   std::unordered_set<std::string> favoriteKeys_;
   std::vector<FontOption> bundledFontOptions_;
   std::vector<FontOption> systemFontOptions_;
+  std::vector<ui::conditions::Definition> conditions_;
   workbench::VariantWorkbench workbench_;
 };
 } // namespace sosr

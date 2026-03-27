@@ -1,0 +1,888 @@
+#include "Menu.h"
+
+#include "RE/C/CommandTable.h"
+#include "imgui_internal.h"
+#include "ui/components/EditableCombo.h"
+#include "ui/components/PinnableTooltip.h"
+
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cfloat>
+#include <cstdio>
+#include <iomanip>
+#include <sstream>
+#include <string_view>
+
+namespace sosr {
+namespace {
+using ConditionClause = ui::conditions::Clause;
+using ConditionComparator = ui::conditions::Comparator;
+using ConditionConnective = ui::conditions::Connective;
+using ConditionDefinition = ui::conditions::Definition;
+
+constexpr ImVec4 kDefaultConditionColor{0.55f, 0.55f, 0.55f, 1.0f};
+constexpr char kIconTrash[] = "\xee\x86\x8c"; // ICON_LC_TRASH
+
+enum class ConditionValueEditorKind : std::uint8_t { Text, Integer, Number };
+
+struct ConditionFunctionInfo {
+  std::string name;
+  std::array<std::string, 2> parameterLabels{};
+  std::array<bool, 2> parameterOptional{false, false};
+  std::array<RE::SCRIPT_PARAM_TYPE, 2> parameterTypes{
+      RE::SCRIPT_PARAM_TYPE::kForm, RE::SCRIPT_PARAM_TYPE::kForm};
+  std::uint16_t parameterCount{0};
+};
+
+void CopyTextToBuffer(const std::string &a_text, char *a_buffer,
+                      const std::size_t a_bufferSize) {
+  if (a_bufferSize == 0) {
+    return;
+  }
+
+  std::snprintf(a_buffer, a_bufferSize, "%s", a_text.c_str());
+}
+
+std::string TrimText(std::string_view a_text) {
+  std::size_t start = 0;
+  while (start < a_text.size() &&
+         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
+    ++start;
+  }
+
+  std::size_t end = a_text.size();
+  while (end > start &&
+         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
+    --end;
+  }
+
+  return std::string(a_text.substr(start, end - start));
+}
+
+int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
+  const auto leftSize = a_left.size();
+  const auto rightSize = a_right.size();
+  const auto count = (std::min)(leftSize, rightSize);
+
+  for (std::size_t index = 0; index < count; ++index) {
+    const auto left = static_cast<unsigned char>(
+        std::tolower(static_cast<unsigned char>(a_left[index])));
+    const auto right = static_cast<unsigned char>(
+        std::tolower(static_cast<unsigned char>(a_right[index])));
+    if (left < right) {
+      return -1;
+    }
+    if (left > right) {
+      return 1;
+    }
+  }
+
+  if (leftSize < rightSize) {
+    return -1;
+  }
+  if (leftSize > rightSize) {
+    return 1;
+  }
+  return 0;
+}
+
+const char *ComparatorLabel(const ConditionComparator a_comparator) {
+  switch (a_comparator) {
+  case ConditionComparator::Equal:
+    return "==";
+  case ConditionComparator::NotEqual:
+    return "!=";
+  case ConditionComparator::Greater:
+    return ">";
+  case ConditionComparator::GreaterOrEqual:
+    return ">=";
+  case ConditionComparator::Less:
+    return "<";
+  case ConditionComparator::LessOrEqual:
+    return "<=";
+  }
+
+  return "==";
+}
+
+const char *ConnectiveLabel(const ConditionConnective a_connective) {
+  return a_connective == ConditionConnective::Or ? "OR" : "AND";
+}
+
+std::string BuildClauseSummary(const ConditionClause &a_clause) {
+  std::string summary = a_clause.functionName;
+  if (!a_clause.arguments[0].empty()) {
+    summary.append(" ");
+    summary.append(a_clause.arguments[0]);
+  }
+  if (!a_clause.arguments[1].empty()) {
+    summary.append(" ");
+    summary.append(a_clause.arguments[1]);
+  }
+  summary.append(" ");
+  summary.append(ComparatorLabel(a_clause.comparator));
+  if (!a_clause.comparand.empty()) {
+    summary.append(" ");
+    summary.append(a_clause.comparand);
+  }
+  return summary;
+}
+
+std::string BuildDefinitionSummary(const ConditionDefinition &a_definition) {
+  std::string summary;
+  for (std::size_t index = 0; index < a_definition.clauses.size(); ++index) {
+    if (index > 0) {
+      summary.append(" ");
+      summary.append(
+          ConnectiveLabel(a_definition.clauses[index - 1].connectiveToNext));
+      summary.append(" ");
+    }
+    summary.append(BuildClauseSummary(a_definition.clauses[index]));
+  }
+
+  return summary;
+}
+
+ConditionClause BuildDefaultPlayerClause() {
+  ConditionClause clause;
+  clause.functionName = "GetIsReference";
+  clause.arguments[0] = "Player";
+  clause.comparator = ConditionComparator::Equal;
+  clause.comparand = "1";
+  clause.connectiveToNext = ConditionConnective::And;
+  return clause;
+}
+
+ConditionDefinition BuildDefaultPlayerCondition() {
+  ConditionDefinition definition;
+  definition.id = "condition-1";
+  definition.name = "Player";
+  definition.color = kDefaultConditionColor;
+  definition.clauses.push_back(BuildDefaultPlayerClause());
+  return definition;
+}
+
+ConditionDefinition BuildNewConditionTemplate() {
+  ConditionDefinition definition;
+  definition.color = kDefaultConditionColor;
+  definition.clauses.push_back(BuildDefaultPlayerClause());
+  return definition;
+}
+
+std::string BuildConditionId(const int a_nextConditionId) {
+  return "condition-" + std::to_string((std::max)(a_nextConditionId, 1));
+}
+
+std::string FormatNumberString(const double a_value) {
+  std::ostringstream stream;
+  stream.setf(std::ios::fixed, std::ios::floatfield);
+  stream << std::setprecision(3) << a_value;
+  auto text = stream.str();
+  const auto dotIndex = text.find('.');
+  if (dotIndex != std::string::npos) {
+    while (!text.empty() && text.back() == '0') {
+      text.pop_back();
+    }
+    if (!text.empty() && text.back() == '.') {
+      text.pop_back();
+    }
+  }
+  return text.empty() ? "0" : text;
+}
+
+ConditionValueEditorKind
+GetEditorKindForParamType(const RE::SCRIPT_PARAM_TYPE a_type) {
+  switch (a_type) {
+  case RE::SCRIPT_PARAM_TYPE::kChar:
+  case RE::SCRIPT_PARAM_TYPE::kInt:
+  case RE::SCRIPT_PARAM_TYPE::kStage:
+  case RE::SCRIPT_PARAM_TYPE::kRelationshipRank:
+    return ConditionValueEditorKind::Integer;
+  case RE::SCRIPT_PARAM_TYPE::kFloat:
+    return ConditionValueEditorKind::Number;
+  default:
+    return ConditionValueEditorKind::Text;
+  }
+}
+
+void DrawHoverDescription(const std::string_view a_id,
+                          const std::string_view a_text,
+                          const float a_delaySeconds = 0.45f) {
+  if (!ImGui::IsItemHovered() ||
+      ImGui::GetCurrentContext()->HoveredIdTimer < a_delaySeconds) {
+    return;
+  }
+
+  ui::components::DrawPinnableTooltip(a_id, true, [&]() {
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 360.0f);
+    ImGui::TextUnformatted(a_text.data(), a_text.data() + a_text.size());
+    ImGui::PopTextWrapPos();
+  });
+}
+
+void DrawClauseHeaderCell(const char *a_id, const char *a_label,
+                          const std::string_view a_tooltip) {
+  ImGui::TextDisabled("%s", a_label);
+  DrawHoverDescription(a_id, a_tooltip);
+}
+
+bool DrawClauseValueEditor(const char *a_id, std::string &a_value,
+                           const ConditionValueEditorKind a_kind,
+                           const float a_width) {
+  ImGui::SetNextItemWidth(a_width);
+
+  if (a_kind == ConditionValueEditorKind::Integer) {
+    int numericValue = 0;
+    if (!a_value.empty()) {
+      try {
+        numericValue = std::stoi(a_value);
+      } catch (const std::exception &) {
+      }
+    }
+
+    if (ImGui::InputInt(a_id, &numericValue, 0, 0)) {
+      a_value = std::to_string(numericValue);
+      return true;
+    }
+    return false;
+  }
+
+  if (a_kind == ConditionValueEditorKind::Number) {
+    double numericValue = 0.0;
+    if (!a_value.empty()) {
+      try {
+        numericValue = std::stod(a_value);
+      } catch (const std::exception &) {
+      }
+    }
+
+    if (ImGui::InputDouble(a_id, &numericValue, 0.0, 0.0, "%.3f")) {
+      a_value = FormatNumberString(numericValue);
+      return true;
+    }
+    return false;
+  }
+
+  char buffer[128];
+  CopyTextToBuffer(a_value, buffer, sizeof(buffer));
+  if (ImGui::InputText(a_id, buffer, sizeof(buffer))) {
+    a_value = buffer;
+    return true;
+  }
+  return false;
+}
+
+const std::vector<ConditionFunctionInfo> &GetConditionFunctionInfos() {
+  static const auto infos = [] {
+    std::vector<ConditionFunctionInfo> result;
+
+    const auto *commands = RE::SCRIPT_FUNCTION::GetFirstScriptCommand();
+    if (!commands) {
+      return result;
+    }
+
+    for (std::uint32_t index = 0;
+         index < RE::SCRIPT_FUNCTION::Commands::kScriptCommandsEnd; ++index) {
+      const auto &command = commands[index];
+      if (!command.functionName || !command.conditionFunction ||
+          command.numParams > 2) {
+        continue;
+      }
+
+      const auto name = TrimText(command.functionName);
+      if (name.empty()) {
+        continue;
+      }
+
+      if (std::ranges::find_if(result, [&](const ConditionFunctionInfo &info) {
+            return CompareTextInsensitive(info.name, name) == 0;
+          }) != result.end()) {
+        continue;
+      }
+
+      ConditionFunctionInfo info;
+      info.name = name;
+      info.parameterCount = command.numParams;
+      for (std::uint16_t paramIndex = 0;
+           paramIndex < command.numParams && paramIndex < 2; ++paramIndex) {
+        if (command.params && command.params[paramIndex].paramName) {
+          info.parameterLabels[paramIndex] =
+              TrimText(command.params[paramIndex].paramName);
+        }
+        if (info.parameterLabels[paramIndex].empty()) {
+          info.parameterLabels[paramIndex] =
+              "Argument " + std::to_string(paramIndex + 1);
+        }
+        info.parameterOptional[paramIndex] =
+            command.params != nullptr && command.params[paramIndex].optional;
+        info.parameterTypes[paramIndex] =
+            command.params ? command.params[paramIndex].paramType.get()
+                           : RE::SCRIPT_PARAM_TYPE::kForm;
+      }
+
+      result.push_back(std::move(info));
+    }
+
+    std::ranges::sort(result, [](const auto &left, const auto &right) {
+      return CompareTextInsensitive(left.name, right.name) < 0;
+    });
+    return result;
+  }();
+
+  return infos;
+}
+
+const ConditionFunctionInfo *
+FindConditionFunctionInfo(std::string_view a_name) {
+  const auto &infos = GetConditionFunctionInfos();
+  const auto it = std::ranges::find_if(infos, [&](const auto &info) {
+    return CompareTextInsensitive(info.name, a_name) == 0;
+  });
+  return it != infos.end() ? std::addressof(*it) : nullptr;
+}
+
+std::vector<std::string> BuildConditionFunctionNames() {
+  std::vector<std::string> names;
+  const auto &infos = GetConditionFunctionInfos();
+  names.reserve(infos.size());
+  for (const auto &info : infos) {
+    names.push_back(info.name);
+  }
+  return names;
+}
+
+float MeasureConditionRowHeight(const ConditionDefinition &a_definition,
+                                const float a_wrapWidth) {
+  const auto &style = ImGui::GetStyle();
+  const auto nameHeight = ImGui::GetTextLineHeight();
+  const auto summary = BuildDefinitionSummary(a_definition);
+  const auto summarySize =
+      ImGui::CalcTextSize(summary.c_str(), nullptr, false, a_wrapWidth);
+  return style.FramePadding.y * 2.0f + nameHeight + style.ItemSpacing.y +
+         summarySize.y;
+}
+} // namespace
+
+void Menu::EnsureDefaultConditions() {
+  if (!conditions_.empty()) {
+    return;
+  }
+
+  conditions_.push_back(BuildDefaultPlayerCondition());
+  nextConditionId_ = 2;
+}
+
+void Menu::OpenNewConditionDialog() {
+  editingConditionIsNew_ = true;
+  editingConditionIndex_.reset();
+  editingCondition_ = BuildNewConditionTemplate();
+  conditionEditorError_.clear();
+  conditionEditorDialogCancelRequested_ = false;
+  openConditionEditorDialog_ = true;
+}
+
+void Menu::OpenConditionEditorDialog(const std::size_t a_index) {
+  if (a_index >= conditions_.size()) {
+    return;
+  }
+
+  editingConditionIsNew_ = false;
+  editingConditionIndex_ = a_index;
+  editingCondition_ = conditions_[a_index];
+  conditionEditorError_.clear();
+  conditionEditorDialogCancelRequested_ = false;
+  openConditionEditorDialog_ = true;
+}
+
+bool Menu::SavePendingCondition() {
+  const auto name = TrimText(editingCondition_.name);
+  if (name.empty()) {
+    conditionEditorError_ = "Condition name is required.";
+    return false;
+  }
+
+  if (editingCondition_.clauses.empty()) {
+    conditionEditorError_ = "At least one clause is required.";
+    return false;
+  }
+
+  for (std::size_t index = 0; index < editingCondition_.clauses.size();
+       ++index) {
+    auto &clause = editingCondition_.clauses[index];
+    clause.functionName = TrimText(clause.functionName);
+    clause.arguments[0] = TrimText(clause.arguments[0]);
+    clause.arguments[1] = TrimText(clause.arguments[1]);
+    clause.comparand = TrimText(clause.comparand);
+
+    const auto *functionInfo = FindConditionFunctionInfo(clause.functionName);
+    if (!functionInfo) {
+      conditionEditorError_ =
+          "Unknown or unsupported condition function in clause " +
+          std::to_string(index + 1) + ".";
+      return false;
+    }
+
+    for (std::uint16_t paramIndex = 0;
+         paramIndex < functionInfo->parameterCount && paramIndex < 2;
+         ++paramIndex) {
+      if (!functionInfo->parameterOptional[paramIndex] &&
+          clause.arguments[paramIndex].empty()) {
+        conditionEditorError_ = functionInfo->parameterLabels[paramIndex] +
+                                " is required in clause " +
+                                std::to_string(index + 1) + ".";
+        return false;
+      }
+
+      const auto editorKind =
+          GetEditorKindForParamType(functionInfo->parameterTypes[paramIndex]);
+      if (editorKind == ConditionValueEditorKind::Integer &&
+          !clause.arguments[paramIndex].empty()) {
+        try {
+          clause.arguments[paramIndex] =
+              std::to_string(std::stoi(clause.arguments[paramIndex]));
+        } catch (const std::exception &) {
+          conditionEditorError_ = functionInfo->parameterLabels[paramIndex] +
+                                  " must be an integer in clause " +
+                                  std::to_string(index + 1) + ".";
+          return false;
+        }
+      } else if (editorKind == ConditionValueEditorKind::Number &&
+                 !clause.arguments[paramIndex].empty()) {
+        try {
+          clause.arguments[paramIndex] =
+              FormatNumberString(std::stod(clause.arguments[paramIndex]));
+        } catch (const std::exception &) {
+          conditionEditorError_ = functionInfo->parameterLabels[paramIndex] +
+                                  " must be numeric in clause " +
+                                  std::to_string(index + 1) + ".";
+          return false;
+        }
+      }
+    }
+
+    if (clause.comparand.empty()) {
+      conditionEditorError_ = "A comparison value is required in clause " +
+                              std::to_string(index + 1) + ".";
+      return false;
+    }
+
+    try {
+      clause.comparand = FormatNumberString(std::stod(clause.comparand));
+    } catch (const std::exception &) {
+      conditionEditorError_ = "Comparison value must be numeric in clause " +
+                              std::to_string(index + 1) + ".";
+      return false;
+    }
+  }
+
+  editingCondition_.name = name;
+  editingCondition_.color.w = 1.0f;
+  if (editingCondition_.id.empty()) {
+    editingCondition_.id = BuildConditionId(nextConditionId_++);
+  }
+
+  if (editingConditionIsNew_) {
+    conditions_.push_back(editingCondition_);
+  } else if (editingConditionIndex_ &&
+             *editingConditionIndex_ < conditions_.size()) {
+    conditions_[*editingConditionIndex_] = editingCondition_;
+  } else {
+    conditionEditorError_ = "The condition being edited no longer exists.";
+    return false;
+  }
+
+  SaveUserSettings();
+  conditionEditorError_.clear();
+  editingConditionIndex_.reset();
+  conditionEditorDialogCancelRequested_ = false;
+  editingConditionIsNew_ = false;
+  return true;
+}
+
+bool Menu::DrawConditionTab() {
+  EnsureDefaultConditions();
+
+  if (ImGui::Button("Add New")) {
+    OpenNewConditionDialog();
+  }
+  ImGui::SameLine();
+  ImGui::TextDisabled("%zu condition%s", conditions_.size(),
+                      conditions_.size() == 1 ? "" : "s");
+  ImGui::Spacing();
+
+  if (!ImGui::BeginTable("##conditions-table", 1,
+                         ImGuiTableFlags_SizingStretchProp |
+                             ImGuiTableFlags_RowBg |
+                             ImGuiTableFlags_BordersInnerV,
+                         ImVec2(0.0f, 0.0f))) {
+    return false;
+  }
+
+  ImGui::TableSetupColumn("Condition", ImGuiTableColumnFlags_WidthStretch);
+  bool rowClicked = false;
+
+  for (std::size_t index = 0; index < conditions_.size(); ++index) {
+    const auto &condition = conditions_[index];
+    const auto rowWrapWidth =
+        (std::max)(ImGui::GetContentRegionAvail().x - 18.0f, 120.0f);
+    const auto rowHeight = MeasureConditionRowHeight(condition, rowWrapWidth);
+
+    ImGui::TableNextRow(0, rowHeight);
+    ImGui::TableSetColumnIndex(0);
+    ImGui::PushID(static_cast<int>(index));
+
+    const auto width = ImGui::GetContentRegionAvail().x;
+    ImGui::InvisibleButton("##condition-row", ImVec2(width, rowHeight));
+    rowClicked |= ImGui::IsItemClicked(ImGuiMouseButton_Left);
+    const auto hovered = ImGui::IsItemHovered();
+    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      OpenConditionEditorDialog(index);
+    }
+
+    const auto min = ImGui::GetItemRectMin();
+    const auto max = ImGui::GetItemRectMax();
+    const auto stripeWidth = 6.0f;
+    const auto rounding = ImGui::GetStyle().FrameRounding;
+    auto *drawList = ImGui::GetWindowDrawList();
+    const auto bodyColor =
+        hovered ? IM_COL32(42, 42, 44, 240) : IM_COL32(34, 34, 36, 225);
+    drawList->AddRectFilled(min, max, bodyColor, rounding);
+    drawList->AddRect(
+        min, max,
+        ImGui::GetColorU32(ImVec4(condition.color.x, condition.color.y,
+                                  condition.color.z, 0.75f)),
+        rounding);
+    drawList->AddRectFilled(min, ImVec2(min.x + stripeWidth, max.y),
+                            ImGui::GetColorU32(condition.color), rounding,
+                            ImDrawFlags_RoundCornersTopLeft |
+                                ImDrawFlags_RoundCornersBottomLeft);
+
+    const auto contentMin = ImVec2(min.x + stripeWidth + 10.0f,
+                                   min.y + ImGui::GetStyle().FramePadding.y);
+    const auto textColor = ImGui::GetColorU32(
+        ImVec4(condition.color.x, condition.color.y, condition.color.z, 1.0f));
+    const auto summary = BuildDefinitionSummary(condition);
+    const auto clipRect = ImVec4(contentMin.x, min.y, max.x - 8.0f, max.y);
+    drawList->PushClipRect(ImVec2(clipRect.x, clipRect.y),
+                           ImVec2(clipRect.z, clipRect.w), true);
+    drawList->AddText(contentMin, textColor, condition.name.c_str());
+    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
+                      ImVec2(contentMin.x, contentMin.y +
+                                               ImGui::GetTextLineHeight() +
+                                               ImGui::GetStyle().ItemSpacing.y),
+                      ImGui::GetColorU32(ImVec4(0.70f, 0.72f, 0.75f, 1.0f)),
+                      summary.c_str(), nullptr, rowWrapWidth);
+    drawList->PopClipRect();
+
+    ImGui::PopID();
+  }
+
+  ImGui::EndTable();
+  return rowClicked;
+}
+
+void Menu::DrawConditionEditorDialog() {
+  if (openConditionEditorDialog_) {
+    ImGui::OpenPopup("Condition Editor");
+    openConditionEditorDialog_ = false;
+  }
+
+  ImGui::SetNextWindowSize(ImVec2(1180.0f, 560.0f), ImGuiCond_Appearing);
+  ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(),
+                          ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(900.0f, 480.0f),
+                                      ImVec2(FLT_MAX, FLT_MAX));
+
+  if (!ImGui::BeginPopupModal("Condition Editor", nullptr, 0)) {
+    conditionEditorDialogOpen_ = false;
+    return;
+  }
+
+  conditionEditorDialogOpen_ = true;
+  const bool hasError = !conditionEditorError_.empty();
+  const auto footerHeight =
+      ImGui::GetFrameHeightWithSpacing() * 2.0f +
+      ImGui::GetStyle().ItemSpacing.y * 3.0f +
+      (hasError ? (ImGui::GetTextLineHeightWithSpacing() * 2.0f) : 0.0f);
+
+  if (ImGui::BeginChild("##condition-editor-body", ImVec2(0.0f, -footerHeight),
+                        ImGuiChildFlags_None,
+                        ImGuiWindowFlags_NoScrollbar |
+                            ImGuiWindowFlags_NoScrollWithMouse)) {
+    char nameBuffer[256];
+    CopyTextToBuffer(editingCondition_.name, nameBuffer, sizeof(nameBuffer));
+    ImGui::SetNextItemWidth(
+        (std::min)(420.0f, ImGui::GetContentRegionAvail().x));
+    if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer))) {
+      editingCondition_.name = nameBuffer;
+    }
+    DrawHoverDescription("conditions:editor:name",
+                         "Friendly name shown in the Conditions catalog.");
+
+    ImVec4 color = editingCondition_.color;
+    ImGui::SetNextItemWidth(
+        (std::min)(260.0f, ImGui::GetContentRegionAvail().x));
+    if (ImGui::ColorEdit3("Color", &color.x, ImGuiColorEditFlags_DisplayRGB)) {
+      editingCondition_.color = ImVec4(color.x, color.y, color.z, 1.0f);
+    }
+    DrawHoverDescription(
+        "conditions:editor:color",
+        "Associated display color used by the Conditions catalog row.");
+
+    ImGui::Spacing();
+    ImGui::TextUnformatted("Clauses");
+    ImGui::Separator();
+
+    const auto conditionFunctionNames = BuildConditionFunctionNames();
+    const auto clausePaneHeight =
+        (std::max)(220.0f, ImGui::GetContentRegionAvail().y);
+    if (ImGui::BeginChild("##condition-clauses", ImVec2(0.0f, clausePaneHeight),
+                          ImGuiChildFlags_Borders)) {
+      constexpr ImGuiTableFlags clauseTableFlags =
+          ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV |
+          ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollX |
+          ImGuiTableFlags_Resizable;
+      if (ImGui::BeginTable("##condition-clause-table", 7, clauseTableFlags,
+                            ImVec2(0.0f, 0.0f))) {
+        ImGui::TableSetupColumn("Function", ImGuiTableColumnFlags_WidthFixed,
+                                240.0f);
+        ImGui::TableSetupColumn("Arg 1", ImGuiTableColumnFlags_WidthFixed,
+                                170.0f);
+        ImGui::TableSetupColumn("Arg 2", ImGuiTableColumnFlags_WidthFixed,
+                                170.0f);
+        ImGui::TableSetupColumn("Comparator", ImGuiTableColumnFlags_WidthFixed,
+                                120.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthFixed,
+                                130.0f);
+        ImGui::TableSetupColumn("Join", ImGuiTableColumnFlags_WidthFixed,
+                                90.0f);
+        ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed,
+                                90.0f);
+
+        ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
+        ImGui::TableSetColumnIndex(0);
+        DrawClauseHeaderCell("conditions:help:function", "Function",
+                             "Condition function to evaluate for this clause.");
+        ImGui::TableSetColumnIndex(1);
+        DrawClauseHeaderCell("conditions:help:arg1", "Arg 1",
+                             "First function argument. Input type follows the "
+                             "selected function.");
+        ImGui::TableSetColumnIndex(2);
+        DrawClauseHeaderCell(
+            "conditions:help:arg2", "Arg 2",
+            "Second function argument when the selected function needs one.");
+        ImGui::TableSetColumnIndex(3);
+        DrawClauseHeaderCell("conditions:help:comparator", "Comparator",
+                             "How the function result is compared.");
+        ImGui::TableSetColumnIndex(4);
+        DrawClauseHeaderCell(
+            "conditions:help:value", "Value",
+            "Numeric value compared against the function result.");
+        ImGui::TableSetColumnIndex(5);
+        DrawClauseHeaderCell("conditions:help:join", "Join",
+                             "How this clause combines with the next one.");
+        ImGui::TableSetColumnIndex(6);
+        DrawClauseHeaderCell("conditions:help:actions", "Actions",
+                             "Remove this clause.");
+
+        for (std::size_t index = 0; index < editingCondition_.clauses.size();) {
+          ImGui::PushID(static_cast<int>(index));
+          auto &clause = editingCondition_.clauses[index];
+          const auto *functionInfo =
+              FindConditionFunctionInfo(clause.functionName);
+
+          ImGui::TableNextRow();
+
+          ImGui::TableSetColumnIndex(0);
+          char functionBuffer[128];
+          CopyTextToBuffer(clause.functionName, functionBuffer,
+                           sizeof(functionBuffer));
+          std::string selectedFunction;
+          if (ui::components::DrawEditableDropdown(
+                  "##function", "Condition function", functionBuffer,
+                  sizeof(functionBuffer), conditionFunctionNames,
+                  ImGui::GetContentRegionAvail().x, &selectedFunction)) {
+            clause.functionName =
+                selectedFunction.empty() ? functionBuffer : selectedFunction;
+            functionInfo = FindConditionFunctionInfo(clause.functionName);
+          } else {
+            clause.functionName = functionBuffer;
+          }
+          DrawHoverDescription(
+              "conditions:editor:function:" + std::to_string(index),
+              "Select the condition function. Supported entries "
+              "come from Skyrim's condition command table.");
+
+          const auto argumentCount =
+              functionInfo ? functionInfo->parameterCount : std::uint16_t{2};
+          for (std::uint16_t paramIndex = 0; paramIndex < 2; ++paramIndex) {
+            ImGui::TableSetColumnIndex(1 + paramIndex);
+            ImGui::BeginDisabled(paramIndex >= argumentCount);
+            const auto kind =
+                functionInfo && paramIndex < argumentCount
+                    ? GetEditorKindForParamType(
+                          functionInfo->parameterTypes[paramIndex])
+                    : ConditionValueEditorKind::Text;
+            DrawClauseValueEditor(paramIndex == 0 ? "##arg1" : "##arg2",
+                                  clause.arguments[paramIndex], kind,
+                                  ImGui::GetContentRegionAvail().x);
+            ImGui::EndDisabled();
+
+            std::string tooltip =
+                functionInfo && paramIndex < argumentCount
+                    ? functionInfo->parameterLabels[paramIndex]
+                    : "Unused argument for the current function.";
+            if (functionInfo && paramIndex < argumentCount &&
+                functionInfo->parameterOptional[paramIndex]) {
+              tooltip.append(" Optional.");
+            } else if (functionInfo && paramIndex < argumentCount) {
+              tooltip.append(" Required.");
+            }
+            DrawHoverDescription(
+                "conditions:editor:arg:" + std::to_string(index) + ":" +
+                    std::to_string(paramIndex),
+                tooltip);
+          }
+          for (std::uint16_t paramIndex = argumentCount; paramIndex < 2;
+               ++paramIndex) {
+            clause.arguments[paramIndex].clear();
+          }
+
+          ImGui::TableSetColumnIndex(3);
+          const std::array comparatorLabels = {"==", "!=", ">",
+                                               ">=", "<",  "<="};
+          int comparatorIndex = static_cast<int>(clause.comparator);
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          if (ImGui::BeginCombo("##comparator",
+                                comparatorLabels[comparatorIndex])) {
+            for (int optionIndex = 0;
+                 optionIndex < static_cast<int>(comparatorLabels.size());
+                 ++optionIndex) {
+              const bool selected = comparatorIndex == optionIndex;
+              if (ImGui::Selectable(comparatorLabels[optionIndex], selected)) {
+                comparatorIndex = optionIndex;
+                clause.comparator =
+                    static_cast<ConditionComparator>(comparatorIndex);
+              }
+              if (selected) {
+                ImGui::SetItemDefaultFocus();
+              }
+            }
+            ImGui::EndCombo();
+          }
+          DrawHoverDescription("conditions:editor:comparator:" +
+                                   std::to_string(index),
+                               "Comparison operator applied to the function "
+                               "result.");
+
+          ImGui::TableSetColumnIndex(4);
+          DrawClauseValueEditor("##comparand", clause.comparand,
+                                ConditionValueEditorKind::Number,
+                                ImGui::GetContentRegionAvail().x);
+          DrawHoverDescription("conditions:editor:value:" +
+                                   std::to_string(index),
+                               "Numeric value compared against the function "
+                               "result.");
+
+          ImGui::TableSetColumnIndex(5);
+          const bool hasNextClause =
+              index + 1 < editingCondition_.clauses.size();
+          ImGui::BeginDisabled(!hasNextClause);
+          int connectiveIndex =
+              clause.connectiveToNext == ConditionConnective::Or ? 1 : 0;
+          constexpr std::array connectiveLabels = {"AND", "OR"};
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          if (ImGui::BeginCombo("##join", connectiveLabels[connectiveIndex])) {
+            for (int optionIndex = 0; optionIndex < 2; ++optionIndex) {
+              const bool selected = connectiveIndex == optionIndex;
+              if (ImGui::Selectable(connectiveLabels[optionIndex], selected)) {
+                connectiveIndex = optionIndex;
+                clause.connectiveToNext = connectiveIndex == 1
+                                              ? ConditionConnective::Or
+                                              : ConditionConnective::And;
+              }
+              if (selected) {
+                ImGui::SetItemDefaultFocus();
+              }
+            }
+            ImGui::EndCombo();
+          }
+          ImGui::EndDisabled();
+          DrawHoverDescription(
+              "conditions:editor:join:" + std::to_string(index),
+              "How this clause combines with the next clause.");
+
+          ImGui::TableSetColumnIndex(6);
+          if (editingCondition_.clauses.size() > 1) {
+            auto *theme = ThemeConfig::GetSingleton();
+            ImGui::PushStyleColor(ImGuiCol_Button,
+                                  theme->GetColor("DECLINE", 0.78f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                  theme->GetColor("DECLINE", 0.95f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                                  theme->GetColor("DECLINE", 0.90f));
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            if (ImGui::Button(kIconTrash,
+                              ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+              editingCondition_.clauses.erase(
+                  editingCondition_.clauses.begin() +
+                  static_cast<std::ptrdiff_t>(index));
+              ImGui::PopStyleColor(3);
+              ImGui::PopID();
+              continue;
+            }
+            ImGui::PopStyleColor(3);
+            DrawHoverDescription("conditions:editor:remove:" +
+                                     std::to_string(index),
+                                 "Remove this clause from the condition.");
+          }
+
+          ImGui::PopID();
+          ++index;
+        }
+
+        ImGui::EndTable();
+      }
+    }
+    ImGui::EndChild();
+  }
+  ImGui::EndChild();
+
+  if (ImGui::Button("Add Clause")) {
+    editingCondition_.clauses.push_back(BuildDefaultPlayerClause());
+  }
+  DrawHoverDescription("conditions:editor:add-clause",
+                       "Append another clause to this condition.");
+
+  if (hasError) {
+    ImGui::Spacing();
+    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 205, 205, 255));
+    ImGui::TextWrapped("%s", conditionEditorError_.c_str());
+    ImGui::PopStyleColor();
+  }
+
+  ImGui::Spacing();
+  if (ImGui::Button("Save")) {
+    if (SavePendingCondition()) {
+      ImGui::CloseCurrentPopup();
+      conditionEditorDialogOpen_ = false;
+    }
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Cancel")) {
+    conditionEditorError_.clear();
+    conditionEditorDialogCancelRequested_ = true;
+    ImGui::CloseCurrentPopup();
+    conditionEditorDialogOpen_ = false;
+  }
+
+  ImGui::EndPopup();
+
+  if (conditionEditorDialogCancelRequested_) {
+    conditionEditorDialogCancelRequested_ = false;
+    editingConditionIndex_.reset();
+    editingConditionIsNew_ = false;
+  }
+}
+} // namespace sosr

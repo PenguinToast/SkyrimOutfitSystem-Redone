@@ -26,6 +26,21 @@ std::string TrimText(std::string_view a_text) {
   return std::string(a_text.substr(start, end - start));
 }
 
+bool EqualsCaseInsensitive(std::string_view a_left, std::string_view a_right) {
+  if (a_left.size() != a_right.size()) {
+    return false;
+  }
+
+  for (std::size_t index = 0; index < a_left.size(); ++index) {
+    if (std::tolower(static_cast<unsigned char>(a_left[index])) !=
+        std::tolower(static_cast<unsigned char>(a_right[index]))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 bool ContainsCaseInsensitive(std::string_view a_haystack,
                              std::string_view a_needle) {
   if (a_needle.empty()) {
@@ -252,7 +267,14 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       popupHovered = ImGui::IsWindowHovered(
           ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
-      const auto needle = TrimText(a_buffer);
+      const auto rawNeedle = TrimText(a_buffer);
+      const auto needle = std::ranges::find_if(a_options,
+                                               [&](const std::string &option) {
+                                                 return EqualsCaseInsensitive(
+                                                     option, rawNeedle);
+                                               }) != a_options.end()
+                              ? std::string{}
+                              : rawNeedle;
       bool anyVisible = false;
       const std::string *topOption =
           FindTopAutocompleteOption(a_options, needle);

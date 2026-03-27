@@ -69,6 +69,75 @@ constexpr char kIconIdentifier[] = "\xee\x84\x87"; // ICON_LC_LINK
 constexpr char kIconCollection[] = "\xee\x97\xbf"; // ICON_LC_FOLDER_CODE
 constexpr char kIconFile[] = "\xee\x83\x87";       // ICON_LC_FILE_CODE
 
+using ConditionComparator = sosr::ui::conditions::Comparator;
+using ConditionConnective = sosr::ui::conditions::Connective;
+
+std::string SerializeConditionComparator(const ConditionComparator a_value) {
+  switch (a_value) {
+  case ConditionComparator::Equal:
+    return "==";
+  case ConditionComparator::NotEqual:
+    return "!=";
+  case ConditionComparator::Greater:
+    return ">";
+  case ConditionComparator::GreaterOrEqual:
+    return ">=";
+  case ConditionComparator::Less:
+    return "<";
+  case ConditionComparator::LessOrEqual:
+    return "<=";
+  }
+
+  return "==";
+}
+
+ConditionComparator ParseConditionComparator(const std::string_view a_value) {
+  if (a_value == "!=") {
+    return ConditionComparator::NotEqual;
+  }
+  if (a_value == ">") {
+    return ConditionComparator::Greater;
+  }
+  if (a_value == ">=") {
+    return ConditionComparator::GreaterOrEqual;
+  }
+  if (a_value == "<") {
+    return ConditionComparator::Less;
+  }
+  if (a_value == "<=") {
+    return ConditionComparator::LessOrEqual;
+  }
+  return ConditionComparator::Equal;
+}
+
+std::string SerializeConditionConnective(const ConditionConnective a_value) {
+  return a_value == ConditionConnective::Or ? "OR" : "AND";
+}
+
+ConditionConnective ParseConditionConnective(const std::string_view a_value) {
+  return a_value == "OR" ? ConditionConnective::Or : ConditionConnective::And;
+}
+
+ImVec4 ParseConditionColor(const nlohmann::json &a_value,
+                           const ImVec4 &a_fallback) {
+  if (!a_value.is_array() || a_value.size() < 3) {
+    return a_fallback;
+  }
+
+  ImVec4 color = a_fallback;
+  color.x = a_value[0].is_number() ? a_value[0].get<float>() : color.x;
+  color.y = a_value[1].is_number() ? a_value[1].get<float>() : color.y;
+  color.z = a_value[2].is_number() ? a_value[2].get<float>() : color.z;
+  color.w = a_value.size() > 3 && a_value[3].is_number()
+                ? a_value[3].get<float>()
+                : color.w;
+  return color;
+}
+
+nlohmann::json SerializeConditionColor(const ImVec4 &a_color) {
+  return nlohmann::json::array({a_color.x, a_color.y, a_color.z, a_color.w});
+}
+
 int CompareText(std::string_view a_left, std::string_view a_right) {
   const auto leftSize = a_left.size();
   const auto rightSize = a_right.size();
@@ -209,26 +278,29 @@ void DrawSimplePinnableTooltip(const std::string_view a_id,
   sosr::ui::components::DrawPinnableTooltip(a_id, a_hoveredSource, a_drawBody);
 }
 
-void DrawCatalogTabHelpTooltip(const std::string_view a_id,
-                               const bool a_hoveredSource,
-                               const std::initializer_list<const char *> a_lines) {
+void DrawCatalogTabHelpTooltip(
+    const std::string_view a_id, const bool a_hoveredSource,
+    const std::initializer_list<const char *> a_lines) {
   const auto mousePos = ImGui::GetIO().MousePos;
   sosr::ui::components::HoveredTooltipOptions tooltipOptions;
   tooltipOptions.useCustomPlacement = true;
   tooltipOptions.pos = ImVec2(mousePos.x - 2.0f, mousePos.y + 12.0f);
   tooltipOptions.pivot = ImVec2(1.0f, 0.0f);
-  sosr::ui::components::DrawPinnableTooltip(a_id, a_hoveredSource, [&]() {
-    bool first = true;
-    for (const auto *line : a_lines) {
-      if (!first) {
-        ImGui::Spacing();
-      }
-      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 420.0f);
-      ImGui::TextUnformatted(line);
-      ImGui::PopTextWrapPos();
-      first = false;
-    }
-  }, tooltipOptions);
+  sosr::ui::components::DrawPinnableTooltip(
+      a_id, a_hoveredSource,
+      [&]() {
+        bool first = true;
+        for (const auto *line : a_lines) {
+          if (!first) {
+            ImGui::Spacing();
+          }
+          ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 420.0f);
+          ImGui::TextUnformatted(line);
+          ImGui::PopTextWrapPos();
+          first = false;
+        }
+      },
+      tooltipOptions);
 }
 
 bool IsDelayedHover(const float a_delaySeconds = 0.45f) {
@@ -382,9 +454,67 @@ void Menu::LoadUserSettings() {
     toggleKey_ = json.value("toggleKey", toggleKey_);
     toggleModifier_ = json.value("toggleModifier", toggleModifier_);
     themeName_ = json.value("theme", themeName_);
+    nextConditionId_ = (std::max)(1, json.value("nextConditionId", 1));
+    conditions_.clear();
+    int maxConditionId = 0;
+    if (const auto conditionsIt = json.find("conditions");
+        conditionsIt != json.end() && conditionsIt->is_array()) {
+      conditions_.reserve(conditionsIt->size());
+      for (const auto &conditionJson : *conditionsIt) {
+        if (!conditionJson.is_object()) {
+          continue;
+        }
+
+        ui::conditions::Definition condition;
+        condition.id = conditionJson.value("id", std::string{});
+        condition.name = conditionJson.value("name", std::string{});
+        condition.color = ParseConditionColor(
+            conditionJson.value("color", nlohmann::json{}), condition.color);
+
+        if (const auto clausesIt = conditionJson.find("clauses");
+            clausesIt != conditionJson.end() && clausesIt->is_array()) {
+          condition.clauses.reserve(clausesIt->size());
+          for (const auto &clauseJson : *clausesIt) {
+            if (!clauseJson.is_object()) {
+              continue;
+            }
+
+            ui::conditions::Clause clause;
+            clause.functionName = clauseJson.value("function", std::string{});
+            clause.arguments[0] = clauseJson.value("arg1", std::string{});
+            clause.arguments[1] = clauseJson.value("arg2", std::string{});
+            clause.comparator = ParseConditionComparator(
+                clauseJson.value("comparator", std::string{"=="}));
+            clause.comparand = clauseJson.value("value", std::string{"1"});
+            clause.connectiveToNext = ParseConditionConnective(
+                clauseJson.value("join", std::string{"AND"}));
+            condition.clauses.push_back(std::move(clause));
+          }
+        }
+
+        if (!condition.id.empty() && !condition.name.empty() &&
+            !condition.clauses.empty()) {
+          if (condition.id.rfind("condition-", 0) == 0) {
+            try {
+              maxConditionId = (std::max)(
+                  maxConditionId,
+                  std::stoi(condition.id.substr(std::size("condition-") - 1)));
+            } catch (const std::exception &) {
+            }
+          }
+          conditions_.push_back(std::move(condition));
+        }
+      }
+    }
+    nextConditionId_ = (std::max)(nextConditionId_, maxConditionId + 1);
   } catch (const std::exception &exception) {
     logger::warn("Failed to parse user settings from {}: {}", userSettingsPath_,
                  exception.what());
+  }
+
+  if (conditions_.empty()) {
+    EnsureDefaultConditions();
+    SaveUserSettings();
   }
 }
 
@@ -403,13 +533,33 @@ void Menu::SaveUserSettings() const {
     return;
   }
 
-  const nlohmann::json json = {{"fontSizePx", fontSizePixels_},
-                               {"fontPath", fontPath_},
-                               {"pauseGameWhileOpen", pauseGameWhenOpen_},
-                               {"smoothScroll", smoothScroll_},
-                               {"toggleKey", toggleKey_},
-                               {"toggleModifier", toggleModifier_},
-                               {"theme", themeName_}};
+  nlohmann::json json = {{"fontSizePx", fontSizePixels_},
+                         {"fontPath", fontPath_},
+                         {"pauseGameWhileOpen", pauseGameWhenOpen_},
+                         {"smoothScroll", smoothScroll_},
+                         {"toggleKey", toggleKey_},
+                         {"toggleModifier", toggleModifier_},
+                         {"theme", themeName_},
+                         {"nextConditionId", nextConditionId_},
+                         {"conditions", nlohmann::json::array()}};
+
+  for (const auto &condition : conditions_) {
+    nlohmann::json conditionJson{
+        {"id", condition.id},
+        {"name", condition.name},
+        {"color", SerializeConditionColor(condition.color)},
+        {"clauses", nlohmann::json::array()}};
+    for (const auto &clause : condition.clauses) {
+      conditionJson["clauses"].push_back(
+          {{"function", clause.functionName},
+           {"arg1", clause.arguments[0]},
+           {"arg2", clause.arguments[1]},
+           {"comparator", SerializeConditionComparator(clause.comparator)},
+           {"value", clause.comparand},
+           {"join", SerializeConditionConnective(clause.connectiveToNext)}});
+    }
+    json["conditions"].push_back(std::move(conditionJson));
+  }
 
   output << json.dump(2) << '\n';
 }
@@ -625,6 +775,9 @@ std::string Menu::BuildFavoriteKey(const BrowserTab a_tab,
     break;
   case BrowserTab::Slots:
     prefix = "slot:";
+    break;
+  case BrowserTab::Conditions:
+    prefix = "condition:";
     break;
   case BrowserTab::Options:
     prefix = "options:";
@@ -1033,7 +1186,8 @@ void Menu::DrawWindow() {
         if (entry != EquipmentCatalog::Get().GetKits().end()) {
           workbench_.ApplyCatalogPreview(entry->id, entry->armorFormIDs);
         }
-      } else if (activeTab_ == BrowserTab::Slots) {
+      } else if (activeTab_ == BrowserTab::Slots ||
+                 activeTab_ == BrowserTab::Conditions) {
         workbench_.ClearPreview();
       }
     };
@@ -1041,8 +1195,7 @@ void Menu::DrawWindow() {
     if (ImGui::BeginTabBar("##catalog-tabs")) {
       const bool gearTabOpen = ImGui::BeginTabItem("Gear");
       DrawCatalogTabHelpTooltip(
-          "catalog:gear-tab",
-          IsDelayedHover(),
+          "catalog:gear-tab", IsDelayedHover(),
           {"Use this tab to override a specific equipped gear piece.",
            "Browse individual armor pieces from the equipment catalog.",
            "Double-click to add an override using Skyrim Vanity System's "
@@ -1058,8 +1211,7 @@ void Menu::DrawWindow() {
 
       const bool outfitsTabOpen = ImGui::BeginTabItem("Outfits");
       DrawCatalogTabHelpTooltip(
-          "catalog:outfits-tab",
-          IsDelayedHover(),
+          "catalog:outfits-tab", IsDelayedHover(),
           {"Browse full outfits from plugins in the catalog.",
            "Double-click to replace matching row overrides so the result "
            "matches the preview. The context menu also offers the old append "
@@ -1074,8 +1226,7 @@ void Menu::DrawWindow() {
 
       const bool kitsTabOpen = ImGui::BeginTabItem("Kits");
       DrawCatalogTabHelpTooltip(
-          "catalog:kits-tab",
-          IsDelayedHover(),
+          "catalog:kits-tab", IsDelayedHover(),
           {"Browse Mod Explorer kits loaded from "
            "data/interface/modex/user/kits.",
            "Kits behave like outfits: double-click replaces matching row "
@@ -1093,8 +1244,7 @@ void Menu::DrawWindow() {
 
       const bool slotsTabOpen = ImGui::BeginTabItem("Equipment Slots");
       DrawCatalogTabHelpTooltip(
-          "catalog:slots-tab",
-          IsDelayedHover(),
+          "catalog:slots-tab", IsDelayedHover(),
           {"Use this tab to override a specific equipment slot no matter "
            "which armor you have equipped there, as long as something is "
            "equipped in that slot.",
@@ -1113,14 +1263,33 @@ void Menu::DrawWindow() {
         ImGui::EndTabItem();
       }
 
+      const bool conditionsTabOpen = ImGui::BeginTabItem("Conditions");
+      DrawCatalogTabHelpTooltip(
+          "catalog:conditions-tab", IsDelayedHover(),
+          {"Use this tab to define reusable condition sets for Dynamic Armor "
+           "Variants Extended.",
+           "Conditions are built from condition functions joined by AND and "
+           "OR operators, plus a shared display color so you can recognize "
+           "them later.",
+           "Double-click a condition to edit it, or use Add New to create a "
+           "fresh one."});
+      if (conditionsTabOpen) {
+        if (activeTab_ != BrowserTab::Conditions) {
+          ClearCatalogSelection();
+        }
+        activeTab_ = BrowserTab::Conditions;
+        ImGui::EndTabItem();
+      }
+
       ImGui::EndTabBar();
     }
 
     ImGui::Separator();
     DrawCatalogFilters();
-    if (activeTab_ != BrowserTab::Slots) {
-      if (ImGui::Checkbox("Favorites Only", &favoritesOnly_) && favoritesOnly_ &&
-          !selectedCatalogKey_.empty() &&
+    if (activeTab_ != BrowserTab::Slots &&
+        activeTab_ != BrowserTab::Conditions) {
+      if (ImGui::Checkbox("Favorites Only", &favoritesOnly_) &&
+          favoritesOnly_ && !selectedCatalogKey_.empty() &&
           !IsFavorite(activeTab_, selectedCatalogKey_)) {
         ClearCatalogSelection();
       }
@@ -1143,14 +1312,14 @@ void Menu::DrawWindow() {
     if (activeTab_ == BrowserTab::Slots) {
       ImGui::Checkbox("Show all", &showAllSlots_);
       DrawCatalogTabHelpTooltip(
-          "catalog:slots-show-all",
-          IsDelayedHover(0.55f),
+          "catalog:slots-show-all", IsDelayedHover(0.55f),
           {"When unchecked, only slots that currently have equipped items are "
            "shown.",
            "Enable this to browse every supported equipment slot, including "
            "slots that are currently empty."});
     }
-    if (activeTab_ != BrowserTab::Slots) {
+    if (activeTab_ != BrowserTab::Slots &&
+        activeTab_ != BrowserTab::Conditions) {
       ImGui::SameLine();
       if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
         if (!previewSelected_) {
@@ -1175,7 +1344,8 @@ void Menu::DrawWindow() {
       if (ImGui::BeginChild("##catalog-pane", ImVec2(0.0f, 0.0f),
                             ImGuiChildFlags_Borders)) {
         bool catalogRowClicked = false;
-        if (EquipmentCatalog::Get().IsRefreshing()) {
+        if (activeTab_ != BrowserTab::Conditions &&
+            EquipmentCatalog::Get().IsRefreshing()) {
           DrawCatalogLoadingPane();
         } else {
           if (activeTab_ == BrowserTab::Gear) {
@@ -1184,6 +1354,8 @@ void Menu::DrawWindow() {
             catalogRowClicked = DrawOutfitTab();
           } else if (activeTab_ == BrowserTab::Kits) {
             catalogRowClicked = DrawKitTab();
+          } else if (activeTab_ == BrowserTab::Conditions) {
+            catalogRowClicked = DrawConditionTab();
           } else {
             catalogRowClicked = DrawSlotTab();
           }
@@ -1212,6 +1384,7 @@ void Menu::DrawWindow() {
 
   DrawCreateKitDialog();
   DrawDeleteKitDialog();
+  DrawConditionEditorDialog();
 
   ImGui::End();
   ImGui::PopStyleVar();
@@ -1486,7 +1659,7 @@ void Menu::SortKitRows(std::vector<const KitEntry *> &a_rows,
 }
 
 void Menu::DrawCatalogFilters() {
-  if (activeTab_ == BrowserTab::Slots) {
+  if (activeTab_ == BrowserTab::Slots || activeTab_ == BrowserTab::Conditions) {
     return;
   }
 
@@ -1659,8 +1832,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
         const auto rowContentPos = ImGui::GetCursorScreenPos();
-        const auto rowHeight =
-            18.0f + (ImGui::GetTextLineHeight() * 2.0f);
+        const auto rowHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
         ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
@@ -1723,7 +1895,8 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           }
         }
 
-        if ((rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
+        if ((rowHovered &&
+             ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
             widgetResult.doubleClicked) {
           rowClicked = true;
           AddGearEntryToWorkbench(entry);
