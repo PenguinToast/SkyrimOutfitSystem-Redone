@@ -1170,7 +1170,6 @@ void Menu::DrawWindow() {
     ImGui::Separator();
     DrawCatalogFilters();
     if (activeTab_ != BrowserTab::Slots) {
-      ImGui::Spacing();
       if (ImGui::Checkbox("Favorites Only", &favoritesOnly_) && favoritesOnly_ &&
           !selectedCatalogKey_.empty() &&
           !IsFavorite(activeTab_, selectedCatalogKey_)) {
@@ -1193,7 +1192,6 @@ void Menu::DrawWindow() {
       }
     }
     if (activeTab_ == BrowserTab::Slots) {
-      ImGui::Spacing();
       ImGui::Checkbox("Show all", &showAllSlots_);
       DrawCatalogTabHelpTooltip(
           "catalog:slots-show-all",
@@ -1213,7 +1211,6 @@ void Menu::DrawWindow() {
         }
       }
     }
-    ImGui::Spacing();
 
     if (ImGui::BeginTable("##browser-layout", 2,
                           ImGuiTableFlags_Resizable |
