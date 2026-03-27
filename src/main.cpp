@@ -35,6 +35,7 @@ SKSEPlugin_Load(const SKSE::LoadInterface *a_skse) {
   SKSE::Init(a_skse);
   SKSE::AllocTrampoline(1 << 10);
   logger::info("{} build {}", Plugin::NAME, Plugin::VERSION_STRING);
+  sosr::integrations::DynamicArmorVariantsExtendedClient::Initialize(a_skse);
 
   messaging->RegisterListener("SKSE", SKSEMessageHandler);
 

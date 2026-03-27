@@ -237,18 +237,8 @@ bool IsDelayedHover(const float a_delaySeconds = 0.45f) {
 }
 
 std::optional<std::string> GetDavAvailabilityMessage() {
-  auto *dav = sosr::integrations::DynamicArmorVariantsExtendedClient::Get();
-  if (!dav) {
-    return "Dynamic Armor Variants Extended is unavailable. Browsing will "
-           "work, but previews and overrides are disabled.";
-  }
-
-  if (!dav->IsReady()) {
-    return "Dynamic Armor Variants Extended is loaded but not ready yet. "
-           "Previews and overrides are temporarily unavailable.";
-  }
-
-  return std::nullopt;
+  return sosr::integrations::DynamicArmorVariantsExtendedClient::
+      GetAvailabilityMessage();
 }
 
 void DrawDavAvailabilityBanner(const std::string_view a_message) {

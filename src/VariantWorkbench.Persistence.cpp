@@ -45,6 +45,15 @@ auto BuildDavConditionsJson() -> std::string {
   return root.dump();
 }
 
+auto BuildDavVariantPriority(const std::size_t a_rowIndex,
+                             const std::size_t a_rowCount) -> std::int32_t {
+  if (a_rowCount == 0 || a_rowIndex >= a_rowCount) {
+    return 0;
+  }
+
+  return static_cast<std::int32_t>(a_rowCount - a_rowIndex);
+}
+
 struct DavReplacementData {
   std::vector<std::string> replacements;
   std::string displayName;
@@ -94,7 +103,7 @@ auto CollectDavReplacementData(
 auto BuildDavVariantJson(
     const RE::TESObjectARMO *a_sourceArmor,
     const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
-    bool a_hideEquipped) -> std::string {
+    bool a_hideEquipped, const std::int32_t a_priority) -> std::string {
   nlohmann::json replaceByForm = nlohmann::json::object();
   const auto replacementData = CollectDavReplacementData(a_overrideArmors);
   if (replacementData.replacements.empty() && !a_hideEquipped) {
@@ -131,6 +140,7 @@ auto BuildDavVariantJson(
            : (replacementData.displayName.empty()
                   ? sosr::armor::GetDisplayName(a_sourceArmor)
                   : replacementData.displayName)},
+      {"priority", a_priority},
       {"replaceByForm", replaceByForm}};
   return root.dump();
 }
@@ -138,7 +148,7 @@ auto BuildDavVariantJson(
 auto BuildDavSlotVariantJson(
     const std::uint64_t a_slotMask,
     const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
-    const bool a_hideEquipped) -> std::string {
+    const bool a_hideEquipped, const std::int32_t a_priority) -> std::string {
   const auto slotNumber = sosr::armor::GetArmorSlotNumber(a_slotMask);
   if (slotNumber == 0) {
     return {};
@@ -167,13 +177,15 @@ auto BuildDavSlotVariantJson(
            ? "Hidden " + slotLabel
            : (replacementData.displayName.empty() ? slotLabel
                                                   : replacementData.displayName)},
+      {"priority", a_priority},
       {"replaceBySlot", replaceBySlot}};
   return root.dump();
 }
 
 auto BuildDavVariantDescriptor(
     const sosr::workbench::VariantWorkbenchRow &a_row,
-    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors)
+    const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
+    const std::int32_t a_priority)
     -> std::optional<DavVariantDescriptor> {
   DavVariantDescriptor descriptor;
 
@@ -181,7 +193,7 @@ auto BuildDavVariantDescriptor(
     descriptor.name = BuildDavSlotVariantName(a_row.equipped.slotMask);
     descriptor.json = BuildDavSlotVariantJson(a_row.equipped.slotMask,
                                               a_overrideArmors,
-                                              a_row.hideEquipped);
+                                              a_row.hideEquipped, a_priority);
   } else {
     const auto *sourceArmor =
         RE::TESForm::LookupByID<RE::TESObjectARMO>(a_row.equipped.formID);
@@ -190,8 +202,8 @@ auto BuildDavVariantDescriptor(
     }
 
     descriptor.name = BuildDavVariantName(sourceArmor);
-    descriptor.json =
-        BuildDavVariantJson(sourceArmor, a_overrideArmors, a_row.hideEquipped);
+    descriptor.json = BuildDavVariantJson(sourceArmor, a_overrideArmors,
+                                          a_row.hideEquipped, a_priority);
   }
 
   if (descriptor.name.empty() || descriptor.json.empty()) {
@@ -294,14 +306,18 @@ bool VariantWorkbench::ApplyCatalogPreview(
       continue;
     }
 
+    const auto rowIndex =
+        static_cast<std::size_t>(std::distance(rows_.begin(), rowIt));
+
     const auto *sourceArmor =
         RE::TESForm::LookupByID<RE::TESObjectARMO>(rowIt->equipped.formID);
     if (!sourceArmor) {
       continue;
     }
 
-    const auto variantJson =
-        BuildDavVariantJson(sourceArmor, overrideArmors, false);
+    const auto variantJson = BuildDavVariantJson(
+        sourceArmor, overrideArmors, false,
+        BuildDavVariantPriority(rowIndex, rows_.size()));
     if (variantJson.empty()) {
       continue;
     }
@@ -321,7 +337,8 @@ bool VariantWorkbench::ApplyCatalogPreview(
   }
 
   auto *dav = GetDynamicArmorVariantsExtendedClient();
-  if (!dav || !dav->IsReady()) {
+  if (!(dav = sosr::integrations::DynamicArmorVariantsExtendedClient::
+            GetReady())) {
     ClearPreview();
     return false;
   }
@@ -402,8 +419,8 @@ void VariantWorkbench::ClearPreview() {
 }
 
 void VariantWorkbench::SyncDynamicArmorVariantsExtended() {
-  auto *dav = GetDynamicArmorVariantsExtendedClient();
-  if (!dav || !dav->IsReady()) {
+  auto *dav = sosr::integrations::DynamicArmorVariantsExtendedClient::GetReady();
+  if (!dav) {
     return;
   }
 
@@ -416,7 +433,8 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended() {
   std::unordered_map<std::string, DavVariantPayload> desiredVariants;
   desiredVariants.reserve(rows_.size());
 
-  for (const auto &row : rows_) {
+  for (std::size_t rowIndex = 0; rowIndex < rows_.size(); ++rowIndex) {
+    const auto &row = rows_[rowIndex];
     std::vector<const RE::TESObjectARMO *> overrideArmors;
     overrideArmors.reserve(row.overrides.size());
     for (const auto &overrideItem : row.overrides) {
@@ -430,7 +448,8 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended() {
       continue;
     }
 
-    const auto descriptor = BuildDavVariantDescriptor(row, overrideArmors);
+    const auto descriptor = BuildDavVariantDescriptor(
+        row, overrideArmors, BuildDavVariantPriority(rowIndex, rows_.size()));
     if (!descriptor.has_value()) {
       continue;
     }
