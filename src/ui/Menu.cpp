@@ -27,13 +27,6 @@ constexpr auto kLegacySettingsDirectory =
 constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
 constexpr auto kFavoritesFilename = "favorites.json";
-constexpr auto kDefaultFontPath =
-    "Data/Interface/SkyrimVanitySystem/fonts/Ubuntu-R.ttf";
-constexpr auto kDefaultIconFontPath =
-    "Data/Interface/SkyrimVanitySystem/fonts/lucide.ttf";
-constexpr int kDefaultFontSizePixels = 16;
-constexpr int kMinFontSizePixels = 8;
-constexpr int kMaxFontSizePixels = 48;
 constexpr float kFadeDurationSeconds = 0.30f;
 constexpr float kSmoothScrollStepMultiplier = 5.0f;
 constexpr float kSmoothScrollLerpFactor = 0.20f;
@@ -341,7 +334,9 @@ void Menu::Init(IDXGISwapChain *a_swapChain, ID3D11Device *a_device,
           .string();
   favoritesPath_ =
       (std::filesystem::path(settingsDirectory_) / kFavoritesFilename).string();
+  RefreshAvailableFonts();
   LoadUserSettings();
+  NormalizeSelectedFontPath();
   LoadFavorites();
 
   IMGUI_CHECKVERSION();
@@ -391,6 +386,7 @@ void Menu::LoadUserSettings() {
     fontSizePixels_ = std::clamp(json.value("fontSizePx", fontSizePixels_),
                                  kMinFontSizePixels, kMaxFontSizePixels);
     pendingFontSizePixels_ = fontSizePixels_;
+    fontPath_ = json.value("fontPath", fontPath_);
     pauseGameWhenOpen_ = json.value("pauseGameWhileOpen", pauseGameWhenOpen_);
     smoothScroll_ = json.value("smoothScroll", smoothScroll_);
     toggleKey_ = json.value("toggleKey", toggleKey_);
@@ -418,6 +414,7 @@ void Menu::SaveUserSettings() const {
   }
 
   const nlohmann::json json = {{"fontSizePx", fontSizePixels_},
+                               {"fontPath", fontPath_},
                                {"pauseGameWhileOpen", pauseGameWhenOpen_},
                                {"smoothScroll", smoothScroll_},
                                {"toggleKey", toggleKey_},
@@ -480,44 +477,6 @@ void Menu::SaveFavorites() const {
   std::ranges::sort(favorites);
   const nlohmann::json json = {{"favorites", favorites}};
   output << json.dump(2) << '\n';
-}
-
-void Menu::RebuildFontAtlas() {
-  auto &io = ImGui::GetIO();
-  auto &style = ImGui::GetStyle();
-  ImFontConfig fontConfig{};
-  fontConfig.SizePixels = static_cast<float>(fontSizePixels_);
-  fontConfig.OversampleH = 1;
-  fontConfig.OversampleV = 1;
-  fontConfig.PixelSnapH = true;
-
-  io.Fonts->Clear();
-  io.FontDefault = nullptr;
-  if (std::filesystem::exists(kDefaultFontPath)) {
-    io.FontDefault = io.Fonts->AddFontFromFileTTF(
-        kDefaultFontPath, static_cast<float>(fontSizePixels_), &fontConfig);
-  }
-  if (!io.FontDefault) {
-    io.FontDefault = io.Fonts->AddFontDefaultVector(&fontConfig);
-  }
-  if (io.FontDefault && std::filesystem::exists(kDefaultIconFontPath)) {
-    ImFontConfig iconConfig{};
-    iconConfig.MergeMode = true;
-    iconConfig.PixelSnapH = true;
-    iconConfig.GlyphOffset.y = 3.0f;
-    iconConfig.DstFont = io.FontDefault;
-    io.Fonts->AddFontFromFileTTF(kDefaultIconFontPath,
-                                 static_cast<float>(fontSizePixels_),
-                                 &iconConfig, kLucideIconRanges.data());
-  }
-  io.Fonts->Build();
-  style.FontScaleMain = 1.0f;
-  style._NextFrameFontSizeBase = static_cast<float>(fontSizePixels_);
-  style.FontSizeBase = static_cast<float>(fontSizePixels_);
-
-  if (initialized_) {
-    ImGui_ImplDX11_InvalidateDeviceObjects();
-  }
 }
 
 void Menu::ApplyStyle() {
@@ -2048,115 +2007,4 @@ bool Menu::DrawKitTab() {
   return rowClicked;
 }
 
-void Menu::DrawOptionsTab() {
-  ClearCatalogSelection();
-  ImGui::TextUnformatted("Interface");
-  ImGui::Separator();
-
-  if (ImGui::BeginChild("##options-font-panel", ImVec2(0.0f, 0.0f),
-                        ImGuiChildFlags_Borders |
-                            ImGuiChildFlags_AutoResizeY)) {
-    if (ImGui::BeginTable("##options-layout", 2,
-                          ImGuiTableFlags_SizingStretchProp,
-                          ImVec2(0.0f, 0.0f))) {
-      ImGui::TableSetupColumn("Description", ImGuiTableColumnFlags_WidthStretch,
-                              1.15f);
-      ImGui::TableSetupColumn("Controls", ImGuiTableColumnFlags_WidthStretch,
-                              0.85f);
-      ImGui::TableNextRow();
-
-      ImGui::TableSetColumnIndex(0);
-      ImGui::TextUnformatted("Font Size");
-      ImGui::TextDisabled("Range: %d px to %d px", kMinFontSizePixels,
-                          kMaxFontSizePixels);
-
-      ImGui::TableSetColumnIndex(1);
-      ImGui::SetNextItemWidth(-FLT_MIN);
-      ImGui::SliderInt("##font-size", &pendingFontSizePixels_,
-                       kMinFontSizePixels, kMaxFontSizePixels, "%d px");
-      if (ImGui::IsItemDeactivatedAfterEdit()) {
-        fontSizePixels_ = pendingFontSizePixels_;
-        SaveUserSettings();
-        pendingFontAtlasRebuild_ = true;
-      }
-
-      if (ImGui::Button("Reset to Default")) {
-        fontSizePixels_ = kDefaultFontSizePixels;
-        pendingFontSizePixels_ = fontSizePixels_;
-        SaveUserSettings();
-        pendingFontAtlasRebuild_ = true;
-      }
-
-      ImGui::TableNextRow();
-      ImGui::TableSetColumnIndex(0);
-      ImGui::TextUnformatted("Toggle UI Button");
-
-      ImGui::TableSetColumnIndex(1);
-      ImGui::SetNextItemWidth(-FLT_MIN);
-      if (ImGui::Button(GetToggleKeyLabel().c_str(), ImVec2(-FLT_MIN, 0.0f))) {
-        OpenToggleKeyCapture();
-      }
-
-      ImGui::TableNextRow();
-      ImGui::TableSetColumnIndex(0);
-      ImGui::TextUnformatted("Pause Game While Open");
-
-      ImGui::TableSetColumnIndex(1);
-      bool pauseGameWhenOpen = pauseGameWhenOpen_;
-      if (ImGui::Checkbox("##pause-game-while-open", &pauseGameWhenOpen)) {
-        pauseGameWhenOpen_ = pauseGameWhenOpen;
-        SaveUserSettings();
-      }
-
-      ImGui::TableNextRow();
-      ImGui::TableSetColumnIndex(0);
-      ImGui::TextUnformatted("Smooth Scrolling");
-
-      ImGui::TableSetColumnIndex(1);
-      bool smoothScroll = smoothScroll_;
-      if (ImGui::Checkbox("##smooth-scrolling", &smoothScroll)) {
-        smoothScroll_ = smoothScroll;
-        pendingSmoothWheelDelta_ = 0.0f;
-        smoothScrollWindowId_ = 0;
-        smoothScrollTargetY_ = 0.0f;
-        SaveUserSettings();
-      }
-
-      ImGui::EndTable();
-    }
-    ImGui::EndChild();
-  }
-
-  if (openToggleKeyPopup_) {
-    ImGui::OpenPopup("##toggle-key-capture");
-    openToggleKeyPopup_ = false;
-  }
-
-  ImGui::SetNextWindowSize(ImVec2(420.0f, 0.0f), ImGuiCond_Appearing);
-  if (ImGui::BeginPopupModal("##toggle-key-capture", nullptr,
-                             ImGuiWindowFlags_NoResize |
-                                 ImGuiWindowFlags_NoMove)) {
-    ImGui::TextUnformatted("Change Toggle UI Button");
-    ImGui::Separator();
-    ImGui::TextWrapped(
-        "Press the key combination you want to use. Hold Shift, Ctrl, or Alt "
-        "while pressing the key to include a modifier.");
-    ImGui::TextWrapped(
-        "Press T to reset to default (F6). Press Escape to cancel.");
-    if (!toggleKeyCaptureError_.empty()) {
-      ImGui::Spacing();
-      ImGui::TextColored(ThemeConfig::GetSingleton()->GetColor("ERROR"), "%s",
-                         toggleKeyCaptureError_.c_str());
-    }
-    ImGui::Spacing();
-    if (ImGui::Button("Cancel", ImVec2(-FLT_MIN, 0.0f))) {
-      CloseToggleKeyCapture();
-      ImGui::CloseCurrentPopup();
-    }
-    if (!awaitingToggleKeyCapture_) {
-      ImGui::CloseCurrentPopup();
-    }
-    ImGui::EndPopup();
-  }
-}
 } // namespace sosr

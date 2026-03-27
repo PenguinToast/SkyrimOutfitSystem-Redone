@@ -19,6 +19,12 @@ class MenuHost;
 
 class Menu {
 public:
+  struct FontOption {
+    std::string label;
+    std::string path;
+    bool isBundled{false};
+  };
+
   static Menu *GetSingleton();
 
   void Init(IDXGISwapChain *a_swapChain, ID3D11Device *a_device,
@@ -51,6 +57,16 @@ public:
   }
 
 private:
+  static constexpr const char *kDefaultFontPath =
+      "Data/Interface/SkyrimVanitySystem/fonts/Ubuntu-R.ttf";
+  static constexpr const char *kDefaultIconFontPath =
+      "Data/Interface/SkyrimVanitySystem/fonts/lucide.ttf";
+  static constexpr const char *kBundledFontDirectory =
+      "Data/Interface/SkyrimVanitySystem/fonts";
+  static constexpr int kDefaultFontSizePixels = 16;
+  static constexpr int kMinFontSizePixels = 8;
+  static constexpr int kMaxFontSizePixels = 48;
+
   enum class DragSourceKind : std::uint32_t {
     Catalog = 1,
     Override = 2,
@@ -79,6 +95,8 @@ private:
   void SaveUserSettings() const;
   void LoadFavorites();
   void SaveFavorites() const;
+  void RefreshAvailableFonts();
+  void NormalizeSelectedFontPath();
   void RebuildFontAtlas();
   void SyncAllowTextInput();
   void UpdateVisibilityAnimation(float a_deltaTime);
@@ -167,6 +185,7 @@ private:
   std::vector<bool> selectedSlotFilters_;
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
+  std::string fontPath_{kDefaultFontPath};
   bool pendingFontAtlasRebuild_{false};
   bool pauseGameWhenOpen_{false};
   bool smoothScroll_{true};
@@ -215,6 +234,8 @@ private:
   bool inventoryOnly_{false};
   std::string pendingCatalogSelectionAfterRefresh_;
   std::unordered_set<std::string> favoriteKeys_;
+  std::vector<FontOption> bundledFontOptions_;
+  std::vector<FontOption> systemFontOptions_;
   workbench::VariantWorkbench workbench_;
 };
 } // namespace sosr
