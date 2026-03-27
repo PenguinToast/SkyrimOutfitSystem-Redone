@@ -70,8 +70,13 @@ int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
 } // namespace
 
 namespace sosr {
-void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry) {
-  workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry,
+                                  const bool a_replaceExisting) {
+  if (a_replaceExisting) {
+    workbench_.ReplaceCatalogSelectionInWorkbench(a_entry.armorFormIDs);
+  } else {
+    workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+  }
 }
 
 void Menu::OpenCreateKitDialog(const KitCreationSource a_source) {

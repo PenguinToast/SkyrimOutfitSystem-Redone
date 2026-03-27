@@ -768,8 +768,13 @@ void Menu::AddGearEntryToWorkbench(const GearEntry &a_entry) {
       std::vector<RE::FormID>{a_entry.formID});
 }
 
-void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry) {
-  workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry,
+                                     const bool a_replaceExisting) {
+  if (a_replaceExisting) {
+    workbench_.ReplaceCatalogSelectionInWorkbench(a_entry.armorFormIDs);
+  } else {
+    workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+  }
 }
 
 void Menu::PreviewGearEntry(const GearEntry &a_entry) {
@@ -1107,8 +1112,9 @@ void Menu::DrawWindow() {
           "catalog:outfits-tab",
           IsDelayedHover(),
           {"Browse full outfits from plugins in the catalog.",
-           "Double-click to add the outfit's items as overrides, or use the "
-           "context menu to add the outfit as workbench rows instead."});
+           "Double-click to replace matching row overrides so the result "
+           "matches the preview. The context menu also offers the old append "
+           "behavior, or you can add the outfit as workbench rows instead."});
       if (outfitsTabOpen) {
         if (activeTab_ != BrowserTab::Outfits) {
           ClearCatalogSelection();
@@ -1123,9 +1129,10 @@ void Menu::DrawWindow() {
           IsDelayedHover(),
           {"Browse Mod Explorer kits loaded from "
            "data/interface/modex/user/kits.",
-           "Kits behave like outfits: double-click adds their items as "
-           "overrides, the context menu can add rows to the workbench, and "
-           "the context menu can also delete kits.",
+           "Kits behave like outfits: double-click replaces matching row "
+           "overrides so the result matches the preview. The context menu also "
+           "offers the old append behavior, can add rows to the workbench, "
+           "and can delete kits.",
            "Kits that refer to non-existent items are not shown."});
       if (kitsTabOpen) {
         if (activeTab_ != BrowserTab::Kits) {
@@ -1845,7 +1852,10 @@ bool Menu::DrawOutfitTab() {
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {
-            AddOutfitEntryToWorkbench(outfit);
+            AddOutfitEntryToWorkbench(outfit, true);
+          }
+          if (ImGui::MenuItem("Append Overrides")) {
+            AddOutfitEntryToWorkbench(outfit, false);
           }
           ImGui::EndPopup();
         }
@@ -1877,7 +1887,7 @@ bool Menu::DrawOutfitTab() {
 
         if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           rowClicked = true;
-          AddOutfitEntryToWorkbench(outfit);
+          AddOutfitEntryToWorkbench(outfit, true);
         }
         if (!ImGui::IsDragDropActive() &&
             ui::components::ShouldDrawPinnableTooltip("outfit:" + outfit.id,
@@ -1968,7 +1978,10 @@ bool Menu::DrawKitTab() {
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {
-            AddKitEntryToWorkbench(kit);
+            AddKitEntryToWorkbench(kit, true);
+          }
+          if (ImGui::MenuItem("Append Overrides")) {
+            AddKitEntryToWorkbench(kit, false);
           }
           ImGui::Separator();
           ImGui::PushStyleColor(
@@ -2009,7 +2022,7 @@ bool Menu::DrawKitTab() {
 
         if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
           rowClicked = true;
-          AddKitEntryToWorkbench(kit);
+          AddKitEntryToWorkbench(kit, true);
         }
         if (!ImGui::IsDragDropActive() &&
             ui::components::ShouldDrawPinnableTooltip("kit:" + kit.id,

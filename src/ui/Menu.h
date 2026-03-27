@@ -131,8 +131,10 @@ private:
   [[nodiscard]] bool MatchesOutfitFilters(const OutfitEntry &a_entry) const;
   [[nodiscard]] bool MatchesKitFilters(const KitEntry &a_entry) const;
   void AddGearEntryToWorkbench(const GearEntry &a_entry);
-  void AddOutfitEntryToWorkbench(const OutfitEntry &a_entry);
-  void AddKitEntryToWorkbench(const KitEntry &a_entry);
+  void AddOutfitEntryToWorkbench(const OutfitEntry &a_entry,
+                                 bool a_replaceExisting = true);
+  void AddKitEntryToWorkbench(const KitEntry &a_entry,
+                              bool a_replaceExisting = true);
   void OpenCreateKitDialog(KitCreationSource a_source);
   void OpenDeleteKitDialog(const KitEntry &a_entry);
   [[nodiscard]] bool SavePendingKit();

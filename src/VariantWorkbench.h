@@ -70,6 +70,8 @@ public:
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
   bool AddCatalogSelectionToWorkbench(const std::vector<RE::FormID> &a_formIDs);
+  bool ReplaceCatalogSelectionInWorkbench(
+      const std::vector<RE::FormID> &a_formIDs);
   bool AddCatalogSelectionAsRows(const std::vector<RE::FormID> &a_formIDs);
   bool AddSlotRow(std::uint64_t a_slotMask);
   bool ApplyCatalogPreview(std::string_view a_selectionKey,

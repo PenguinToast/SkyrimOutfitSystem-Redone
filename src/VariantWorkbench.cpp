@@ -449,6 +449,32 @@ bool VariantWorkbench::AddCatalogSelectionToWorkbench(
   return addedAny;
 }
 
+bool VariantWorkbench::ReplaceCatalogSelectionInWorkbench(
+    const std::vector<RE::FormID> &a_formIDs) {
+  std::vector<PlannedCatalogAssignment> assignments;
+  if (!PlanCatalogAssignments(a_formIDs, assignments)) {
+    return false;
+  }
+
+  std::unordered_set<int> targetRows;
+  targetRows.reserve(assignments.size());
+  for (const auto &assignment : assignments) {
+    targetRows.insert(assignment.rowIndex);
+  }
+
+  for (const auto rowIndex : targetRows) {
+    auto &row = rows_[static_cast<std::size_t>(rowIndex)];
+    row.overrides.clear();
+  }
+
+  bool addedAny = false;
+  for (const auto &assignment : assignments) {
+    addedAny |= AddCatalogOverride(assignment.rowIndex, assignment.armorFormID);
+  }
+
+  return addedAny;
+}
+
 bool VariantWorkbench::AddCatalogSelectionAsRows(
     const std::vector<RE::FormID> &a_formIDs) {
   auto newRows = BuildCatalogRows(a_formIDs);
