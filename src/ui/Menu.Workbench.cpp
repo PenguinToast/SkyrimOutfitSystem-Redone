@@ -13,8 +13,17 @@
 
 namespace {
 constexpr char kVariantItemPayloadType[] = "SOSR_VARIANT_ITEM";
+constexpr char kIconEllipsis[] = "\xee\x82\xba"; // ICON_LC_ELLIPSIS
 constexpr float kWorkbenchRowGapY = 20.0f;
 constexpr float kWorkbenchOverrideGapY = 5.0f;
+constexpr char kWorkbenchOverflowPopupId[] = "##workbench-toolbar-overflow";
+
+struct WorkbenchToolbarAction {
+  std::string_view label;
+  bool enabled{true};
+  std::function<void()> callback;
+  std::function<void()> tooltip;
+};
 
 struct ColoredTextRun {
   std::string_view text;
@@ -212,58 +221,146 @@ void Menu::DrawVariantWorkbenchPane() {
   const auto equippedKitFormIDs = workbench_.CollectEquippedArmorFormIDs();
   const auto overrideKitFormIDs =
       workbench_.CollectOverrideArmorFormIDsFromEquippedRows();
+  const bool canCreateEquippedKit = !equippedKitFormIDs.empty();
+  const bool canCreateOverrideKit = !overrideKitFormIDs.empty();
 
-  if (ImGui::Button("Reset Equipped")) {
-    workbench_.ClearPreview();
-    if (workbench_.ResetEquippedRows()) {
-      workbench_.SyncDynamicArmorVariantsExtended();
+  const std::array actions = {
+      WorkbenchToolbarAction{
+          .label = "Reset Equipped",
+          .callback =
+              [&]() {
+                workbench_.ClearPreview();
+                if (workbench_.ResetEquippedRows()) {
+                  workbench_.SyncDynamicArmorVariantsExtended();
+                }
+              },
+      },
+      WorkbenchToolbarAction{
+          .label = "Reset All",
+          .callback =
+              [&]() {
+                workbench_.ClearPreview();
+                workbench_.ResetAllRows();
+                workbench_.SyncRowsFromPlayer();
+                workbench_.SyncDynamicArmorVariantsExtended();
+              },
+      },
+      WorkbenchToolbarAction{
+          .label = "Kit from Equipped",
+          .enabled = canCreateEquippedKit,
+          .callback = [&]() { OpenCreateKitDialog(KitCreationSource::Equipped); },
+          .tooltip =
+              []() {
+                ImGui::TextUnformatted("Create a Modex kit from the player's "
+                                       "currently equipped armor.");
+              },
+      },
+      WorkbenchToolbarAction{
+          .label = "Kit from Overrides",
+          .enabled = canCreateOverrideKit,
+          .callback =
+              [&]() { OpenCreateKitDialog(KitCreationSource::Overrides); },
+          .tooltip =
+              []() {
+                ImGui::TextUnformatted("Create a Modex kit from overrides on "
+                                       "currently equipped armor only.");
+              },
+      },
+  };
+
+  const auto &style = ImGui::GetStyle();
+  const auto spacingX = style.ItemSpacing.x;
+  const auto buttonWidth = [](std::string_view label) {
+    return ImGui::CalcTextSize(label.data(), label.data() + label.size()).x +
+           ImGui::GetStyle().FramePadding.x * 2.0f;
+  };
+
+  std::vector<float> widths;
+  widths.reserve(actions.size());
+  float totalWidth = 0.0f;
+  for (const auto &action : actions) {
+    const auto width = buttonWidth(action.label);
+    widths.push_back(width);
+    if (!widths.empty() && widths.size() > 1) {
+      totalWidth += spacingX;
+    }
+    totalWidth += width;
+  }
+
+  const auto availableWidth = ImGui::GetContentRegionAvail().x;
+  const auto moreButtonWidth = buttonWidth(kIconEllipsis);
+  std::size_t visibleCount = actions.size();
+  if (totalWidth > availableWidth) {
+    visibleCount = 0;
+    float usedWidth = 0.0f;
+    for (std::size_t index = 0; index < actions.size(); ++index) {
+      const auto remainingActions = actions.size() - (index + 1);
+      const auto width = widths[index];
+      const auto leadingSpacing = visibleCount > 0 ? spacingX : 0.0f;
+      const auto overflowReserve =
+          remainingActions > 0
+              ? (visibleCount > 0 || index > 0 ? spacingX : 0.0f) +
+                    moreButtonWidth
+              : 0.0f;
+
+      if (usedWidth + leadingSpacing + width + overflowReserve <=
+          availableWidth) {
+        usedWidth += leadingSpacing + width;
+        ++visibleCount;
+        continue;
+      }
+
+      break;
     }
   }
-  ImGui::SameLine();
-  if (ImGui::Button("Reset All")) {
-    workbench_.ClearPreview();
-    workbench_.ResetAllRows();
-    workbench_.SyncRowsFromPlayer();
-    workbench_.SyncDynamicArmorVariantsExtended();
+
+  auto drawToolbarAction = [&](const WorkbenchToolbarAction &action,
+                               std::string_view tooltipId) {
+    if (!action.enabled) {
+      ImGui::BeginDisabled();
+    }
+    if (ImGui::Button(action.label.data())) {
+      action.callback();
+    }
+    if (!action.enabled) {
+      ImGui::EndDisabled();
+    }
+    if (action.tooltip) {
+      DrawSimplePinnableTooltip(
+          tooltipId,
+          ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
+                               ImGuiHoveredFlags_AllowWhenDisabled),
+          action.tooltip);
+    }
+  };
+
+  for (std::size_t index = 0; index < visibleCount; ++index) {
+    if (index > 0) {
+      ImGui::SameLine();
+    }
+    drawToolbarAction(actions[index],
+                      "workbench:toolbar:" + std::to_string(index));
   }
-  ImGui::SameLine();
-  const bool canCreateEquippedKit = !equippedKitFormIDs.empty();
-  if (!canCreateEquippedKit) {
-    ImGui::BeginDisabled();
+
+  if (visibleCount < actions.size()) {
+    if (visibleCount > 0) {
+      ImGui::SameLine();
+    }
+    if (ImGui::Button(kIconEllipsis)) {
+      ImGui::OpenPopup(kWorkbenchOverflowPopupId);
+    }
+    if (ImGui::BeginPopup(kWorkbenchOverflowPopupId)) {
+      for (std::size_t index = visibleCount; index < actions.size(); ++index) {
+        const auto &action = actions[index];
+        if (ImGui::MenuItem(action.label.data(), nullptr, false,
+                            action.enabled)) {
+          action.callback();
+          ImGui::CloseCurrentPopup();
+        }
+      }
+      ImGui::EndPopup();
+    }
   }
-  if (ImGui::Button("Kit from Equipped")) {
-    OpenCreateKitDialog(KitCreationSource::Equipped);
-  }
-  if (!canCreateEquippedKit) {
-    ImGui::EndDisabled();
-  }
-  DrawSimplePinnableTooltip(
-      "workbench:kit-from-equipped",
-      ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
-                           ImGuiHoveredFlags_AllowWhenDisabled),
-      []() {
-        ImGui::TextUnformatted(
-            "Create a Modex kit from the player's currently equipped armor.");
-      });
-  ImGui::SameLine();
-  const bool canCreateOverrideKit = !overrideKitFormIDs.empty();
-  if (!canCreateOverrideKit) {
-    ImGui::BeginDisabled();
-  }
-  if (ImGui::Button("Kit from Overrides")) {
-    OpenCreateKitDialog(KitCreationSource::Overrides);
-  }
-  if (!canCreateOverrideKit) {
-    ImGui::EndDisabled();
-  }
-  DrawSimplePinnableTooltip(
-      "workbench:kit-from-overrides",
-      ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort |
-                           ImGuiHoveredFlags_AllowWhenDisabled),
-      []() {
-        ImGui::TextUnformatted("Create a Modex kit from overrides on currently "
-                               "equipped armor only.");
-      });
   ImGui::Spacing();
 
   const auto &rows = workbench_.GetRows();
