@@ -2,6 +2,7 @@
 
 #include "RE/C/CommandTable.h"
 #include "imgui_internal.h"
+#include "ui/ConditionFunctionMetadata.h"
 #include "ui/ConditionParamOptionCache.h"
 #include "ui/components/EditableCombo.h"
 #include "ui/components/PinnableTooltip.h"
@@ -41,6 +42,7 @@ struct ConditionFunctionInfo {
   std::array<RE::SCRIPT_PARAM_TYPE, 2> parameterTypes{
       RE::SCRIPT_PARAM_TYPE::kForm, RE::SCRIPT_PARAM_TYPE::kForm};
   std::uint16_t parameterCount{0};
+  bool returnsBooleanResult{false};
 };
 
 void DrawClauseDragHandle(const char *a_id, const ImVec2 a_size) {
@@ -249,6 +251,19 @@ std::string FormatNumberString(const double a_value) {
   return text.empty() ? "0" : text;
 }
 
+bool ParseBooleanComparand(std::string_view a_text, bool a_defaultValue) {
+  const auto trimmed = TrimText(a_text);
+  if (trimmed.empty()) {
+    return a_defaultValue;
+  }
+
+  try {
+    return std::stod(trimmed) != 0.0;
+  } catch (const std::exception &) {
+    return a_defaultValue;
+  }
+}
+
 std::string ValidateConditionDraft(const ConditionDefinition &a_definition) {
   const auto name = TrimText(a_definition.name);
   if (name.empty()) {
@@ -307,16 +322,23 @@ std::string ValidateConditionDraft(const ConditionDefinition &a_definition) {
     }
 
     const auto comparand = TrimText(clause.comparand);
-    if (comparand.empty()) {
-      return "A comparison value is required in clause " +
-             std::to_string(index + 1) + ".";
-    }
+    if (functionInfo->returnsBooleanResult) {
+      if (!comparand.empty() && comparand != "0" && comparand != "1") {
+        return "Boolean comparison value must be 0 or 1 in clause " +
+               std::to_string(index + 1) + ".";
+      }
+    } else {
+      if (comparand.empty()) {
+        return "A comparison value is required in clause " +
+               std::to_string(index + 1) + ".";
+      }
 
-    try {
-      (void)std::stod(comparand);
-    } catch (const std::exception &) {
-      return "Comparison value must be numeric in clause " +
-             std::to_string(index + 1) + ".";
+      try {
+        (void)std::stod(comparand);
+      } catch (const std::exception &) {
+        return "Comparison value must be numeric in clause " +
+               std::to_string(index + 1) + ".";
+      }
     }
   }
 
@@ -357,7 +379,8 @@ RE::SCRIPT_PARAM_TYPE ResolveEditorParamType(std::string_view a_functionName,
 }
 
 bool SupportsTypedFunction(const RE::SCRIPT_FUNCTION &a_command) {
-  if (!a_command.conditionFunction || a_command.numParams > 2) {
+  if (!a_command.conditionFunction || a_command.numParams > 2 ||
+      ui::conditions::IsObsoleteConditionFunction(a_command)) {
     return false;
   }
 
@@ -516,6 +539,8 @@ const std::vector<ConditionFunctionInfo> &GetConditionFunctionInfos() {
       ConditionFunctionInfo info;
       info.name = name;
       info.parameterCount = command.numParams;
+      info.returnsBooleanResult =
+          ui::conditions::ReturnsBooleanConditionResult(info.name);
       for (std::uint16_t paramIndex = 0;
            paramIndex < command.numParams && paramIndex < 2; ++paramIndex) {
         if (command.params && command.params[paramIndex].paramName) {
@@ -697,18 +722,23 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
       }
     }
 
-    if (clause.comparand.empty()) {
-      a_editor.error = "A comparison value is required in clause " +
-                       std::to_string(index + 1) + ".";
-      return false;
-    }
+    if (functionInfo->returnsBooleanResult) {
+      clause.comparand = ParseBooleanComparand(clause.comparand, false) ? "1"
+                                                                        : "0";
+    } else {
+      if (clause.comparand.empty()) {
+        a_editor.error = "A comparison value is required in clause " +
+                         std::to_string(index + 1) + ".";
+        return false;
+      }
 
-    try {
-      clause.comparand = FormatNumberString(std::stod(clause.comparand));
-    } catch (const std::exception &) {
-      a_editor.error = "Comparison value must be numeric in clause " +
-                       std::to_string(index + 1) + ".";
-      return false;
+      try {
+        clause.comparand = FormatNumberString(std::stod(clause.comparand));
+      } catch (const std::exception &) {
+        a_editor.error = "Comparison value must be numeric in clause " +
+                         std::to_string(index + 1) + ".";
+        return false;
+      }
     }
   }
 
@@ -940,7 +970,8 @@ void Menu::DrawConditionEditorDialog() {
           ImGui::TableSetColumnIndex(5);
           DrawClauseHeaderCell(
               "conditions:help:value", "Value",
-              "Numeric value compared against the function result.");
+              "Value compared against the function result. Boolean-returning "
+              "functions use a true/false checkbox.");
           ImGui::TableSetColumnIndex(6);
           DrawClauseHeaderCell("conditions:help:join", "Join",
                                "How this clause combines with the next one.");
@@ -1069,13 +1100,26 @@ void Menu::DrawConditionEditorDialog() {
                                  "result.");
 
             ImGui::TableSetColumnIndex(5);
-            DrawNumericClauseValueEditor("##comparand", clause.comparand,
-                                         ConditionValueEditorKind::Number,
-                                         ImGui::GetContentRegionAvail().x);
+            if (functionInfo && functionInfo->returnsBooleanResult) {
+              bool boolComparand = ParseBooleanComparand(clause.comparand, true);
+              if (ImGui::Checkbox("##comparand", &boolComparand)) {
+                clause.comparand = boolComparand ? "1" : "0";
+              } else if (clause.comparand.empty() || clause.comparand != "0" &&
+                                                     clause.comparand != "1") {
+                clause.comparand = boolComparand ? "1" : "0";
+              }
+            } else {
+              DrawNumericClauseValueEditor("##comparand", clause.comparand,
+                                           ConditionValueEditorKind::Number,
+                                           ImGui::GetContentRegionAvail().x);
+            }
             DrawHoverDescription("conditions:editor:value:" +
                                      std::to_string(index),
-                                 "Numeric value compared against the function "
-                                 "result.");
+                                 functionInfo && functionInfo->returnsBooleanResult
+                                     ? "Checked stores 1 (true). Unchecked "
+                                       "stores 0 (false)."
+                                     : "Numeric value compared against the "
+                                       "function result.");
 
             ImGui::TableSetColumnIndex(6);
             const bool hasNextClause = index + 1 < editor.draft.clauses.size();
