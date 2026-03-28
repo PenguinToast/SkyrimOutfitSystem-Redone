@@ -839,6 +839,30 @@ float MeasureConditionRowHeight(const ConditionDefinition &a_definition,
   return style.FramePadding.y * 2.0f + nameHeight + style.ItemSpacing.y +
          descriptionSize.y;
 }
+
+struct ConditionDeleteUsage {
+  std::size_t referencingConditionCount{0};
+  std::size_t appliedRowCount{0};
+
+  [[nodiscard]] bool CanDelete() const {
+    return referencingConditionCount == 0 && appliedRowCount == 0;
+  }
+
+  [[nodiscard]] std::string BuildTooltip() const {
+    if (CanDelete()) {
+      return {};
+    }
+
+    if (referencingConditionCount != 0 && appliedRowCount != 0) {
+      return "Condition is in use by other conditions and applied to one or "
+             "more workbench rows.";
+    }
+    if (referencingConditionCount != 0) {
+      return "Condition is in use by other conditions.";
+    }
+    return "Condition is applied to one or more workbench rows.";
+  }
+};
 } // namespace
 
 void Menu::EnsureDefaultConditions() {
@@ -1080,11 +1104,32 @@ bool Menu::DrawConditionTab() {
 
   ImGui::TableSetupColumn("Condition", ImGuiTableColumnFlags_WidthStretch);
   bool rowClicked = false;
+  std::optional<std::size_t> pendingDeleteIndex;
 
   for (std::size_t index = 0; index < conditions_.size(); ++index) {
     const auto &condition = conditions_[index];
+    ConditionDeleteUsage deleteUsage;
+    for (const auto &otherCondition : conditions_) {
+      if (otherCondition.id == condition.id) {
+        continue;
+      }
+      if (std::ranges::any_of(
+              otherCondition.clauses, [&](const ConditionClause &a_clause) {
+                return a_clause.customConditionId == condition.id;
+              })) {
+        ++deleteUsage.referencingConditionCount;
+      }
+    }
+    for (const auto &row : workbench_.GetRows()) {
+      if (row.conditionId && *row.conditionId == condition.id) {
+        ++deleteUsage.appliedRowCount;
+      }
+    }
+    const auto deleteTooltip = deleteUsage.BuildTooltip();
+    const bool deleteEnabled = deleteUsage.CanDelete();
+
     const auto rowWrapWidth =
-        (std::max)(ImGui::GetContentRegionAvail().x - 18.0f, 120.0f);
+        (std::max)(ImGui::GetContentRegionAvail().x - 52.0f, 120.0f);
     const auto rowHeight =
         MeasureConditionRowHeight(condition, rowWrapWidth);
 
@@ -1094,16 +1139,24 @@ bool Menu::DrawConditionTab() {
 
     const auto width = ImGui::GetContentRegionAvail().x;
     ImGui::InvisibleButton("##condition-row", ImVec2(width, rowHeight));
-    rowClicked |= ImGui::IsItemClicked(ImGuiMouseButton_Left);
-    const auto hovered = ImGui::IsItemHovered();
-    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-      OpenConditionEditorDialog(index);
-    }
-
     const auto min = ImGui::GetItemRectMin();
     const auto max = ImGui::GetItemRectMax();
     const auto stripeWidth = 6.0f;
+    const auto deletePaneWidth = 34.0f;
     const auto rounding = ImGui::GetStyle().FrameRounding;
+    const ImVec2 deleteMin(max.x - deletePaneWidth, min.y);
+    const ImVec2 deleteMax = max;
+    const bool deleteHovered =
+        ImGui::IsMouseHoveringRect(deleteMin, deleteMax, false);
+    const auto hovered = ImGui::IsItemHovered() || deleteHovered;
+    const bool rowBodyHovered =
+        hovered && !deleteHovered &&
+        ImGui::IsMouseHoveringRect(min, ImVec2(deleteMin.x, max.y), false);
+    rowClicked |= rowBodyHovered && ImGui::IsItemClicked(ImGuiMouseButton_Left);
+    if (rowBodyHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      OpenConditionEditorDialog(index);
+    }
+
     auto *drawList = ImGui::GetWindowDrawList();
     const auto bodyColor =
         hovered ? IM_COL32(42, 42, 44, 240) : IM_COL32(34, 34, 36, 225);
@@ -1118,11 +1171,32 @@ bool Menu::DrawConditionTab() {
                             ImDrawFlags_RoundCornersTopLeft |
                                 ImDrawFlags_RoundCornersBottomLeft);
 
+    auto *theme = ThemeConfig::GetSingleton();
+    const ImU32 deleteFillColor =
+        deleteEnabled
+            ? (deleteHovered ? theme->GetColorU32("DECLINE", 0.95f)
+                             : theme->GetColorU32("DECLINE", 0.78f))
+            : theme->GetColorU32("DECLINE", deleteHovered ? 0.35f : 0.24f);
+    drawList->AddRectFilled(
+        deleteMin, deleteMax, deleteFillColor, rounding,
+        ImDrawFlags_RoundCornersTopRight | ImDrawFlags_RoundCornersBottomRight);
+    drawList->AddLine(ImVec2(deleteMin.x, deleteMin.y),
+                      ImVec2(deleteMin.x, deleteMax.y),
+                      IM_COL32(255, 255, 255, 18), 1.0f);
+    const auto deleteIconSize = ImGui::CalcTextSize(kIconTrash);
+    drawList->AddText(
+        ImVec2(deleteMin.x + ((deletePaneWidth - deleteIconSize.x) * 0.5f),
+               deleteMin.y + (((deleteMax.y - deleteMin.y) - deleteIconSize.y) *
+                              0.5f)),
+        ImGui::GetColorU32(deleteEnabled ? ImGuiCol_Text : ImGuiCol_TextDisabled),
+        kIconTrash);
+
     const auto contentMin = ImVec2(min.x + stripeWidth + 10.0f,
                                    min.y + ImGui::GetStyle().FramePadding.y);
     const auto textColor = ImGui::GetColorU32(
         ImVec4(condition.color.x, condition.color.y, condition.color.z, 1.0f));
-    const auto clipRect = ImVec4(contentMin.x, min.y, max.x - 8.0f, max.y);
+    const auto clipRect =
+        ImVec4(contentMin.x, min.y, deleteMin.x - 8.0f, max.y);
     drawList->PushClipRect(ImVec2(clipRect.x, clipRect.y),
                            ImVec2(clipRect.z, clipRect.w), true);
     drawList->AddText(contentMin, textColor, condition.name.c_str());
@@ -1136,7 +1210,18 @@ bool Menu::DrawConditionTab() {
     }
     drawList->PopClipRect();
 
-    if (ImGui::BeginDragDropSource()) {
+    if (deleteHovered) {
+      if (deleteEnabled) {
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+          pendingDeleteIndex = index;
+        }
+      } else if (!deleteTooltip.empty()) {
+        DrawHoverDescription("conditions:delete-disabled:" + condition.id,
+                             deleteTooltip, 0.2f);
+      }
+    }
+
+    if (!deleteHovered && ImGui::BeginDragDropSource()) {
       DraggedConditionPayload payload{};
       std::snprintf(payload.conditionId.data(), payload.conditionId.size(), "%s",
                     condition.id.c_str());
@@ -1152,6 +1237,19 @@ bool Menu::DrawConditionTab() {
   }
 
   ImGui::EndTable();
+
+  if (pendingDeleteIndex && *pendingDeleteIndex < conditions_.size()) {
+    const auto deletedConditionId = conditions_[*pendingDeleteIndex].id;
+    conditions_.erase(conditions_.begin() +
+                      static_cast<std::ptrdiff_t>(*pendingDeleteIndex));
+    for (auto &editor : conditionEditors_) {
+      if (editor.sourceConditionId == deletedConditionId) {
+        editor.error.clear();
+        editor.open = false;
+      }
+    }
+  }
+
   return rowClicked;
 }
 
