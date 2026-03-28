@@ -742,6 +742,7 @@ void Menu::OnMenuShow() {
   pendingSmoothWheelDelta_ = 0.0f;
   smoothScrollWindowId_ = 0;
   smoothScrollTargetY_ = 0.0f;
+  workbench_.SyncRowsFromPlayer();
   enabled_ = true;
 }
 
@@ -1238,7 +1239,6 @@ void Menu::DrawWindow() {
     DrawOptionsTab();
   } else {
     UpdateCatalogRefresh();
-    workbench_.SyncRowsFromPlayer();
     const auto applySelectedPreview = [&]() {
       if (EquipmentCatalog::Get().IsRefreshing()) {
         return;

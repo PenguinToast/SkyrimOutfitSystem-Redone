@@ -574,8 +574,7 @@ void Menu::DrawVariantWorkbenchPane() {
         const auto equippedWidget = ui::components::DrawEquipmentWidget(
             rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
             row.equipped,
-            {.showDeleteButton =
-                 row.equipped.IsSlot() || !row.isEquipped,
+            {.showDeleteButton = true,
              .disabledAppearance = conditionState.disabled,
              .accentColor = conditionState.color,
              .conflictStyle =
@@ -692,12 +691,17 @@ void Menu::DrawVariantWorkbenchPane() {
         }
         if (ImGui::BeginPopupContextItem(
                 ("##row-condition-context-" + std::to_string(rowIndex)).c_str())) {
-          const auto defaultConditionId =
-              std::string(ui::conditions::kDefaultConditionId);
-          if (ImGui::MenuItem(
-                  conditionState.disabled ? "Enable for Player"
-                                          : "Use Player Condition")) {
-            workbench_.SetConditionId(rowIndex, defaultConditionId);
+          if (ImGui::BeginMenu(conditionState.disabled ? "Enable Condition"
+                                                       : "Set Condition")) {
+            for (const auto &condition : conditions_) {
+              const bool isCurrent =
+                  row.conditionId.has_value() &&
+                  *row.conditionId == condition.id;
+              if (ImGui::MenuItem(condition.name.c_str(), nullptr, isCurrent)) {
+                workbench_.SetConditionId(rowIndex, condition.id);
+              }
+            }
+            ImGui::EndMenu();
           }
           if (ImGui::MenuItem("Disable Row")) {
             workbench_.SetConditionId(rowIndex, std::nullopt);
