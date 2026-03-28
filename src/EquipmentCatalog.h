@@ -1,5 +1,7 @@
 #pragma once
 
+#include "IncrementalLoader.h"
+
 #include <memory>
 #include <unordered_map>
 
@@ -113,7 +115,6 @@ public:
 
 private:
   struct RefreshState;
-
   EquipmentCatalog();
   void RebuildDerivedData();
 

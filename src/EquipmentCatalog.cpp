@@ -731,19 +731,11 @@ BuildKitEntry(const std::filesystem::path &a_path) {
 
 namespace sosr {
 struct EquipmentCatalog::RefreshState {
-  enum class Phase : std::uint8_t { Gear, Outfits, Kits, Finalize };
   RefreshMode mode{RefreshMode::Full};
-
   std::vector<RE::TESObjectARMO *> armors;
   std::vector<RE::BGSOutfit *> outfits;
   std::vector<std::filesystem::path> kitPaths;
-  std::size_t armorIndex{0};
-  std::size_t outfitIndex{0};
-  std::size_t kitIndex{0};
-  std::size_t completedUnits{0};
-  std::size_t totalUnits{1};
-  Phase phase{Phase::Gear};
-  std::string status{"Preparing catalog..."};
+  IncrementalLoader loader;
 };
 
 EquipmentCatalog &EquipmentCatalog::Get() {
@@ -854,19 +846,60 @@ void EquipmentCatalog::StartRefreshFromGame(const RefreshMode a_mode) {
     }
   }
 
+  std::vector<IncrementalLoader::Phase> phases;
   if (a_mode == RefreshMode::Full) {
-    state.totalUnits = state.armors.size() + state.outfits.size() +
-                       state.kitPaths.size() + 1;
-    state.phase = RefreshState::Phase::Gear;
-    state.status = "Building gear catalog...";
+    phases.push_back(
+        {"Building gear catalog...", state.armors.size(),
+         [this, &state](const std::size_t a_index) {
+           if (auto entry = BuildGearEntry(state.armors[a_index])) {
+             gearIndexByFormID_.emplace(entry->formID, gear_.size());
+             gear_.push_back(std::move(*entry));
+           }
+         }});
+    phases.push_back({"Building outfit catalog...", state.outfits.size(),
+                      [this, &state](const std::size_t a_index) {
+                        if (auto entry = BuildOutfitEntry(
+                                state.outfits[a_index], leveledListCache_)) {
+                          outfitIndexByFormID_.emplace(entry->formID,
+                                                       outfits_.size());
+                          outfits_.push_back(std::move(*entry));
+                        }
+                      }});
+  }
+
+  phases.push_back({"Building kit catalog...", state.kitPaths.size(),
+                    [this, &state](const std::size_t a_index) {
+                      if (auto entry = BuildKitEntry(state.kitPaths[a_index])) {
+                        kits_.push_back(std::move(*entry));
+                      }
+                    }});
+  phases.push_back(
+      {"Finalizing catalog...", 1, [this, &state](const std::size_t) {
+         RebuildDerivedData();
+         source_ = state.mode == RefreshMode::Full
+                       ? "Runtime cache from TESDataHandler"
+                       : "Runtime cache from TESDataHandler with "
+                         "refreshed kit cache";
+         revision_ = "armor=" + std::to_string(gear_.size()) +
+                     ", outfits=" + std::to_string(outfits_.size()) +
+                     ", kits=" + std::to_string(kits_.size());
+         if (state.mode == RefreshMode::Full) {
+           logger::info("Equipment catalog refreshed: {} gear "
+                        "entries, {} outfits, {} kits",
+                        gear_.size(), outfits_.size(), kits_.size());
+         } else {
+           logger::info("Equipment catalog kits refreshed: {} kits",
+                        kits_.size());
+         }
+       }});
+
+  if (a_mode == RefreshMode::Full) {
     source_ = "Refreshing runtime cache from TESDataHandler";
   } else {
-    state.totalUnits = state.kitPaths.size() + 1;
-    state.phase = RefreshState::Phase::Kits;
-    state.status = "Building kit catalog...";
     source_ = "Refreshing kit cache from disk";
   }
   revision_ = "cache-refreshing";
+  state.loader.Start(std::move(phases));
 }
 
 bool EquipmentCatalog::ContinueRefreshFromGame(
@@ -875,80 +908,12 @@ bool EquipmentCatalog::ContinueRefreshFromGame(
     return false;
   }
 
-  using clock = std::chrono::steady_clock;
-  const auto start = clock::now();
-  const auto budget =
-      std::chrono::duration<double, std::milli>(a_maxMillisecondsPerTick);
   auto &state = *refreshState_;
-
-  while (refreshState_ && (clock::now() - start) < budget) {
-    switch (state.phase) {
-    case RefreshState::Phase::Gear:
-      if (state.armorIndex < state.armors.size()) {
-        if (auto entry = BuildGearEntry(state.armors[state.armorIndex])) {
-          gearIndexByFormID_.emplace(entry->formID, gear_.size());
-          gear_.push_back(std::move(*entry));
-        }
-        ++state.armorIndex;
-        ++state.completedUnits;
-        break;
-      }
-
-      state.phase = RefreshState::Phase::Outfits;
-      state.status = "Building outfit catalog...";
-      break;
-
-    case RefreshState::Phase::Outfits:
-      if (state.outfitIndex < state.outfits.size()) {
-        if (auto entry =
-                BuildOutfitEntry(state.outfits[state.outfitIndex],
-                                 leveledListCache_)) {
-          outfitIndexByFormID_.emplace(entry->formID, outfits_.size());
-          outfits_.push_back(std::move(*entry));
-        }
-        ++state.outfitIndex;
-        ++state.completedUnits;
-        break;
-      }
-
-      state.phase = RefreshState::Phase::Kits;
-      state.status = "Building kit catalog...";
-      break;
-
-    case RefreshState::Phase::Kits:
-      if (state.kitIndex < state.kitPaths.size()) {
-        if (auto entry = BuildKitEntry(state.kitPaths[state.kitIndex])) {
-          kits_.push_back(std::move(*entry));
-        }
-        ++state.kitIndex;
-        ++state.completedUnits;
-        break;
-      }
-
-      state.phase = RefreshState::Phase::Finalize;
-      state.status = "Finalizing catalog...";
-      break;
-
-    case RefreshState::Phase::Finalize:
-      RebuildDerivedData();
-      source_ = "Runtime cache from TESDataHandler";
-      revision_ = "armor=" + std::to_string(gear_.size()) +
-                  ", outfits=" + std::to_string(outfits_.size()) +
-                  ", kits=" + std::to_string(kits_.size());
-      if (state.mode == RefreshMode::Full) {
-        logger::info(
-            "Equipment catalog refreshed: {} gear entries, {} outfits, {} kits",
-            gear_.size(), outfits_.size(), kits_.size());
-      } else {
-        logger::info("Equipment catalog kits refreshed: {} kits",
-                     kits_.size());
-      }
-      refreshState_.reset();
-      return false;
-    }
+  if (!state.loader.Continue(a_maxMillisecondsPerTick)) {
+    refreshState_.reset();
+    return false;
   }
-
-  return refreshState_ != nullptr;
+  return true;
 }
 
 void EquipmentCatalog::RefreshFromGame() {
@@ -965,18 +930,14 @@ float EquipmentCatalog::GetRefreshProgress() const {
   if (!refreshState_) {
     return 1.0f;
   }
-
-  const auto totalUnits = (std::max)(refreshState_->totalUnits, std::size_t{1});
-  return static_cast<float>(refreshState_->completedUnits) /
-         static_cast<float>(totalUnits);
+  return refreshState_->loader.GetProgress();
 }
 
 std::string_view EquipmentCatalog::GetRefreshStatus() const {
   if (!refreshState_) {
     return source_;
   }
-
-  return refreshState_->status;
+  return refreshState_->loader.GetStatus();
 }
 
 void EquipmentCatalog::RebuildDerivedData() {

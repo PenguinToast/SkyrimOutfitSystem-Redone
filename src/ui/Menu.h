@@ -90,6 +90,16 @@ private:
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
 
+  struct ConditionEditorState {
+    std::string windowId;
+    std::string sourceConditionId;
+    ui::conditions::Definition draft;
+    std::string error;
+    bool isNew{false};
+    bool open{true};
+    bool focusOnNextDraw{false};
+  };
+
   Menu() = default;
   friend class MenuHost;
 
@@ -169,7 +179,7 @@ private:
   void EnsureDefaultConditions();
   void OpenNewConditionDialog();
   void OpenConditionEditorDialog(std::size_t a_index);
-  [[nodiscard]] bool SavePendingCondition();
+  [[nodiscard]] bool SaveConditionEditor(ConditionEditorState &a_editor);
   [[nodiscard]] std::vector<const GearEntry *> BuildFilteredGear() const;
   [[nodiscard]] std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
   [[nodiscard]] std::vector<const KitEntry *> BuildFilteredKits() const;
@@ -240,13 +250,7 @@ private:
   std::string pendingDeleteKitName_;
   std::string pendingDeleteKitPath_;
   std::string deleteKitError_;
-  bool openConditionEditorDialog_{false};
-  bool conditionEditorDialogOpen_{false};
-  bool conditionEditorDialogCancelRequested_{false};
-  bool editingConditionIsNew_{false};
-  std::optional<std::size_t> editingConditionIndex_;
-  ui::conditions::Definition editingCondition_;
-  std::string conditionEditorError_;
+  int nextConditionEditorId_{1};
   int nextConditionId_{1};
   bool favoritesOnly_{false};
   bool inventoryOnly_{false};
@@ -255,6 +259,7 @@ private:
   std::vector<FontOption> bundledFontOptions_;
   std::vector<FontOption> systemFontOptions_;
   std::vector<ui::conditions::Definition> conditions_;
+  std::vector<ConditionEditorState> conditionEditors_;
   workbench::VariantWorkbench workbench_;
 };
 } // namespace sosr

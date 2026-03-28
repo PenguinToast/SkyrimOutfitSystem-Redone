@@ -1,0 +1,522 @@
+#include "ui/ConditionParamOptionCache.h"
+
+#include "ArmorUtils.h"
+#include "IncrementalLoader.h"
+
+#include <RE/Skyrim.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <memory>
+#include <ranges>
+#include <string>
+#include <string_view>
+#include <unordered_set>
+#include <unordered_map>
+
+namespace {
+using ParamType = RE::SCRIPT_PARAM_TYPE;
+
+struct CacheEntryLoadState {
+  std::vector<std::string> stagedOptions;
+  std::vector<RE::TESForm *> forms;
+  std::unordered_set<RE::FormID> seenForms;
+  sosr::IncrementalLoader loader;
+};
+
+struct CacheEntry {
+  std::vector<std::string> options;
+  std::unique_ptr<CacheEntryLoadState> loadState;
+  bool loaded{false};
+  bool unsupported{false};
+};
+
+bool IsTokenCompatible(std::string_view a_text) {
+  if (a_text.empty()) {
+    return false;
+  }
+
+  return std::ranges::all_of(a_text, [](const unsigned char a_char) {
+    return std::isalnum(a_char) != 0 || a_char == '_';
+  });
+}
+
+void SortUniqueStrings(std::vector<std::string> &a_values) {
+  std::ranges::sort(a_values);
+  a_values.erase(std::unique(a_values.begin(), a_values.end()), a_values.end());
+}
+
+std::string JoinStrings(const std::vector<std::string> &a_values) {
+  std::string result;
+  for (const auto &value : a_values) {
+    if (!result.empty()) {
+      result.append(", ");
+    }
+    result.append(value);
+  }
+  return result;
+}
+
+std::string GetEditorIdToken(const RE::TESForm *a_form) {
+  if (!a_form || a_form->IsDeleted() || a_form->IsIgnored()) {
+    return {};
+  }
+
+  auto editorID = sosr::armor::GetEditorID(a_form);
+  if (!IsTokenCompatible(editorID)) {
+    return {};
+  }
+  return editorID;
+}
+
+template <class T> std::vector<RE::TESForm *> CollectForms() {
+  std::vector<RE::TESForm *> forms;
+
+  auto *dataHandler = RE::TESDataHandler::GetSingleton();
+  if (!dataHandler) {
+    return forms;
+  }
+
+  for (auto *form : dataHandler->GetFormArray<T>()) {
+    forms.push_back(form);
+  }
+  return forms;
+}
+
+void AppendObjectRefToken(CacheEntryLoadState &a_state,
+                          RE::TESObjectREFR *a_ref) {
+  if (!a_ref) {
+    return;
+  }
+
+  const auto formID = a_ref->GetFormID();
+  if (formID == 0 || !a_state.seenForms.insert(formID).second) {
+    return;
+  }
+
+  if (const auto token = GetEditorIdToken(a_ref); !token.empty()) {
+    a_state.stagedOptions.push_back(token);
+  }
+}
+
+void AppendCellRefTokens(CacheEntryLoadState &a_state, RE::TESObjectCELL *a_cell) {
+  if (!a_cell) {
+    return;
+  }
+
+  const auto &runtimeData = a_cell->GetRuntimeData();
+  for (auto *ref : runtimeData.objectList) {
+    AppendObjectRefToken(a_state, ref);
+  }
+
+  a_cell->ForEachReference([&](RE::TESObjectREFR *a_ref) {
+    AppendObjectRefToken(a_state, a_ref);
+    return RE::BSContainer::ForEachResult::kContinue;
+  });
+}
+
+std::vector<std::string> BuildImmediateOptions(const ParamType a_type) {
+  switch (a_type) {
+  case ParamType::kAxis:
+    return {"X", "Y", "Z"};
+  case ParamType::kSex:
+    return {"MALE", "FEMALE"};
+  case ParamType::kCastingSource:
+    return {"LEFT", "RIGHT", "VOICE", "INSTANT"};
+  default:
+    return {};
+  }
+}
+
+std::vector<RE::TESForm *> CollectFormsForType(const ParamType a_type) {
+  switch (a_type) {
+  case ParamType::kActor:
+  case ParamType::kActorBase:
+  case ParamType::kNPC:
+    return CollectForms<RE::TESNPC>();
+  case ParamType::kActorValue:
+    return CollectForms<RE::ActorValueInfo>();
+  case ParamType::kRace:
+    return CollectForms<RE::TESRace>();
+  case ParamType::kClass:
+    return CollectForms<RE::TESClass>();
+  case ParamType::kFaction:
+    return CollectForms<RE::TESFaction>();
+  case ParamType::kGlobal:
+    return CollectForms<RE::TESGlobal>();
+  case ParamType::kQuest:
+    return CollectForms<RE::TESQuest>();
+  case ParamType::kKeyword:
+    return CollectForms<RE::BGSKeyword>();
+  case ParamType::kPerk:
+    return CollectForms<RE::BGSPerk>();
+  case ParamType::kVoiceType:
+    return CollectForms<RE::BGSVoiceType>();
+  case ParamType::kCell:
+    return CollectForms<RE::TESObjectCELL>();
+  case ParamType::kLocation:
+    return CollectForms<RE::BGSLocation>();
+  case ParamType::kWeather:
+    return CollectForms<RE::TESWeather>();
+  case ParamType::kShout:
+    return CollectForms<RE::TESShout>();
+  case ParamType::kWordOfPower:
+    return CollectForms<RE::TESWordOfPower>();
+  default:
+    return {};
+  }
+}
+
+std::string GetStatusLabel(const ParamType a_type) {
+  switch (a_type) {
+  case ParamType::kObjectRef:
+    return "Loading references...";
+  case ParamType::kActor:
+  case ParamType::kActorBase:
+  case ParamType::kNPC:
+    return "Loading actors...";
+  case ParamType::kRace:
+    return "Loading races...";
+  case ParamType::kActorValue:
+    return "Loading actor values...";
+  case ParamType::kClass:
+    return "Loading classes...";
+  case ParamType::kFaction:
+    return "Loading factions...";
+  case ParamType::kGlobal:
+    return "Loading globals...";
+  case ParamType::kQuest:
+    return "Loading quests...";
+  case ParamType::kKeyword:
+    return "Loading keywords...";
+  case ParamType::kPerk:
+    return "Loading perks...";
+  case ParamType::kVoiceType:
+    return "Loading voice types...";
+  case ParamType::kCell:
+    return "Loading cells...";
+  case ParamType::kLocation:
+    return "Loading locations...";
+  case ParamType::kWeather:
+    return "Loading weather...";
+  case ParamType::kShout:
+    return "Loading shouts...";
+  case ParamType::kWordOfPower:
+    return "Loading words of power...";
+  default:
+    return "Loading options...";
+  }
+}
+
+std::string_view GetParamTypeLabel(const ParamType a_type) {
+  switch (a_type) {
+  case ParamType::kObjectRef:
+    return "ObjectRef";
+  case ParamType::kActor:
+    return "Actor";
+  case ParamType::kActorBase:
+    return "ActorBase";
+  case ParamType::kNPC:
+    return "NPC";
+  case ParamType::kActorValue:
+    return "ActorValue";
+  case ParamType::kRace:
+    return "Race";
+  case ParamType::kClass:
+    return "Class";
+  case ParamType::kFaction:
+    return "Faction";
+  case ParamType::kGlobal:
+    return "Global";
+  case ParamType::kQuest:
+    return "Quest";
+  case ParamType::kKeyword:
+    return "Keyword";
+  case ParamType::kPerk:
+    return "Perk";
+  case ParamType::kVoiceType:
+    return "VoiceType";
+  case ParamType::kCell:
+    return "Cell";
+  case ParamType::kLocation:
+    return "Location";
+  case ParamType::kWeather:
+    return "Weather";
+  case ParamType::kShout:
+    return "Shout";
+  case ParamType::kWordOfPower:
+    return "WordOfPower";
+  case ParamType::kAxis:
+    return "Axis";
+  case ParamType::kSex:
+    return "Sex";
+  case ParamType::kCastingSource:
+    return "CastingSource";
+  default:
+    return "Unknown";
+  }
+}
+
+bool SupportsCachedOptions(const ParamType a_type) {
+  if (!BuildImmediateOptions(a_type).empty()) {
+    return true;
+  }
+
+  switch (a_type) {
+  case ParamType::kObjectRef:
+  case ParamType::kActor:
+  case ParamType::kActorBase:
+  case ParamType::kNPC:
+  case ParamType::kActorValue:
+  case ParamType::kRace:
+  case ParamType::kClass:
+  case ParamType::kFaction:
+  case ParamType::kGlobal:
+  case ParamType::kQuest:
+  case ParamType::kKeyword:
+  case ParamType::kPerk:
+  case ParamType::kVoiceType:
+  case ParamType::kCell:
+  case ParamType::kLocation:
+  case ParamType::kWeather:
+  case ParamType::kShout:
+  case ParamType::kWordOfPower:
+    return true;
+  default:
+    return false;
+  }
+}
+
+class ConditionParamOptionCacheImpl {
+public:
+  static auto Get() -> ConditionParamOptionCacheImpl & {
+    static ConditionParamOptionCacheImpl singleton;
+    return singleton;
+  }
+
+  void Continue(const double a_maxMillisecondsPerTick) {
+    std::vector<std::pair<int, std::reference_wrapper<CacheEntry>>>
+        activeEntries;
+    activeEntries.reserve(entries_.size());
+
+    for (auto &[type, entry] : entries_) {
+      if (entry.loadState && entry.loadState->loader.IsRunning()) {
+        activeEntries.emplace_back(type, entry);
+      }
+    }
+
+    if (activeEntries.empty()) {
+      return;
+    }
+
+    const auto budgetPerEntry =
+        a_maxMillisecondsPerTick / static_cast<double>(activeEntries.size());
+    for (auto &[type, entryRef] : activeEntries) {
+      auto &entry = entryRef.get();
+      if (!entry.loadState) {
+        continue;
+      }
+
+      if (!entry.loadState->loader.Continue(budgetPerEntry)) {
+        entry.options = std::move(entry.loadState->stagedOptions);
+        SortUniqueStrings(entry.options);
+        entry.loaded = true;
+        const auto typeLabel =
+            std::string(GetParamTypeLabel(static_cast<ParamType>(type)));
+        logger::info(
+            "Condition param cache ready: {} (type {}) with {} option(s)",
+            typeLabel, type, entry.options.size());
+        if (entry.options.size() <= 8) {
+          logger::info("Condition param cache values [{}]: {}", typeLabel,
+                       JoinStrings(entry.options));
+        }
+        entry.loadState.reset();
+      }
+    }
+  }
+
+  void Reset() { entries_.clear(); }
+
+  auto Ensure(const ParamType a_type)
+      -> sosr::ui::conditions::ConditionParamOptionCache::State {
+    auto &entry = entries_[static_cast<int>(a_type)];
+    if (entry.unsupported) {
+      return sosr::ui::conditions::ConditionParamOptionCache::State::
+          Unsupported;
+    }
+    if (entry.loaded) {
+      return sosr::ui::conditions::ConditionParamOptionCache::State::Ready;
+    }
+    if (entry.loadState) {
+      return sosr::ui::conditions::ConditionParamOptionCache::State::Loading;
+    }
+
+    if (!SupportsCachedOptions(a_type)) {
+      entry.unsupported = true;
+      return sosr::ui::conditions::ConditionParamOptionCache::State::
+          Unsupported;
+    }
+
+    entry.options = BuildImmediateOptions(a_type);
+    if (!entry.options.empty()) {
+      entry.loaded = true;
+      return sosr::ui::conditions::ConditionParamOptionCache::State::Ready;
+    }
+
+    auto loadState = std::make_unique<CacheEntryLoadState>();
+    loadState->stagedOptions = std::move(entry.options);
+    auto *statePtr = loadState.get();
+
+    if (a_type == ParamType::kObjectRef) {
+      auto *dataHandler = RE::TESDataHandler::GetSingleton();
+      const auto interiorCount = dataHandler
+                                     ? static_cast<std::size_t>(
+                                           dataHandler->interiorCells.size())
+                                     : std::size_t{0};
+      const auto worldspaceCount =
+          dataHandler
+              ? static_cast<std::size_t>(
+                    dataHandler->GetFormArray<RE::TESWorldSpace>().size())
+              : std::size_t{0};
+      const auto cellCount =
+          dataHandler
+              ? static_cast<std::size_t>(
+                    dataHandler->GetFormArray<RE::TESObjectCELL>().size())
+              : std::size_t{0};
+
+      statePtr->stagedOptions.push_back("Player");
+      logger::info(
+          "Condition param cache loading: {} (type {}) from {} interior cell(s), "
+          "{} worldspace(s), {} cell form(s)",
+          std::string(GetParamTypeLabel(a_type)), static_cast<int>(a_type),
+          interiorCount, worldspaceCount, cellCount);
+
+      loadState->loader.Start({
+          {"Loading interior references...", interiorCount,
+           [statePtr, dataHandler](const std::size_t a_index) {
+             if (!dataHandler) {
+               return;
+             }
+             AppendCellRefTokens(*statePtr, dataHandler->interiorCells[a_index]);
+           }},
+          {"Loading worldspace references...", worldspaceCount,
+           [statePtr, dataHandler](const std::size_t a_index) {
+             if (!dataHandler) {
+               return;
+             }
+             auto *worldspace = dataHandler->GetFormArray<RE::TESWorldSpace>()[a_index];
+             if (!worldspace) {
+               return;
+             }
+             AppendCellRefTokens(*statePtr, worldspace->persistentCell);
+             for (const auto &ref : worldspace->mobilePersistentRefs) {
+               AppendObjectRefToken(*statePtr, ref.get());
+             }
+           }},
+          {"Loading cell references...", cellCount,
+           [statePtr, dataHandler](const std::size_t a_index) {
+             if (!dataHandler) {
+               return;
+             }
+             AppendCellRefTokens(
+                 *statePtr, dataHandler->GetFormArray<RE::TESObjectCELL>()[a_index]);
+           }},
+          {"Finalizing options...", 1,
+           [statePtr](const std::size_t) {
+             SortUniqueStrings(statePtr->stagedOptions);
+           }},
+      });
+    } else {
+      loadState->forms = CollectFormsForType(a_type);
+      logger::info("Condition param cache loading: {} (type {}) from {} form(s)",
+                   std::string(GetParamTypeLabel(a_type)),
+                   static_cast<int>(a_type), loadState->forms.size());
+      loadState->loader.Start({
+          {GetStatusLabel(a_type), loadState->forms.size(),
+           [statePtr](const std::size_t a_index) {
+             if (const auto token = GetEditorIdToken(statePtr->forms[a_index]);
+                 !token.empty()) {
+               statePtr->stagedOptions.push_back(token);
+             }
+           }},
+          {"Finalizing options...", 1,
+           [statePtr](const std::size_t) {
+             SortUniqueStrings(statePtr->stagedOptions);
+           }},
+      });
+    }
+    entry.loadState = std::move(loadState);
+    return sosr::ui::conditions::ConditionParamOptionCache::State::Loading;
+  }
+
+  auto GetOptions(const ParamType a_type) const
+      -> const std::vector<std::string> * {
+    const auto it = entries_.find(static_cast<int>(a_type));
+    if (it == entries_.end() || !it->second.loaded) {
+      return nullptr;
+    }
+    return std::addressof(it->second.options);
+  }
+
+  auto GetProgress(const ParamType a_type) const -> float {
+    const auto it = entries_.find(static_cast<int>(a_type));
+    if (it == entries_.end()) {
+      return 0.0f;
+    }
+    if (it->second.loadState) {
+      return it->second.loadState->loader.GetProgress();
+    }
+    return it->second.loaded ? 1.0f : 0.0f;
+  }
+
+  auto GetStatus(const ParamType a_type) const -> std::string_view {
+    const auto it = entries_.find(static_cast<int>(a_type));
+    if (it == entries_.end()) {
+      return {};
+    }
+    if (it->second.loadState) {
+      return it->second.loadState->loader.GetStatus();
+    }
+    return {};
+  }
+
+private:
+  std::unordered_map<int, CacheEntry> entries_;
+};
+} // namespace
+
+namespace sosr::ui::conditions {
+ConditionParamOptionCache &ConditionParamOptionCache::Get() {
+  static ConditionParamOptionCache singleton;
+  return singleton;
+}
+
+void ConditionParamOptionCache::Continue(
+    const double a_maxMillisecondsPerTick) {
+  ConditionParamOptionCacheImpl::Get().Continue(a_maxMillisecondsPerTick);
+}
+
+void ConditionParamOptionCache::Reset() {
+  ConditionParamOptionCacheImpl::Get().Reset();
+}
+
+ConditionParamOptionCache::State
+ConditionParamOptionCache::Ensure(const ParamType a_type) {
+  return ConditionParamOptionCacheImpl::Get().Ensure(a_type);
+}
+
+const std::vector<std::string> *
+ConditionParamOptionCache::GetOptions(const ParamType a_type) const {
+  return ConditionParamOptionCacheImpl::Get().GetOptions(a_type);
+}
+
+float ConditionParamOptionCache::GetProgress(const ParamType a_type) const {
+  return ConditionParamOptionCacheImpl::Get().GetProgress(a_type);
+}
+
+std::string_view
+ConditionParamOptionCache::GetStatus(const ParamType a_type) const {
+  return ConditionParamOptionCacheImpl::Get().GetStatus(a_type);
+}
+} // namespace sosr::ui::conditions

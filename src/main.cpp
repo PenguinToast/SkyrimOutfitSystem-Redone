@@ -4,6 +4,7 @@
 #include "Plugin.h"
 #include "Serialization.h"
 #include "integrations/DynamicArmorVariantsExtendedClient.h"
+#include "ui/ConditionParamOptionCache.h"
 #include "ui/Menu.h"
 
 static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
@@ -14,6 +15,10 @@ static void SKSEMessageHandler(SKSE::MessagingInterface::Message *a_message) {
   case SKSE::MessagingInterface::kPostPostLoad:
     sosr::integrations::DynamicArmorVariantsExtendedClient::Refresh();
     sosr::hooks::Install();
+    break;
+  case SKSE::MessagingInterface::kPreLoadGame:
+  case SKSE::MessagingInterface::kPostLoadGame:
+    sosr::ui::conditions::ConditionParamOptionCache::Get().Reset();
     break;
   default:
     break;
