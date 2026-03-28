@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -84,18 +85,17 @@ template <class T> std::vector<RE::TESForm *> CollectForms() {
   return forms;
 }
 
-void AppendObjectRefToken(CacheEntryLoadState &a_state,
-                          RE::TESObjectREFR *a_ref) {
-  if (!a_ref) {
+void AppendFormToken(CacheEntryLoadState &a_state, RE::TESForm *a_form) {
+  if (!a_form) {
     return;
   }
 
-  const auto formID = a_ref->GetFormID();
+  const auto formID = a_form->GetFormID();
   if (formID == 0 || !a_state.seenForms.insert(formID).second) {
     return;
   }
 
-  if (const auto token = GetEditorIdToken(a_ref); !token.empty()) {
+  if (const auto token = GetEditorIdToken(a_form); !token.empty()) {
     a_state.stagedOptions.push_back(token);
   }
 }
@@ -107,11 +107,11 @@ void AppendCellRefTokens(CacheEntryLoadState &a_state, RE::TESObjectCELL *a_cell
 
   const auto &runtimeData = a_cell->GetRuntimeData();
   for (auto *ref : runtimeData.objectList) {
-    AppendObjectRefToken(a_state, ref);
+    AppendFormToken(a_state, ref);
   }
 
   a_cell->ForEachReference([&](RE::TESObjectREFR *a_ref) {
-    AppendObjectRefToken(a_state, a_ref);
+    AppendFormToken(a_state, a_ref);
     return RE::BSContainer::ForEachResult::kContinue;
   });
 }
@@ -129,8 +129,24 @@ std::vector<std::string> BuildImmediateOptions(const ParamType a_type) {
   }
 }
 
+bool UsesGenericFormSource(const ParamType a_type) {
+  switch (a_type) {
+  case ParamType::kObject:
+  case ParamType::kInventoryObject:
+  case ParamType::kKnowableForm:
+  case ParamType::kForm:
+    return true;
+  default:
+    return false;
+  }
+}
+
 std::vector<RE::TESForm *> CollectFormsForType(const ParamType a_type) {
   switch (a_type) {
+  case ParamType::kFormList:
+    return CollectForms<RE::BGSListForm>();
+  case ParamType::kSpellItem:
+    return CollectForms<RE::SpellItem>();
   case ParamType::kActor:
   case ParamType::kActorBase:
   case ParamType::kNPC:
@@ -170,6 +186,15 @@ std::vector<RE::TESForm *> CollectFormsForType(const ParamType a_type) {
 
 std::string GetStatusLabel(const ParamType a_type) {
   switch (a_type) {
+  case ParamType::kObject:
+  case ParamType::kInventoryObject:
+  case ParamType::kKnowableForm:
+  case ParamType::kForm:
+    return "Loading forms...";
+  case ParamType::kFormList:
+    return "Loading form lists...";
+  case ParamType::kSpellItem:
+    return "Loading spells...";
   case ParamType::kObjectRef:
     return "Loading references...";
   case ParamType::kActor:
@@ -211,6 +236,18 @@ std::string GetStatusLabel(const ParamType a_type) {
 
 std::string_view GetParamTypeLabel(const ParamType a_type) {
   switch (a_type) {
+  case ParamType::kObject:
+    return "Object";
+  case ParamType::kInventoryObject:
+    return "InventoryObject";
+  case ParamType::kKnowableForm:
+    return "KnowableForm";
+  case ParamType::kForm:
+    return "Form";
+  case ParamType::kFormList:
+    return "FormList";
+  case ParamType::kSpellItem:
+    return "SpellItem";
   case ParamType::kObjectRef:
     return "ObjectRef";
   case ParamType::kActor:
@@ -264,6 +301,12 @@ bool SupportsCachedOptions(const ParamType a_type) {
   }
 
   switch (a_type) {
+  case ParamType::kObject:
+  case ParamType::kInventoryObject:
+  case ParamType::kKnowableForm:
+  case ParamType::kForm:
+  case ParamType::kFormList:
+  case ParamType::kSpellItem:
   case ParamType::kObjectRef:
   case ParamType::kActor:
   case ParamType::kActorBase:
@@ -368,7 +411,45 @@ public:
     loadState->stagedOptions = std::move(entry.options);
     auto *statePtr = loadState.get();
 
-    if (a_type == ParamType::kObjectRef) {
+    if (UsesGenericFormSource(a_type)) {
+      auto *dataHandler = RE::TESDataHandler::GetSingleton();
+      const auto arrayCount =
+          dataHandler ? static_cast<std::size_t>(std::size(dataHandler->formArrays))
+                      : std::size_t{0};
+      std::size_t totalFormCount = 0;
+      if (dataHandler) {
+        for (const auto &formArray : dataHandler->formArrays) {
+          totalFormCount += static_cast<std::size_t>(formArray.size());
+        }
+      }
+
+      logger::info(
+          "Condition param cache loading: {} (type {}) from {} form(s) "
+          "across {} form array(s)",
+          std::string(GetParamTypeLabel(a_type)), static_cast<int>(a_type),
+          totalFormCount, arrayCount);
+
+      std::vector<sosr::IncrementalLoader::Phase> phases;
+      phases.reserve(arrayCount + 1);
+      if (dataHandler) {
+        for (std::size_t arrayIndex = 0; arrayIndex < arrayCount; ++arrayIndex) {
+          phases.push_back(
+              {GetStatusLabel(a_type),
+               static_cast<std::size_t>(dataHandler->formArrays[arrayIndex].size()),
+               [statePtr, dataHandler, arrayIndex](const std::size_t a_index) {
+                 const auto formIndex = static_cast<decltype(
+                     dataHandler->formArrays[arrayIndex].size())>(a_index);
+                 AppendFormToken(*statePtr,
+                                 dataHandler->formArrays[arrayIndex][formIndex]);
+               }});
+        }
+      }
+      phases.push_back({"Finalizing options...", 1,
+                        [statePtr](const std::size_t) {
+                          SortUniqueStrings(statePtr->stagedOptions);
+                        }});
+      loadState->loader.Start(std::move(phases));
+    } else if (a_type == ParamType::kObjectRef) {
       auto *dataHandler = RE::TESDataHandler::GetSingleton();
       const auto interiorCount = dataHandler
                                      ? static_cast<std::size_t>(
@@ -398,20 +479,28 @@ public:
              if (!dataHandler) {
                return;
              }
-             AppendCellRefTokens(*statePtr, dataHandler->interiorCells[a_index]);
+             const auto cellIndex =
+                 static_cast<decltype(dataHandler->interiorCells.size())>(
+                     a_index);
+             AppendCellRefTokens(*statePtr,
+                                 dataHandler->interiorCells[cellIndex]);
            }},
           {"Loading worldspace references...", worldspaceCount,
            [statePtr, dataHandler](const std::size_t a_index) {
              if (!dataHandler) {
                return;
              }
-             auto *worldspace = dataHandler->GetFormArray<RE::TESWorldSpace>()[a_index];
+             const auto worldspaceIndex = static_cast<decltype(
+                 dataHandler->GetFormArray<RE::TESWorldSpace>().size())>(
+                 a_index);
+             auto *worldspace =
+                 dataHandler->GetFormArray<RE::TESWorldSpace>()[worldspaceIndex];
              if (!worldspace) {
                return;
              }
              AppendCellRefTokens(*statePtr, worldspace->persistentCell);
              for (const auto &ref : worldspace->mobilePersistentRefs) {
-               AppendObjectRefToken(*statePtr, ref.get());
+               AppendFormToken(*statePtr, ref.get());
              }
            }},
           {"Loading cell references...", cellCount,
@@ -419,8 +508,11 @@ public:
              if (!dataHandler) {
                return;
              }
+             const auto cellIndex = static_cast<decltype(
+                 dataHandler->GetFormArray<RE::TESObjectCELL>().size())>(
+                 a_index);
              AppendCellRefTokens(
-                 *statePtr, dataHandler->GetFormArray<RE::TESObjectCELL>()[a_index]);
+                 *statePtr, dataHandler->GetFormArray<RE::TESObjectCELL>()[cellIndex]);
            }},
           {"Finalizing options...", 1,
            [statePtr](const std::size_t) {
@@ -490,6 +582,10 @@ namespace sosr::ui::conditions {
 ConditionParamOptionCache &ConditionParamOptionCache::Get() {
   static ConditionParamOptionCache singleton;
   return singleton;
+}
+
+bool ConditionParamOptionCache::Supports(const ParamType a_type) {
+  return SupportsCachedOptions(a_type);
 }
 
 void ConditionParamOptionCache::Continue(

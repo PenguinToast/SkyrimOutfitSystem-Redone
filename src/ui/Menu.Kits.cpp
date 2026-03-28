@@ -281,7 +281,7 @@ void Menu::DrawCreateKitDialog() {
     if (ui::components::DrawEditableDropdown(
             "kit-name", "New or existing kit name", pendingKitName_.data(),
             pendingKitName_.size(), existingNames, fieldWidth, &selectedName,
-            false) &&
+            true) &&
         !selectedName.empty()) {
       if (const auto it = std::ranges::find_if(catalog.GetKits(),
                                                [&](const KitEntry &a_entry) {
@@ -300,7 +300,7 @@ void Menu::DrawCreateKitDialog() {
     ui::components::DrawEditableDropdown(
         "kit-collection", "Collection (optional)", pendingKitCollection_.data(),
         pendingKitCollection_.size(), catalog.GetKitCollections(), fieldWidth,
-        nullptr, false);
+        nullptr, true);
 
     if (!createKitError_.empty()) {
       ImGui::Spacing();

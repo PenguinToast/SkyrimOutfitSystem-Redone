@@ -13,6 +13,7 @@ public:
 
   static ConditionParamOptionCache &Get();
 
+  [[nodiscard]] static bool Supports(RE::SCRIPT_PARAM_TYPE a_type);
   void Continue(double a_maxMillisecondsPerTick = 16.0);
   void Reset();
   [[nodiscard]] State Ensure(RE::SCRIPT_PARAM_TYPE a_type);

@@ -91,7 +91,7 @@ private:
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
 
   struct ConditionEditorState {
-    std::string windowId;
+    int windowSlot{0};
     std::string sourceConditionId;
     ui::conditions::Definition draft;
     std::string error;
@@ -177,6 +177,7 @@ private:
   void PreviewOutfitEntry(const OutfitEntry &a_entry);
   void PreviewKitEntry(const KitEntry &a_entry);
   void EnsureDefaultConditions();
+  [[nodiscard]] int AllocateConditionEditorWindowSlot() const;
   void OpenNewConditionDialog();
   void OpenConditionEditorDialog(std::size_t a_index);
   [[nodiscard]] bool SaveConditionEditor(ConditionEditorState &a_editor);
@@ -250,7 +251,6 @@ private:
   std::string pendingDeleteKitName_;
   std::string pendingDeleteKitPath_;
   std::string deleteKitError_;
-  int nextConditionEditorId_{1};
   int nextConditionId_{1};
   bool favoritesOnly_{false};
   bool inventoryOnly_{false};

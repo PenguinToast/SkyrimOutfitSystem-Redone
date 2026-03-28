@@ -166,9 +166,15 @@ bool DrawSearchableStringCombo(const char *a_label, const char *a_allLabel,
   options.emplace_back(a_allLabel);
   options.insert(options.end(), a_options.begin(), a_options.end());
 
-  const bool changed =
-      DrawEditableDropdown(a_label, preview, a_filter.InputBuf,
-                           IM_ARRAYSIZE(a_filter.InputBuf), options, width);
+  std::string selectedOption;
+  const bool changed = DrawEditableDropdown(
+      a_label, preview, a_filter.InputBuf, IM_ARRAYSIZE(a_filter.InputBuf),
+      options, width, &selectedOption, false);
+
+  if (!selectedOption.empty()) {
+    std::snprintf(a_filter.InputBuf, IM_ARRAYSIZE(a_filter.InputBuf), "%s",
+                  selectedOption.c_str());
+  }
 
   if (a_filter.InputBuf[0] == '\0') {
     a_index = 0;
@@ -194,8 +200,9 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
                           char *a_buffer, const std::size_t a_bufferSize,
                           const std::vector<std::string> &a_options,
                           const float a_width, std::string *a_selectedOption,
-                          const bool a_acceptAutocompleteOnEnter) {
+                          const bool a_allowCustomInput) {
   bool changed = false;
+  const bool acceptAutocompleteOnEnter = !a_allowCustomInput;
   const auto popupId = std::string(a_label) + "##popup";
   const auto openId = std::string(a_label) + "##open";
   const auto buttonWidth = ImGui::GetFrameHeight();
@@ -203,7 +210,7 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   EditableDropdownAutocompleteData autocompleteData{std::addressof(a_options)};
   ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_AutoSelectAll |
                                    ImGuiInputTextFlags_CallbackCompletion;
-  if (a_acceptAutocompleteOnEnter) {
+  if (acceptAutocompleteOnEnter) {
     inputFlags |= ImGuiInputTextFlags_EnterReturnsTrue;
   }
 
@@ -217,7 +224,7 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   const bool submitted = ImGui::InputTextWithHint(
       "##input", a_hint, a_buffer, a_bufferSize, inputFlags,
       EditableDropdownInputCallback, std::addressof(autocompleteData));
-  if (submitted) {
+  if (submitted && a_allowCustomInput) {
     changed = true;
   }
   const bool inputTextActive = ImGui::IsItemActive();
@@ -268,16 +275,17 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
           ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
       const auto rawNeedle = TrimText(a_buffer);
-      const auto needle = std::ranges::find_if(a_options,
-                                               [&](const std::string &option) {
-                                                 return EqualsCaseInsensitive(
-                                                     option, rawNeedle);
-                                               }) != a_options.end()
-                              ? std::string{}
-                              : rawNeedle;
+      const auto exactMatchIt =
+          std::ranges::find_if(a_options, [&](const std::string &option) {
+            return EqualsCaseInsensitive(option, rawNeedle);
+          });
+      const std::string *exactMatch =
+          exactMatchIt != a_options.end() ? std::addressof(*exactMatchIt)
+                                          : nullptr;
+      const auto needle = exactMatch ? std::string{} : rawNeedle;
       bool anyVisible = false;
       const std::string *topOption =
-          FindTopAutocompleteOption(a_options, needle);
+          exactMatch ? exactMatch : FindTopAutocompleteOption(a_options, needle);
       const auto commitOption = [&](const std::string &a_option) {
         std::snprintf(a_buffer, a_bufferSize, "%s", a_option.c_str());
         if (a_selectedOption) {
@@ -293,17 +301,23 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         }
 
         anyVisible = true;
-        const bool selected = topOption == std::addressof(option);
-        if (ImGui::Selectable(option.c_str(), selected)) {
+        const bool selected =
+            exactMatch ? exactMatch == std::addressof(option)
+                       : topOption == std::addressof(option);
+        if (ImGui::Selectable(option.c_str(), selected,
+                              ImGuiSelectableFlags_SelectOnClick)) {
           commitOption(option);
           ImGui::SetKeyboardFocusHere(-1);
         }
         if (selected) {
           ImGui::SetItemDefaultFocus();
+          if (exactMatch) {
+            ImGui::SetScrollHereY();
+          }
         }
       }
 
-      if (submitted && a_acceptAutocompleteOnEnter && topOption) {
+      if (submitted && acceptAutocompleteOnEnter && topOption) {
         commitOption(*topOption);
         ImGui::SetKeyboardFocusHere(-1);
       }
@@ -330,6 +344,40 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
 
   storage->SetBool(openStorageId, dropdownOpen);
   ImGui::PopID();
+  if (!a_allowCustomInput) {
+    const auto exactMatch = std::ranges::find_if(
+        a_options, [&](const std::string &option) {
+          return EqualsCaseInsensitive(option, a_buffer);
+        });
+    if (exactMatch == a_options.end()) {
+      if (a_selectedOption) {
+        std::snprintf(a_buffer, a_bufferSize, "%s", a_selectedOption->c_str());
+      } else if (const auto *topOption =
+                     FindTopAutocompleteOption(a_options, a_buffer);
+                 topOption) {
+        std::snprintf(a_buffer, a_bufferSize, "%s", topOption->c_str());
+      } else if (!a_options.empty()) {
+        std::snprintf(a_buffer, a_bufferSize, "%s", a_options.front().c_str());
+      } else if (a_bufferSize > 0) {
+        a_buffer[0] = '\0';
+      }
+    }
+  }
+
+  return changed;
+}
+
+bool DrawSearchableDropdown(const char *a_label, const char *a_hint,
+                            std::string &a_value,
+                            const std::vector<std::string> &a_options,
+                            const float a_width) {
+  char buffer[128];
+  std::snprintf(buffer, sizeof(buffer), "%s", a_value.c_str());
+  std::string selectedOption = a_value;
+  const bool changed = DrawEditableDropdown(
+      a_label, a_hint, buffer, sizeof(buffer), a_options, a_width,
+      &selectedOption, false);
+  a_value = selectedOption.empty() ? buffer : selectedOption;
   return changed;
 }
 } // namespace sosr::ui::components
