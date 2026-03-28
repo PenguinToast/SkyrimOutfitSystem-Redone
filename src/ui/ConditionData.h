@@ -21,6 +21,7 @@ enum class Connective : std::uint8_t { And, Or };
 
 struct Clause {
   std::string functionName;
+  std::string customConditionId;
   std::array<std::string, 2> arguments{};
   Comparator comparator{Comparator::Equal};
   std::string comparand{"1"};
@@ -30,6 +31,7 @@ struct Clause {
 struct Definition {
   std::string id;
   std::string name;
+  std::string description;
   ImVec4 color{0.55f, 0.55f, 0.55f, 1.0f};
   std::vector<Clause> clauses;
 };

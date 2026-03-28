@@ -27,6 +27,8 @@ constexpr auto kLegacySettingsDirectory =
 constexpr auto kImGuiIniFilename = "imgui.ini";
 constexpr auto kUserSettingsFilename = "settings.json";
 constexpr auto kFavoritesFilename = "favorites.json";
+constexpr std::uint32_t kConditionSerializationType = 'COND';
+constexpr std::uint32_t kConditionSerializationVersion = 1;
 constexpr float kFadeDurationSeconds = 0.30f;
 constexpr float kSmoothScrollStepMultiplier = 5.0f;
 constexpr float kSmoothScrollLerpFactor = 0.20f;
@@ -454,68 +456,12 @@ void Menu::LoadUserSettings() {
     toggleKey_ = json.value("toggleKey", toggleKey_);
     toggleModifier_ = json.value("toggleModifier", toggleModifier_);
     themeName_ = json.value("theme", themeName_);
-    nextConditionId_ = (std::max)(1, json.value("nextConditionId", 1));
-    conditions_.clear();
-    int maxConditionId = 0;
-    if (const auto conditionsIt = json.find("conditions");
-        conditionsIt != json.end() && conditionsIt->is_array()) {
-      conditions_.reserve(conditionsIt->size());
-      for (const auto &conditionJson : *conditionsIt) {
-        if (!conditionJson.is_object()) {
-          continue;
-        }
-
-        ui::conditions::Definition condition;
-        condition.id = conditionJson.value("id", std::string{});
-        condition.name = conditionJson.value("name", std::string{});
-        condition.color = ParseConditionColor(
-            conditionJson.value("color", nlohmann::json{}), condition.color);
-
-        if (const auto clausesIt = conditionJson.find("clauses");
-            clausesIt != conditionJson.end() && clausesIt->is_array()) {
-          condition.clauses.reserve(clausesIt->size());
-          for (const auto &clauseJson : *clausesIt) {
-            if (!clauseJson.is_object()) {
-              continue;
-            }
-
-            ui::conditions::Clause clause;
-            clause.functionName = clauseJson.value("function", std::string{});
-            clause.arguments[0] = clauseJson.value("arg1", std::string{});
-            clause.arguments[1] = clauseJson.value("arg2", std::string{});
-            clause.comparator = ParseConditionComparator(
-                clauseJson.value("comparator", std::string{"=="}));
-            clause.comparand = clauseJson.value("value", std::string{"1"});
-            clause.connectiveToNext = ParseConditionConnective(
-                clauseJson.value("join", std::string{"AND"}));
-            condition.clauses.push_back(std::move(clause));
-          }
-        }
-
-        if (!condition.id.empty() && !condition.name.empty() &&
-            !condition.clauses.empty()) {
-          if (condition.id.rfind("condition-", 0) == 0) {
-            try {
-              maxConditionId = (std::max)(
-                  maxConditionId,
-                  std::stoi(condition.id.substr(std::size("condition-") - 1)));
-            } catch (const std::exception &) {
-            }
-          }
-          conditions_.push_back(std::move(condition));
-        }
-      }
-    }
-    nextConditionId_ = (std::max)(nextConditionId_, maxConditionId + 1);
   } catch (const std::exception &exception) {
     logger::warn("Failed to parse user settings from {}: {}", userSettingsPath_,
                  exception.what());
   }
 
-  if (conditions_.empty()) {
-    EnsureDefaultConditions();
-    SaveUserSettings();
-  }
+  EnsureDefaultConditions();
 }
 
 void Menu::SaveUserSettings() const {
@@ -539,29 +485,143 @@ void Menu::SaveUserSettings() const {
                          {"smoothScroll", smoothScroll_},
                          {"toggleKey", toggleKey_},
                          {"toggleModifier", toggleModifier_},
-                         {"theme", themeName_},
-                         {"nextConditionId", nextConditionId_},
-                         {"conditions", nlohmann::json::array()}};
+                         {"theme", themeName_}};
+
+  output << json.dump(2) << '\n';
+}
+
+void Menu::SerializeConditions(SKSE::SerializationInterface *a_skse) const {
+  nlohmann::json root{{"nextConditionId", nextConditionId_},
+                      {"conditions", nlohmann::json::array()}};
 
   for (const auto &condition : conditions_) {
     nlohmann::json conditionJson{
         {"id", condition.id},
         {"name", condition.name},
+        {"description", condition.description},
         {"color", SerializeConditionColor(condition.color)},
         {"clauses", nlohmann::json::array()}};
     for (const auto &clause : condition.clauses) {
       conditionJson["clauses"].push_back(
-          {{"function", clause.functionName},
+          {{"function", clause.customConditionId.empty() ? clause.functionName
+                                                         : std::string{}},
+           {"customConditionId", clause.customConditionId},
            {"arg1", clause.arguments[0]},
            {"arg2", clause.arguments[1]},
            {"comparator", SerializeConditionComparator(clause.comparator)},
            {"value", clause.comparand},
            {"join", SerializeConditionConnective(clause.connectiveToNext)}});
     }
-    json["conditions"].push_back(std::move(conditionJson));
+    root["conditions"].push_back(std::move(conditionJson));
   }
 
-  output << json.dump(2) << '\n';
+  const auto payload = root.dump();
+  a_skse->WriteRecord(kConditionSerializationType, kConditionSerializationVersion,
+                      payload.data(), static_cast<std::uint32_t>(payload.size()));
+}
+
+void Menu::DeserializeConditions(SKSE::SerializationInterface *a_skse) {
+  RevertConditions();
+
+  std::uint32_t type = 0;
+  std::uint32_t version = 0;
+  std::uint32_t length = 0;
+  if (!a_skse->GetNextRecordInfo(type, version, length)) {
+    EnsureDefaultConditions();
+    return;
+  }
+
+  if (type != kConditionSerializationType) {
+    EnsureDefaultConditions();
+    return;
+  }
+
+  if (version != kConditionSerializationVersion) {
+    logger::warn("Skipping SOSR serialized conditions from unsupported version {}",
+                 version);
+    EnsureDefaultConditions();
+    return;
+  }
+
+  std::string payload(length, '\0');
+  if (!a_skse->ReadRecordData(payload.data(), length)) {
+    logger::error("Failed to read SOSR serialized condition payload");
+    EnsureDefaultConditions();
+    return;
+  }
+
+  const auto root = nlohmann::json::parse(payload, nullptr, false, true);
+  if (root.is_discarded() || !root.is_object()) {
+    logger::error("Failed to parse SOSR serialized condition payload");
+    EnsureDefaultConditions();
+    return;
+  }
+
+  nextConditionId_ = (std::max)(1, root.value("nextConditionId", 1));
+
+  int maxConditionId = 0;
+  if (const auto conditionsIt = root.find("conditions");
+      conditionsIt != root.end() && conditionsIt->is_array()) {
+    conditions_.reserve(conditionsIt->size());
+    for (const auto &conditionJson : *conditionsIt) {
+      if (!conditionJson.is_object()) {
+        continue;
+      }
+
+      ui::conditions::Definition condition;
+      condition.id = conditionJson.value("id", std::string{});
+      condition.name = conditionJson.value("name", std::string{});
+      condition.description =
+          conditionJson.value("description", std::string{});
+      condition.color = ParseConditionColor(
+          conditionJson.value("color", nlohmann::json{}), condition.color);
+
+      if (const auto clausesIt = conditionJson.find("clauses");
+          clausesIt != conditionJson.end() && clausesIt->is_array()) {
+        condition.clauses.reserve(clausesIt->size());
+        for (const auto &clauseJson : *clausesIt) {
+          if (!clauseJson.is_object()) {
+            continue;
+          }
+
+          ui::conditions::Clause clause;
+          clause.customConditionId =
+              clauseJson.value("customConditionId", std::string{});
+          clause.functionName = clauseJson.value("function", std::string{});
+          clause.arguments[0] = clauseJson.value("arg1", std::string{});
+          clause.arguments[1] = clauseJson.value("arg2", std::string{});
+          clause.comparator = ParseConditionComparator(
+              clauseJson.value("comparator", std::string{"=="}));
+          clause.comparand = clauseJson.value("value", std::string{"1"});
+          clause.connectiveToNext = ParseConditionConnective(
+              clauseJson.value("join", std::string{"AND"}));
+          condition.clauses.push_back(std::move(clause));
+        }
+      }
+
+      if (!condition.id.empty() && !condition.name.empty() &&
+          !condition.clauses.empty()) {
+        if (condition.id.rfind("condition-", 0) == 0) {
+          try {
+            maxConditionId = (std::max)(
+                maxConditionId,
+                std::stoi(condition.id.substr(std::size("condition-") - 1)));
+          } catch (const std::exception &) {
+          }
+        }
+        conditions_.push_back(std::move(condition));
+      }
+    }
+  }
+
+  nextConditionId_ = (std::max)(nextConditionId_, maxConditionId + 1);
+  EnsureDefaultConditions();
+}
+
+void Menu::RevertConditions() {
+  conditions_.clear();
+  conditionEditors_.clear();
+  nextConditionId_ = 1;
 }
 
 void Menu::LoadFavorites() {

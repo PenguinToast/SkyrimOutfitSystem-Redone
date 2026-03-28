@@ -179,46 +179,6 @@ const char *ConnectiveLabel(const ConditionConnective a_connective) {
   return a_connective == ConditionConnective::Or ? "OR" : "AND";
 }
 
-std::string ResolveClauseDisplayName(
-    const ConditionClause &a_clause,
-    const std::vector<ConditionDefinition> &a_conditions);
-
-std::string BuildClauseSummary(const ConditionClause &a_clause,
-                               const std::vector<ConditionDefinition> &a_conditions) {
-  std::string summary = ResolveClauseDisplayName(a_clause, a_conditions);
-  if (!a_clause.arguments[0].empty()) {
-    summary.append(" ");
-    summary.append(a_clause.arguments[0]);
-  }
-  if (!a_clause.arguments[1].empty()) {
-    summary.append(" ");
-    summary.append(a_clause.arguments[1]);
-  }
-  summary.append(" ");
-  summary.append(ComparatorLabel(a_clause.comparator));
-  if (!a_clause.comparand.empty()) {
-    summary.append(" ");
-    summary.append(a_clause.comparand);
-  }
-  return summary;
-}
-
-std::string BuildDefinitionSummary(const ConditionDefinition &a_definition,
-                                   const std::vector<ConditionDefinition> &a_conditions) {
-  std::string summary;
-  for (std::size_t index = 0; index < a_definition.clauses.size(); ++index) {
-    if (index > 0) {
-      summary.append(" ");
-      summary.append(
-          ConnectiveLabel(a_definition.clauses[index - 1].connectiveToNext));
-      summary.append(" ");
-    }
-    summary.append(BuildClauseSummary(a_definition.clauses[index], a_conditions));
-  }
-
-  return summary;
-}
-
 ConditionClause BuildDefaultPlayerClause() {
   ConditionClause clause;
   clause.functionName = "GetIsReference";
@@ -233,6 +193,7 @@ ConditionDefinition BuildDefaultPlayerCondition() {
   ConditionDefinition definition;
   definition.id = "condition-1";
   definition.name = "Player";
+  definition.description = "Applies to Player";
   definition.color = kDefaultConditionColor;
   definition.clauses.push_back(BuildDefaultPlayerClause());
   return definition;
@@ -704,6 +665,17 @@ void DrawClauseHeaderCell(const char *a_id, const char *a_label,
   DrawHoverDescription(a_id, a_tooltip);
 }
 
+void DrawConditionColorSwatch(const char *a_id, const ImVec4 &a_color,
+                              const std::string_view a_tooltip) {
+  ImGui::ColorButton(a_id, a_color,
+                     ImGuiColorEditFlags_NoTooltip |
+                         ImGuiColorEditFlags_NoDragDrop |
+                         ImGuiColorEditFlags_NoBorder,
+                     ImVec2(ImGui::GetFrameHeight() - 2.0f,
+                            ImGui::GetFrameHeight() - 2.0f));
+  DrawHoverDescription(std::string(a_id), a_tooltip);
+}
+
 
 const std::vector<ConditionFunctionInfo> &GetConditionFunctionInfos() {
   static const auto infos = [] {
@@ -776,15 +748,17 @@ FindConditionFunctionInfo(std::string_view a_name) {
 }
 
 float MeasureConditionRowHeight(const ConditionDefinition &a_definition,
-                                const std::vector<ConditionDefinition> &a_conditions,
                                 const float a_wrapWidth) {
   const auto &style = ImGui::GetStyle();
   const auto nameHeight = ImGui::GetTextLineHeight();
-  const auto summary = BuildDefinitionSummary(a_definition, a_conditions);
-  const auto summarySize =
-      ImGui::CalcTextSize(summary.c_str(), nullptr, false, a_wrapWidth);
+  if (a_definition.description.empty()) {
+    return style.FramePadding.y * 2.0f + nameHeight;
+  }
+
+  const auto descriptionSize = ImGui::CalcTextSize(
+      a_definition.description.c_str(), nullptr, false, a_wrapWidth);
   return style.FramePadding.y * 2.0f + nameHeight + style.ItemSpacing.y +
-         summarySize.y;
+         descriptionSize.y;
 }
 } // namespace
 
@@ -977,7 +951,6 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
     *it = a_editor.draft;
   }
 
-  SaveUserSettings();
   a_editor.error.clear();
   return true;
 }
@@ -1009,7 +982,7 @@ bool Menu::DrawConditionTab() {
     const auto rowWrapWidth =
         (std::max)(ImGui::GetContentRegionAvail().x - 18.0f, 120.0f);
     const auto rowHeight =
-        MeasureConditionRowHeight(condition, conditions_, rowWrapWidth);
+        MeasureConditionRowHeight(condition, rowWrapWidth);
 
     ImGui::TableNextRow(0, rowHeight);
     ImGui::TableSetColumnIndex(0);
@@ -1045,17 +1018,18 @@ bool Menu::DrawConditionTab() {
                                    min.y + ImGui::GetStyle().FramePadding.y);
     const auto textColor = ImGui::GetColorU32(
         ImVec4(condition.color.x, condition.color.y, condition.color.z, 1.0f));
-    const auto summary = BuildDefinitionSummary(condition, conditions_);
     const auto clipRect = ImVec4(contentMin.x, min.y, max.x - 8.0f, max.y);
     drawList->PushClipRect(ImVec2(clipRect.x, clipRect.y),
                            ImVec2(clipRect.z, clipRect.w), true);
     drawList->AddText(contentMin, textColor, condition.name.c_str());
-    drawList->AddText(ImGui::GetFont(), ImGui::GetFontSize(),
-                      ImVec2(contentMin.x, contentMin.y +
-                                               ImGui::GetTextLineHeight() +
-                                               ImGui::GetStyle().ItemSpacing.y),
-                      ImGui::GetColorU32(ImVec4(0.70f, 0.72f, 0.75f, 1.0f)),
-                      summary.c_str(), nullptr, rowWrapWidth);
+    if (!condition.description.empty()) {
+      drawList->AddText(
+          ImGui::GetFont(), ImGui::GetFontSize(),
+          ImVec2(contentMin.x, contentMin.y + ImGui::GetTextLineHeight() +
+                                   ImGui::GetStyle().ItemSpacing.y),
+          ImGui::GetColorU32(ImVec4(0.70f, 0.72f, 0.75f, 1.0f)),
+          condition.description.c_str(), nullptr, rowWrapWidth);
+    }
     drawList->PopClipRect();
 
     ImGui::PopID();
@@ -1115,16 +1089,31 @@ void Menu::DrawConditionEditorDialog() {
       CopyTextToBuffer(editor.draft.name, nameBuffer, sizeof(nameBuffer));
       ImGui::SetNextItemWidth(
           (std::min)(420.0f, ImGui::GetContentRegionAvail().x));
-      if (ImGui::InputText("Name", nameBuffer, sizeof(nameBuffer))) {
+      if (ImGui::InputTextWithHint("##name", "Name", nameBuffer,
+                                   sizeof(nameBuffer))) {
         editor.draft.name = nameBuffer;
       }
       DrawHoverDescription("conditions:editor:name",
                            "Friendly name shown in the Conditions catalog.");
 
+      char descriptionBuffer[512];
+      CopyTextToBuffer(editor.draft.description, descriptionBuffer,
+                       sizeof(descriptionBuffer));
+      ImGui::SetNextItemWidth(
+          (std::min)(520.0f, ImGui::GetContentRegionAvail().x));
+      if (ImGui::InputTextWithHint("##description", "Description",
+                                   descriptionBuffer,
+                                   sizeof(descriptionBuffer))) {
+        editor.draft.description = descriptionBuffer;
+      }
+      DrawHoverDescription(
+          "conditions:editor:description",
+          "Optional description shown on the condition widget.");
+
       ImVec4 color = editor.draft.color;
       ImGui::SetNextItemWidth(
           (std::min)(260.0f, ImGui::GetContentRegionAvail().x));
-      if (ImGui::ColorEdit3("Color", &color.x,
+      if (ImGui::ColorEdit3("##color", &color.x,
                             ImGuiColorEditFlags_DisplayRGB)) {
         editor.draft.color = ImVec4(color.x, color.y, color.z, 1.0f);
       }
@@ -1247,15 +1236,31 @@ void Menu::DrawConditionEditorDialog() {
               ImGui::EndDragDropSource();
             }
             ImGui::TableSetColumnIndex(1);
+            const auto *customCondition =
+                clause.customConditionId.empty()
+                    ? nullptr
+                    : FindConditionDefinitionById(conditions_,
+                                                  clause.customConditionId);
+            float functionWidth = ImGui::GetContentRegionAvail().x;
+            if (customCondition != nullptr) {
+              const float swatchSize = ImGui::GetFrameHeight() - 2.0f;
+              const float spacing = ImGui::GetStyle().ItemSpacing.x;
+              DrawConditionColorSwatch(
+                  "##custom-condition-color", customCondition->color,
+                  "Referenced custom condition color: " +
+                      customCondition->name);
+              ImGui::SameLine(0.0f, spacing);
+              functionWidth = (std::max)(0.0f, functionWidth - swatchSize - spacing);
+            }
             if (ui::components::DrawSearchableDropdown(
                     "##function", "Condition function", selectedFunctionName,
-                    conditionFunctionNames, ImGui::GetContentRegionAvail().x)) {
+                    conditionFunctionNames, functionWidth)) {
               clause.arguments[0].clear();
               clause.arguments[1].clear();
-              if (const auto *customCondition = FindConditionDefinitionByName(
+              if (const auto *selectedCustomCondition = FindConditionDefinitionByName(
                       conditions_, selectedFunctionName, editor.sourceConditionId);
-                  customCondition != nullptr) {
-                clause.customConditionId = customCondition->id;
+                  selectedCustomCondition != nullptr) {
+                clause.customConditionId = selectedCustomCondition->id;
                 clause.functionName.clear();
               } else {
                 clause.customConditionId.clear();

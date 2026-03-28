@@ -96,11 +96,27 @@ int CompareText(std::string_view a_left, std::string_view a_right) {
   return 0;
 }
 
+constexpr std::string_view kSectionPrefix = "\x1fsection:";
+
+bool IsSectionEntry(std::string_view a_option) {
+  return a_option.size() >= kSectionPrefix.size() &&
+         EqualsCaseInsensitive(a_option.substr(0, kSectionPrefix.size()),
+                               kSectionPrefix);
+}
+
+std::string_view GetSectionLabel(std::string_view a_option) {
+  return IsSectionEntry(a_option) ? a_option.substr(kSectionPrefix.size())
+                                  : a_option;
+}
+
 const std::string *
 FindTopAutocompleteOption(const std::vector<std::string> &a_options,
                           std::string_view a_buffer) {
   const auto needle = TrimText(a_buffer);
   for (const auto &option : a_options) {
+    if (IsSectionEntry(option)) {
+      continue;
+    }
     if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
       continue;
     }
@@ -277,6 +293,9 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       const auto rawNeedle = TrimText(a_buffer);
       const auto exactMatchIt =
           std::ranges::find_if(a_options, [&](const std::string &option) {
+            if (IsSectionEntry(option)) {
+              return false;
+            }
             return EqualsCaseInsensitive(option, rawNeedle);
           });
       const std::string *exactMatch =
@@ -296,6 +315,15 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         ImGui::CloseCurrentPopup();
       };
       for (const auto &option : a_options) {
+        if (IsSectionEntry(option)) {
+          if (anyVisible) {
+            ImGui::Spacing();
+          }
+          ImGui::TextDisabled("%.*s",
+                              static_cast<int>(GetSectionLabel(option).size()),
+                              GetSectionLabel(option).data());
+          continue;
+        }
         if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
           continue;
         }

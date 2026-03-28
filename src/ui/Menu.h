@@ -16,6 +16,9 @@
 struct IDXGISwapChain;
 struct ID3D11Device;
 struct ID3D11DeviceContext;
+namespace SKSE {
+class SerializationInterface;
+}
 
 namespace sosr {
 class MenuHost;
@@ -58,6 +61,9 @@ public:
   [[nodiscard]] workbench::VariantWorkbench &GetWorkbench() {
     return workbench_;
   }
+  void SerializeConditions(SKSE::SerializationInterface *a_skse) const;
+  void DeserializeConditions(SKSE::SerializationInterface *a_skse);
+  void RevertConditions();
 
 private:
   static constexpr const char *kDefaultFontPath =
@@ -180,6 +186,7 @@ private:
   [[nodiscard]] int AllocateConditionEditorWindowSlot() const;
   void OpenNewConditionDialog();
   void OpenConditionEditorDialog(std::size_t a_index);
+  void OpenConditionEditorDialogById(std::string_view a_conditionId);
   [[nodiscard]] bool SaveConditionEditor(ConditionEditorState &a_editor);
   [[nodiscard]] std::vector<const GearEntry *> BuildFilteredGear() const;
   [[nodiscard]] std::vector<const OutfitEntry *> BuildFilteredOutfits() const;
