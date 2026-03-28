@@ -61,6 +61,10 @@ public:
   [[nodiscard]] workbench::VariantWorkbench &GetWorkbench() {
     return workbench_;
   }
+  [[nodiscard]] const std::vector<ui::conditions::Definition> &
+  GetConditions() const {
+    return conditions_;
+  }
   void SerializeConditions(SKSE::SerializationInterface *a_skse) const;
   void DeserializeConditions(SKSE::SerializationInterface *a_skse);
   void RevertConditions();
@@ -89,6 +93,10 @@ private:
     std::int32_t itemIndex{-1};
     RE::FormID formID{0};
     std::uint64_t slotMask{0};
+  };
+
+  struct DraggedConditionPayload {
+    std::array<char, 64> conditionId{};
   };
 
   enum class BrowserTab { Gear, Outfits, Kits, Slots, Conditions, Options };

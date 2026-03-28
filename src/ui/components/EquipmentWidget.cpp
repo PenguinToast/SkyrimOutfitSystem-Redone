@@ -253,9 +253,14 @@ DrawEquipmentWidget(const char *a_id,
       a_options.conflictStyle == EquipmentWidgetConflictStyle::Warning;
   const auto hasErrorConflict =
       a_options.conflictStyle == EquipmentWidgetConflictStyle::Error;
+  constexpr float accentWidth = 5.0f;
 
   ImU32 fillColor = theme->GetColorU32("BG_LIGHT");
   ImU32 borderColor = theme->GetColorU32("BORDER");
+  if (a_options.disabledAppearance) {
+    fillColor = theme->GetColorU32("BG", 0.92f);
+    borderColor = theme->GetColorU32("TEXT_DISABLED", 0.55f);
+  }
   if (hasWarningConflict) {
     fillColor = theme->GetColorU32("WARN", 0.28f);
     borderColor = theme->GetColorU32("WARN", 0.88f);
@@ -289,23 +294,36 @@ DrawEquipmentWidget(const char *a_id,
 
   drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);
   drawList->AddRect(rectMin, rectMax, borderColor, 8.0f);
+  if (a_options.accentColor.has_value()) {
+    drawList->AddRectFilled(
+        rectMin, ImVec2(rectMin.x + accentWidth, rectMax.y),
+        ImGui::GetColorU32(*a_options.accentColor), 8.0f,
+        ImDrawFlags_RoundCornersTopLeft | ImDrawFlags_RoundCornersBottomLeft);
+  }
 
-  const auto namePos = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY);
+  const auto contentStartX =
+      rectMin.x + paddingX + (a_options.accentColor.has_value() ? accentWidth : 0.0f);
+  const auto namePos = ImVec2(contentStartX, rectMin.y + paddingY);
   const auto slotPos =
-      ImVec2(rectMin.x + paddingX, rectMin.y + paddingY + lineHeight + 4.0f);
+      ImVec2(contentStartX, rectMin.y + paddingY + lineHeight + 4.0f);
   const auto deletePaneWidth = a_options.showDeleteButton ? 34.0f : 0.0f;
-  const auto clipMin = ImVec2(rectMin.x + paddingX, rectMin.y + paddingY);
+  const auto clipMin = ImVec2(contentStartX, rectMin.y + paddingY);
   const auto clipMax =
       ImVec2(rectMax.x - paddingX - deletePaneWidth, rectMax.y - paddingY);
   const auto buttonMin = ImVec2(rectMax.x - deletePaneWidth, rectMin.y);
   const auto buttonMax = rectMax;
   result.deleteHovered = a_options.showDeleteButton &&
                          ImGui::IsMouseHoveringRect(buttonMin, buttonMax);
+  const auto nameColor =
+      a_options.disabledAppearance ? theme->GetColorU32("TEXT_DISABLED")
+                                   : theme->GetColorU32("TEXT");
+  const auto slotColor = a_options.disabledAppearance
+                             ? theme->GetColorU32("TEXT_DISABLED", 0.82f)
+                             : theme->GetColorU32("TEXT_HEADER", 0.92f);
 
   drawList->PushClipRect(clipMin, clipMax, true);
-  drawList->AddText(namePos, theme->GetColorU32("TEXT"), a_item.name.c_str());
-  drawList->AddText(slotPos, theme->GetColorU32("TEXT_HEADER", 0.92f),
-                    a_item.slotText.c_str());
+  drawList->AddText(namePos, nameColor, a_item.name.c_str());
+  drawList->AddText(slotPos, slotColor, a_item.slotText.c_str());
   drawList->PopClipRect();
 
   if (a_options.showDeleteButton) {

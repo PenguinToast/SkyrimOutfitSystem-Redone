@@ -1462,7 +1462,7 @@ void Menu::DrawWindow() {
       ImGui::EndTable();
     }
 
-    workbench_.SyncDynamicArmorVariantsExtended();
+    workbench_.SyncDynamicArmorVariantsExtended(conditions_);
   }
 
   DrawCreateKitDialog();

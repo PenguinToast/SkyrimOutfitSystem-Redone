@@ -191,7 +191,7 @@ ConditionClause BuildDefaultPlayerClause() {
 
 ConditionDefinition BuildDefaultPlayerCondition() {
   ConditionDefinition definition;
-  definition.id = "condition-1";
+  definition.id = std::string(ui::conditions::kDefaultConditionId);
   definition.name = "Player";
   definition.description = "Applies to Player";
   definition.color = kDefaultConditionColor;
@@ -1031,6 +1031,18 @@ bool Menu::DrawConditionTab() {
           condition.description.c_str(), nullptr, rowWrapWidth);
     }
     drawList->PopClipRect();
+
+    if (ImGui::BeginDragDropSource()) {
+      DraggedConditionPayload payload{};
+      std::snprintf(payload.conditionId.data(), payload.conditionId.size(), "%s",
+                    condition.id.c_str());
+      ImGui::SetDragDropPayload("SVS_CONDITION", &payload, sizeof(payload));
+      ImGui::TextUnformatted(condition.name.c_str());
+      if (!condition.description.empty()) {
+        ImGui::TextUnformatted(condition.description.c_str());
+      }
+      ImGui::EndDragDropSource();
+    }
 
     ImGui::PopID();
   }

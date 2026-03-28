@@ -24,6 +24,31 @@ std::string BuildSlotKey(const std::uint64_t a_slotMask) {
   return "slot:" + std::to_string(slotNumber);
 }
 
+std::string BuildArmorSourceKey(const RE::FormID a_formID) {
+  return "armor:" + sosr::armor::FormatFormID(a_formID);
+}
+
+std::string BuildRowKey(const std::string_view a_sourceKey,
+                        const std::optional<std::string> &a_conditionId) {
+  std::string key(a_sourceKey);
+  key.append("|condition:");
+  if (a_conditionId.has_value()) {
+    key.append(*a_conditionId);
+  } else {
+    key.append("null");
+  }
+  return key;
+}
+
+std::optional<std::string> GetDefaultRowConditionId() {
+  return std::string(sosr::ui::conditions::kDefaultConditionId);
+}
+
+void UpdateRowIdentity(VariantWorkbenchRow &a_row) {
+  a_row.key = BuildRowKey(a_row.sourceKey, a_row.conditionId);
+  a_row.equipped.key = a_row.key;
+}
+
 int ScorePreferredTargetSlots(
     const std::uint64_t a_itemMask, const std::uint64_t a_targetMask,
     const std::initializer_list<BipedSlot> &a_sourceSlots,
@@ -306,24 +331,29 @@ void VariantWorkbench::SyncRowsFromPlayer() {
     const auto addonSlotMask = armor::GetArmorAddonSlotMask(armor);
     occupiedSlotMask |= addonSlotMask != 0 ? addonSlotMask : equipped.slotMask;
 
-    const auto rowKey = "armor:" + armor::FormatFormID(formID);
-    const auto existingIt =
-        std::ranges::find(rows_, rowKey, [](const VariantWorkbenchRow &a_row) {
-          return a_row.key;
-        });
-    if (existingIt != rows_.end()) {
-      existingIt->equipped = std::move(equipped);
-      existingIt->equipped.key = rowKey;
-      existingIt->isEquipped = true;
+    const auto sourceKey = BuildArmorSourceKey(formID);
+    bool hasDefaultConditionRow = false;
+    for (auto &row : rows_) {
+      if (row.sourceKey != sourceKey) {
+        continue;
+      }
+
+      row.equipped = equipped;
+      row.isEquipped = true;
+      UpdateRowIdentity(row);
+      hasDefaultConditionRow |= row.conditionId == GetDefaultRowConditionId();
+    }
+    if (hasDefaultConditionRow) {
       continue;
     }
 
     VariantWorkbenchRow row{};
-    row.key = rowKey;
+    row.sourceKey = sourceKey;
+    row.conditionId = GetDefaultRowConditionId();
     row.equipped = std::move(equipped);
-    row.equipped.key = rowKey;
     row.isEquipped = true;
-    newlyEquippedRowKeys.push_back(rowKey);
+    UpdateRowIdentity(row);
+    newlyEquippedRowKeys.push_back(row.key);
     newlyEquippedRows.push_back(std::move(row));
   }
 
@@ -518,7 +548,8 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
       continue;
     }
 
-    const auto rowKey = "armor:" + armor::FormatFormID(armor->GetFormID());
+    const auto sourceKey = BuildArmorSourceKey(armor->GetFormID());
+    const auto rowKey = BuildRowKey(sourceKey, GetDefaultRowConditionId());
     if (!seenRowKeys.insert(rowKey).second) {
       continue;
     }
@@ -529,9 +560,10 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
     }
 
     VariantWorkbenchRow row{};
-    row.key = rowKey;
+    row.sourceKey = sourceKey;
+    row.conditionId = GetDefaultRowConditionId();
     row.equipped = std::move(equipped);
-    row.equipped.key = rowKey;
+    UpdateRowIdentity(row);
     newRows.push_back(std::move(row));
   }
 
@@ -540,11 +572,12 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
 
 std::optional<VariantWorkbenchRow>
 VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask) const {
-  const auto rowKey = BuildSlotKey(a_slotMask);
-  if (rowKey.empty()) {
+  const auto sourceKey = BuildSlotKey(a_slotMask);
+  if (sourceKey.empty()) {
     return std::nullopt;
   }
 
+  const auto rowKey = BuildRowKey(sourceKey, GetDefaultRowConditionId());
   if (std::ranges::find(rows_, rowKey, &VariantWorkbenchRow::key) !=
       rows_.end()) {
     return std::nullopt;
@@ -556,9 +589,10 @@ VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask) const {
   }
 
   VariantWorkbenchRow row{};
-  row.key = rowKey;
+  row.sourceKey = sourceKey;
+  row.conditionId = GetDefaultRowConditionId();
   row.equipped = std::move(slotItem);
-  row.equipped.key = rowKey;
+  UpdateRowIdentity(row);
   return row;
 }
 
@@ -609,6 +643,28 @@ bool VariantWorkbench::DeleteRow(int a_rowIndex) {
   }
 
   rows_.erase(rows_.begin() + a_rowIndex);
+  RebuildRowOrder();
+  return true;
+}
+
+bool VariantWorkbench::SetConditionId(
+    const int a_rowIndex, std::optional<std::string> a_conditionId) {
+  if (a_rowIndex < 0 || a_rowIndex >= static_cast<int>(rows_.size())) {
+    return false;
+  }
+
+  auto &row = rows_[static_cast<std::size_t>(a_rowIndex)];
+  const auto nextKey = BuildRowKey(row.sourceKey, a_conditionId);
+  const auto duplicateIt = std::ranges::find_if(
+      rows_, [&](const VariantWorkbenchRow &a_other) {
+        return &a_other != &row && a_other.key == nextKey;
+      });
+  if (duplicateIt != rows_.end()) {
+    return false;
+  }
+
+  row.conditionId = std::move(a_conditionId);
+  UpdateRowIdentity(row);
   RebuildRowOrder();
   return true;
 }

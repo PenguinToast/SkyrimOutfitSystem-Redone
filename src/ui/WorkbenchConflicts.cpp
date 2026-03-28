@@ -15,7 +15,7 @@ struct ActiveWorkbenchVisual {
 
 bool HasVariantSelectionConflictSource(
     const sosr::workbench::VariantWorkbenchRow &a_row) {
-  return a_row.IsVisualConflictSource() &&
+  return a_row.HasCondition() && a_row.IsVisualConflictSource() &&
          (a_row.hideEquipped || !a_row.overrides.empty());
 }
 
@@ -88,7 +88,7 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
   for (int rowIndex = 0; rowIndex < static_cast<int>(a_rows.size());
        ++rowIndex) {
     const auto &row = a_rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.IsVisualConflictSource()) {
+    if (!row.HasCondition() || !row.IsVisualConflictSource()) {
       continue;
     }
 
@@ -121,7 +121,7 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
   for (int rowIndex = 0; rowIndex < static_cast<int>(a_rows.size());
        ++rowIndex) {
     const auto &row = a_rows[static_cast<std::size_t>(rowIndex)];
-    if (!row.IsVisualConflictSource()) {
+    if (!row.HasCondition() || !row.IsVisualConflictSource()) {
       continue;
     }
 

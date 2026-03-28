@@ -3,6 +3,8 @@
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 
+#include "ui/ConditionData.h"
+
 #include <optional>
 #include <string>
 #include <string_view>
@@ -36,10 +38,14 @@ struct EquipmentWidgetItem {
 
 struct VariantWorkbenchRow {
   std::string key;
+  std::string sourceKey;
+  std::optional<std::string> conditionId;
   EquipmentWidgetItem equipped;
   std::vector<EquipmentWidgetItem> overrides;
   bool hideEquipped{false};
   bool isEquipped{false};
+
+  [[nodiscard]] bool HasCondition() const { return conditionId.has_value(); }
 
   [[nodiscard]] bool IsSlotRow() const {
     return equipped.IsSlot();
@@ -95,7 +101,9 @@ public:
                      bool a_insertAfter);
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
-  void SyncDynamicArmorVariantsExtended();
+  bool SetConditionId(int a_rowIndex, std::optional<std::string> a_conditionId);
+  void SyncDynamicArmorVariantsExtended(
+      const std::vector<ui::conditions::Definition> &a_conditions);
   void Serialize(SKSE::SerializationInterface *a_skse) const;
   void Deserialize(SKSE::SerializationInterface *a_skse);
   void Revert();
@@ -134,7 +142,11 @@ private:
 
   std::vector<VariantWorkbenchRow> rows_;
   std::vector<std::string> rowOrder_;
-  std::unordered_map<std::string, std::string> activeDavVariants_;
+  struct ActiveDavVariantState {
+    std::string variantJson;
+    std::string conditionSignature;
+  };
+  std::unordered_map<std::string, ActiveDavVariantState> activeDavVariants_;
   std::string previewSelectionKey_;
   std::unordered_map<std::string, std::string> previewDavVariants_;
 };

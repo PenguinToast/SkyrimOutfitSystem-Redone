@@ -3,12 +3,15 @@
 #include "VariantWorkbench.h"
 
 #include <functional>
+#include <optional>
 
 namespace sosr::ui::components {
 enum class EquipmentWidgetConflictStyle { None, Warning, Error };
 
 struct EquipmentWidgetOptions {
   bool showDeleteButton{false};
+  bool disabledAppearance{false};
+  std::optional<ImVec4> accentColor;
   EquipmentWidgetConflictStyle conflictStyle{
       EquipmentWidgetConflictStyle::None};
   std::function<void()> drawTooltipExtras{};

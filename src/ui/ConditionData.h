@@ -5,9 +5,12 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sosr::ui::conditions {
+inline constexpr std::string_view kDefaultConditionId = "condition-1";
+
 enum class Comparator : std::uint8_t {
   Equal,
   NotEqual,
