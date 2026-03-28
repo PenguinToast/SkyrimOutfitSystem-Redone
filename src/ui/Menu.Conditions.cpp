@@ -98,6 +98,9 @@ RE::SCRIPT_PARAM_TYPE ResolveEditorParamType(std::string_view a_functionName,
                                              RE::SCRIPT_PARAM_TYPE a_type);
 const std::vector<ConditionFunctionInfo> &GetConditionFunctionInfos();
 const ConditionFunctionInfo *FindConditionFunctionInfo(std::string_view a_name);
+const ConditionDefinition *FindConditionDefinitionByName(
+    const std::vector<ConditionDefinition> &a_conditions,
+    std::string_view a_name, std::string_view a_excludedId = {});
 
 void CopyTextToBuffer(const std::string &a_text, char *a_buffer,
                       const std::size_t a_bufferSize) {
@@ -199,9 +202,85 @@ ConditionDefinition BuildDefaultPlayerCondition() {
   return definition;
 }
 
-ConditionDefinition BuildNewConditionTemplate() {
+float ComputeColorDistanceSq(const ImVec4 &a_left, const ImVec4 &a_right) {
+  const auto dr = a_left.x - a_right.x;
+  const auto dg = a_left.y - a_right.y;
+  const auto db = a_left.z - a_right.z;
+  return (dr * dr) + (dg * dg) + (db * db);
+}
+
+template <class Range>
+ImVec4 PickDistinctConditionColor(const Range &a_existingColors) {
+  static const std::array<ImVec4, 10> kPalette{
+      ImVec4{0.86f, 0.25f, 0.28f, 1.0f}, ImVec4{0.17f, 0.62f, 0.32f, 1.0f},
+      ImVec4{0.19f, 0.48f, 0.85f, 1.0f}, ImVec4{0.86f, 0.58f, 0.16f, 1.0f},
+      ImVec4{0.55f, 0.30f, 0.86f, 1.0f}, ImVec4{0.10f, 0.67f, 0.67f, 1.0f},
+      ImVec4{0.84f, 0.35f, 0.63f, 1.0f}, ImVec4{0.61f, 0.50f, 0.18f, 1.0f},
+      ImVec4{0.24f, 0.71f, 0.86f, 1.0f}, ImVec4{0.93f, 0.40f, 0.13f, 1.0f}};
+
+  auto scoreColor = [&](const ImVec4 &a_candidate) {
+    float minDistanceSq = FLT_MAX;
+    bool hasExisting = false;
+    for (const auto &existing : a_existingColors) {
+      minDistanceSq =
+          (std::min)(minDistanceSq, ComputeColorDistanceSq(a_candidate, existing));
+      hasExisting = true;
+    }
+    return hasExisting ? minDistanceSq : FLT_MAX;
+  };
+
+  ImVec4 bestColor = kPalette.front();
+  float bestScore = -1.0f;
+  for (const auto &candidate : kPalette) {
+    const float score = scoreColor(candidate);
+    if (score > bestScore) {
+      bestScore = score;
+      bestColor = candidate;
+    }
+  }
+
+  for (int index = 0; index < 24; ++index) {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    ImGui::ColorConvertHSVtoRGB(index / 24.0f, 0.70f, 0.88f, r, g, b);
+    const ImVec4 candidate(r, g, b, 1.0f);
+    const float score = scoreColor(candidate);
+    if (score > bestScore) {
+      bestScore = score;
+      bestColor = candidate;
+    }
+  }
+
+  return bestColor;
+}
+
+std::string BuildSuggestedConditionName(
+    const std::vector<ConditionDefinition> &a_conditions,
+    const int a_seed,
+    const std::function<bool(std::string_view)> &a_extraConflict = {}) {
+  auto conflicts = [&](std::string_view a_candidate) {
+    if (FindConditionFunctionInfo(a_candidate) != nullptr ||
+        FindConditionDefinitionByName(a_conditions, a_candidate) != nullptr) {
+      return true;
+    }
+
+    return a_extraConflict && a_extraConflict(a_candidate);
+  };
+
+  for (int index = (std::max)(a_seed, 1);; ++index) {
+    const auto candidate = "Condition " + std::to_string(index);
+    if (!conflicts(candidate)) {
+      return candidate;
+    }
+  }
+}
+
+ConditionDefinition BuildNewConditionTemplate(
+    const std::string &a_name, const ImVec4 &a_color) {
   ConditionDefinition definition;
-  definition.color = kDefaultConditionColor;
+  definition.name = a_name;
+  definition.color = a_color;
   definition.clauses.push_back(BuildDefaultPlayerClause());
   return definition;
 }
@@ -238,7 +317,7 @@ FindConditionDefinitionById(const std::vector<ConditionDefinition> &a_conditions
 
 const ConditionDefinition *FindConditionDefinitionByName(
     const std::vector<ConditionDefinition> &a_conditions, std::string_view a_name,
-    std::string_view a_excludedId = {}) {
+    std::string_view a_excludedId) {
   const auto it =
       std::ranges::find_if(a_conditions, [&](const ConditionDefinition &condition) {
         return condition.id != a_excludedId &&
@@ -784,9 +863,34 @@ int Menu::AllocateConditionEditorWindowSlot() const {
 }
 
 void Menu::OpenNewConditionDialog() {
+  std::vector<ImVec4> existingColors;
+  existingColors.reserve(conditions_.size() + conditionEditors_.size());
+  for (const auto &condition : conditions_) {
+    existingColors.push_back(condition.color);
+  }
+  for (const auto &existingEditor : conditionEditors_) {
+    if (existingEditor.isNew) {
+      existingColors.push_back(existingEditor.draft.color);
+    }
+  }
+
+  const auto suggestedName =
+      BuildSuggestedConditionName(conditions_, nextConditionId_,
+                                  [&](std::string_view a_candidate) {
+                                    return std::ranges::any_of(
+                                        conditionEditors_,
+                                        [&](const ConditionEditorState &a_editor) {
+                                          return a_editor.isNew &&
+                                                 CompareTextInsensitive(
+                                                     TrimText(a_editor.draft.name),
+                                                     a_candidate) == 0;
+                                        });
+                                  });
+
   ConditionEditorState editor;
   editor.windowSlot = AllocateConditionEditorWindowSlot();
-  editor.draft = BuildNewConditionTemplate();
+  editor.draft = BuildNewConditionTemplate(
+      suggestedName, PickDistinctConditionColor(existingColors));
   editor.isNew = true;
   editor.focusOnNextDraw = true;
   conditionEditors_.push_back(std::move(editor));
