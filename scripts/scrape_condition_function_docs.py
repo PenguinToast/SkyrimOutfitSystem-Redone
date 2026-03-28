@@ -6,6 +6,7 @@ import argparse
 import html
 import json
 import re
+import shutil
 import sys
 import time
 import urllib.parse
@@ -109,6 +110,38 @@ def fetch_function_doc(title: str) -> dict:
     }
 
 
+def slugify_title(title: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", title.strip())
+    return slug.strip("_") or "untitled"
+
+
+def write_doc_dump(output_dir: Path, payload: dict) -> None:
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    index_lines = []
+    for index, doc in enumerate(payload["functions"], start=1):
+        title = doc["title"]
+        slug = slugify_title(title)
+        filename = f"{index:03d}_{slug}.txt"
+        file_path = output_dir / filename
+
+        header = [
+            f"Title: {title}",
+            f"URL: {doc['url']}",
+            f"Obsolete: {'yes' if doc['obsolete'] else 'no'}",
+            "",
+        ]
+        file_path.write_text("\n".join(header) + doc["text"] + "\n", encoding="utf-8")
+        index_lines.append(f"{filename}\t{title}\t{'obsolete' if doc['obsolete'] else 'active'}")
+
+    (output_dir / "index.tsv").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    (output_dir / "index.json").write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Scrape live CK condition-function docs through the MediaWiki API."
@@ -117,6 +150,11 @@ def main() -> int:
         "--output",
         type=Path,
         help="Write scraped JSON to this file instead of stdout.",
+    )
+    parser.add_argument(
+        "--dump-dir",
+        type=Path,
+        help="Write one text file per function plus index files into this directory.",
     )
     parser.add_argument(
         "--limit",
@@ -149,10 +187,13 @@ def main() -> int:
         "functions": docs,
     }
 
+    if args.dump_dir:
+        write_doc_dump(args.dump_dir, payload)
+
     output_text = json.dumps(payload, indent=2, ensure_ascii=False)
     if args.output:
         args.output.write_text(output_text, encoding="utf-8")
-    else:
+    elif not args.dump_dir:
         print(output_text)
 
     return 0
