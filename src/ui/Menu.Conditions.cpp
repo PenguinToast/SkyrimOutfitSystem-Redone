@@ -12,8 +12,10 @@
 #include <cctype>
 #include <cfloat>
 #include <cstdio>
+#include <functional>
 #include <iomanip>
 #include <sstream>
+#include <span>
 #include <string_view>
 
 namespace sosr {
@@ -27,6 +29,7 @@ constexpr ImVec4 kDefaultConditionColor{0.55f, 0.55f, 0.55f, 1.0f};
 constexpr char kIconTrash[] = "\xee\x86\x8c"; // ICON_LC_TRASH
 constexpr char kIconGripVertical[] = "\xee\x83\xae"; // ICON_LC_GRIP_VERTICAL
 constexpr char kConditionClausePayloadType[] = "SVS_CONDITION_CLAUSE";
+constexpr std::string_view kDropdownSectionPrefix = "\x1fsection:";
 
 enum class ConditionValueEditorKind : std::uint8_t {
   Unsupported,
@@ -93,6 +96,7 @@ GetEditorKindForParamType(RE::SCRIPT_PARAM_TYPE a_type);
 RE::SCRIPT_PARAM_TYPE ResolveEditorParamType(std::string_view a_functionName,
                                              std::uint16_t a_paramIndex,
                                              RE::SCRIPT_PARAM_TYPE a_type);
+const std::vector<ConditionFunctionInfo> &GetConditionFunctionInfos();
 const ConditionFunctionInfo *FindConditionFunctionInfo(std::string_view a_name);
 
 void CopyTextToBuffer(const std::string &a_text, char *a_buffer,
@@ -166,12 +170,22 @@ const char *ComparatorLabel(const ConditionComparator a_comparator) {
   return "==";
 }
 
+bool IsBooleanComparator(const ConditionComparator a_comparator) {
+  return a_comparator == ConditionComparator::Equal ||
+         a_comparator == ConditionComparator::NotEqual;
+}
+
 const char *ConnectiveLabel(const ConditionConnective a_connective) {
   return a_connective == ConditionConnective::Or ? "OR" : "AND";
 }
 
-std::string BuildClauseSummary(const ConditionClause &a_clause) {
-  std::string summary = a_clause.functionName;
+std::string ResolveClauseDisplayName(
+    const ConditionClause &a_clause,
+    const std::vector<ConditionDefinition> &a_conditions);
+
+std::string BuildClauseSummary(const ConditionClause &a_clause,
+                               const std::vector<ConditionDefinition> &a_conditions) {
+  std::string summary = ResolveClauseDisplayName(a_clause, a_conditions);
   if (!a_clause.arguments[0].empty()) {
     summary.append(" ");
     summary.append(a_clause.arguments[0]);
@@ -189,7 +203,8 @@ std::string BuildClauseSummary(const ConditionClause &a_clause) {
   return summary;
 }
 
-std::string BuildDefinitionSummary(const ConditionDefinition &a_definition) {
+std::string BuildDefinitionSummary(const ConditionDefinition &a_definition,
+                                   const std::vector<ConditionDefinition> &a_conditions) {
   std::string summary;
   for (std::size_t index = 0; index < a_definition.clauses.size(); ++index) {
     if (index > 0) {
@@ -198,7 +213,7 @@ std::string BuildDefinitionSummary(const ConditionDefinition &a_definition) {
           ConnectiveLabel(a_definition.clauses[index - 1].connectiveToNext));
       summary.append(" ");
     }
-    summary.append(BuildClauseSummary(a_definition.clauses[index]));
+    summary.append(BuildClauseSummary(a_definition.clauses[index], a_conditions));
   }
 
   return summary;
@@ -234,6 +249,161 @@ std::string BuildConditionId(const int a_nextConditionId) {
   return "condition-" + std::to_string((std::max)(a_nextConditionId, 1));
 }
 
+std::string BuildSectionEntry(std::string_view a_label) {
+  std::string entry{kDropdownSectionPrefix};
+  entry.append(a_label);
+  return entry;
+}
+
+const ConditionDefinition *
+FindConditionDefinitionById(const std::vector<ConditionDefinition> &a_conditions,
+                            std::string_view a_id);
+
+const ConditionDefinition *ResolveConditionDefinitionForValidation(
+    const std::vector<ConditionDefinition> &a_conditions,
+    const ConditionDefinition &a_draft, std::string_view a_conditionId) {
+  if (!a_draft.id.empty() && a_conditionId == a_draft.id) {
+    return std::addressof(a_draft);
+  }
+  return FindConditionDefinitionById(a_conditions, a_conditionId);
+}
+
+const ConditionDefinition *
+FindConditionDefinitionById(const std::vector<ConditionDefinition> &a_conditions,
+                            std::string_view a_id) {
+  const auto it = std::ranges::find(a_conditions, a_id, &ConditionDefinition::id);
+  return it != a_conditions.end() ? std::addressof(*it) : nullptr;
+}
+
+const ConditionDefinition *FindConditionDefinitionByName(
+    const std::vector<ConditionDefinition> &a_conditions, std::string_view a_name,
+    std::string_view a_excludedId = {}) {
+  const auto it =
+      std::ranges::find_if(a_conditions, [&](const ConditionDefinition &condition) {
+        return condition.id != a_excludedId &&
+               CompareTextInsensitive(condition.name, a_name) == 0;
+      });
+  return it != a_conditions.end() ? std::addressof(*it) : nullptr;
+}
+
+const ConditionFunctionInfo *ResolveConditionFunctionInfo(
+    const ConditionClause &a_clause,
+    const std::vector<ConditionDefinition> &a_conditions,
+    std::optional<ConditionFunctionInfo> &a_customInfo) {
+  if (!a_clause.customConditionId.empty()) {
+    if (const auto *condition =
+            FindConditionDefinitionById(a_conditions, a_clause.customConditionId);
+        condition != nullptr) {
+      a_customInfo = ConditionFunctionInfo{};
+      a_customInfo->name = condition->name;
+      a_customInfo->parameterCount = 0;
+      a_customInfo->returnsBooleanResult = true;
+      return std::addressof(*a_customInfo);
+    }
+  }
+
+  return FindConditionFunctionInfo(a_clause.functionName);
+}
+
+std::string ResolveClauseDisplayName(
+    const ConditionClause &a_clause,
+    const std::vector<ConditionDefinition> &a_conditions) {
+  if (!a_clause.customConditionId.empty()) {
+    if (const auto *condition =
+            FindConditionDefinitionById(a_conditions, a_clause.customConditionId);
+        condition != nullptr) {
+      return condition->name;
+    }
+  }
+  return a_clause.functionName;
+}
+
+std::vector<std::string>
+BuildConditionFunctionNames(const std::vector<ConditionDefinition> &a_conditions,
+                            std::string_view a_excludedConditionId) {
+  std::vector<std::string> names;
+  const auto &infos = GetConditionFunctionInfos();
+
+  std::vector<std::string> customNames;
+  customNames.reserve(a_conditions.size());
+  for (const auto &condition : a_conditions) {
+    if (condition.id == a_excludedConditionId) {
+      continue;
+    }
+    customNames.push_back(condition.name);
+  }
+  std::ranges::sort(customNames, [](const auto &left, const auto &right) {
+    return CompareTextInsensitive(left, right) < 0;
+  });
+
+  names.reserve(customNames.size() + infos.size() + 2);
+  if (!customNames.empty()) {
+    names.push_back(BuildSectionEntry("Conditions"));
+    names.insert(names.end(), customNames.begin(), customNames.end());
+  }
+  names.push_back(BuildSectionEntry("Condition Functions"));
+  for (const auto &info : infos) {
+    names.push_back(info.name);
+  }
+  return names;
+}
+
+bool HasConditionDependencyCycle(const ConditionDefinition &a_draft,
+                                 const std::vector<ConditionDefinition> &a_conditions) {
+  std::vector<std::string_view> ids;
+  ids.reserve(a_conditions.size() + (a_draft.id.empty() ? 0u : 1u));
+  for (const auto &condition : a_conditions) {
+    if (condition.id.empty()) {
+      continue;
+    }
+    ids.push_back(condition.id);
+  }
+  if (!a_draft.id.empty() &&
+      std::ranges::find(ids, std::string_view{a_draft.id}) == ids.end()) {
+    ids.push_back(a_draft.id);
+  }
+
+  std::vector<std::uint8_t> states(ids.size(), 0);
+  std::function<bool(std::string_view)> visit = [&](const std::string_view id) {
+    const auto idIt = std::ranges::find(ids, id);
+    if (idIt == ids.end()) {
+      return false;
+    }
+
+    const auto index =
+        static_cast<std::size_t>(std::distance(ids.begin(), idIt));
+    if (states[index] == 1) {
+      return true;
+    }
+    if (states[index] == 2) {
+      return false;
+    }
+
+    states[index] = 1;
+    if (const auto *condition =
+            ResolveConditionDefinitionForValidation(a_conditions, a_draft, id);
+        condition != nullptr) {
+      for (const auto &clause : condition->clauses) {
+        if (clause.customConditionId.empty()) {
+          continue;
+        }
+        if (visit(clause.customConditionId)) {
+          return true;
+        }
+      }
+    }
+    states[index] = 2;
+    return false;
+  };
+
+  for (const auto id : ids) {
+    if (visit(id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::string FormatNumberString(const double a_value) {
   std::ostringstream stream;
   stream.setf(std::ios::fixed, std::ios::floatfield);
@@ -264,22 +434,44 @@ bool ParseBooleanComparand(std::string_view a_text, bool a_defaultValue) {
   }
 }
 
-std::string ValidateConditionDraft(const ConditionDefinition &a_definition) {
+std::string ValidateConditionDraft(
+    const ConditionDefinition &a_definition,
+    const std::vector<ConditionDefinition> &a_conditions) {
   const auto name = TrimText(a_definition.name);
   if (name.empty()) {
     return "Condition name is required.";
+  }
+
+  if (FindConditionFunctionInfo(name) != nullptr) {
+    return "Condition name conflicts with an existing condition function.";
+  }
+
+  if (FindConditionDefinitionByName(a_conditions, name, a_definition.id) !=
+      nullptr) {
+    return "Condition name conflicts with another custom condition.";
   }
 
   if (a_definition.clauses.empty()) {
     return "At least one clause is required.";
   }
 
+  if (HasConditionDependencyCycle(a_definition, a_conditions)) {
+    return "Custom condition references must not contain circular dependencies.";
+  }
+
   for (std::size_t index = 0; index < a_definition.clauses.size(); ++index) {
     const auto &clause = a_definition.clauses[index];
     const auto functionName = TrimText(clause.functionName);
-    const auto *functionInfo = FindConditionFunctionInfo(functionName);
+    std::optional<ConditionFunctionInfo> customFunctionInfo;
+    const auto *functionInfo =
+        ResolveConditionFunctionInfo(clause, a_conditions, customFunctionInfo);
     if (!functionInfo) {
       return "Unknown or unsupported condition function in clause " +
+             std::to_string(index + 1) + ".";
+    }
+    if (!clause.customConditionId.empty() && clause.customConditionId == a_definition.id &&
+        !a_definition.id.empty()) {
+      return "A condition cannot reference itself in clause " +
              std::to_string(index + 1) + ".";
     }
 
@@ -294,7 +486,7 @@ std::string ValidateConditionDraft(const ConditionDefinition &a_definition) {
 
       const auto editorKind =
           GetEditorKindForParamType(ResolveEditorParamType(
-              functionName, paramIndex,
+              functionInfo->name, paramIndex,
               functionInfo->parameterTypes[paramIndex]));
       if (editorKind == ConditionValueEditorKind::Unsupported) {
         return functionInfo->parameterLabels[paramIndex] +
@@ -323,6 +515,10 @@ std::string ValidateConditionDraft(const ConditionDefinition &a_definition) {
 
     const auto comparand = TrimText(clause.comparand);
     if (functionInfo->returnsBooleanResult) {
+      if (!IsBooleanComparator(clause.comparator)) {
+        return "Boolean-return conditions only support == and != in clause " +
+               std::to_string(index + 1) + ".";
+      }
       if (!comparand.empty() && comparand != "0" && comparand != "1") {
         return "Boolean comparison value must be 0 or 1 in clause " +
                std::to_string(index + 1) + ".";
@@ -579,21 +775,12 @@ FindConditionFunctionInfo(std::string_view a_name) {
   return it != infos.end() ? std::addressof(*it) : nullptr;
 }
 
-std::vector<std::string> BuildConditionFunctionNames() {
-  std::vector<std::string> names;
-  const auto &infos = GetConditionFunctionInfos();
-  names.reserve(infos.size());
-  for (const auto &info : infos) {
-    names.push_back(info.name);
-  }
-  return names;
-}
-
 float MeasureConditionRowHeight(const ConditionDefinition &a_definition,
+                                const std::vector<ConditionDefinition> &a_conditions,
                                 const float a_wrapWidth) {
   const auto &style = ImGui::GetStyle();
   const auto nameHeight = ImGui::GetTextLineHeight();
-  const auto summary = BuildDefinitionSummary(a_definition);
+  const auto summary = BuildDefinitionSummary(a_definition, a_conditions);
   const auto summarySize =
       ImGui::CalcTextSize(summary.c_str(), nullptr, false, a_wrapWidth);
   return style.FramePadding.y * 2.0f + nameHeight + style.ItemSpacing.y +
@@ -654,14 +841,24 @@ void Menu::OpenConditionEditorDialog(const std::size_t a_index) {
   conditionEditors_.push_back(std::move(editor));
 }
 
+void Menu::OpenConditionEditorDialogById(const std::string_view a_conditionId) {
+  const auto it =
+      std::ranges::find(conditions_, a_conditionId, &ConditionDefinition::id);
+  if (it == conditions_.end()) {
+    return;
+  }
+  OpenConditionEditorDialog(
+      static_cast<std::size_t>(std::distance(conditions_.begin(), it)));
+}
+
 bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
-  if (const auto validationError = ValidateConditionDraft(a_editor.draft);
+  if (const auto validationError =
+          ValidateConditionDraft(a_editor.draft, conditions_);
       !validationError.empty()) {
     a_editor.error = validationError;
     return false;
   }
 
-  const auto name = TrimText(a_editor.draft.name);
   for (std::size_t index = 0; index < a_editor.draft.clauses.size(); ++index) {
     auto &clause = a_editor.draft.clauses[index];
     clause.functionName = TrimText(clause.functionName);
@@ -669,11 +866,24 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
     clause.arguments[1] = TrimText(clause.arguments[1]);
     clause.comparand = TrimText(clause.comparand);
 
-    const auto *functionInfo = FindConditionFunctionInfo(clause.functionName);
+    std::optional<ConditionFunctionInfo> customFunctionInfo;
+    const auto *functionInfo =
+        ResolveConditionFunctionInfo(clause, conditions_, customFunctionInfo);
     if (!functionInfo) {
       a_editor.error = "Unknown or unsupported condition function in clause " +
                        std::to_string(index + 1) + ".";
       return false;
+    }
+    if (!clause.customConditionId.empty()) {
+      if (clause.customConditionId == a_editor.draft.id &&
+          !a_editor.draft.id.empty()) {
+        a_editor.error = "A condition cannot reference itself in clause " +
+                         std::to_string(index + 1) + ".";
+        return false;
+      }
+      clause.arguments[0].clear();
+      clause.arguments[1].clear();
+      clause.functionName.clear();
     }
 
     for (std::uint16_t paramIndex = 0;
@@ -723,6 +933,12 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
     }
 
     if (functionInfo->returnsBooleanResult) {
+      if (!IsBooleanComparator(clause.comparator)) {
+        a_editor.error =
+            "Boolean-return conditions only support == and != in clause " +
+            std::to_string(index + 1) + ".";
+        return false;
+      }
       clause.comparand = ParseBooleanComparand(clause.comparand, false) ? "1"
                                                                         : "0";
     } else {
@@ -742,12 +958,11 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
     }
   }
 
-  a_editor.draft.name = name;
+  a_editor.draft.name = TrimText(a_editor.draft.name);
   a_editor.draft.color.w = 1.0f;
   if (a_editor.draft.id.empty()) {
     a_editor.draft.id = BuildConditionId(nextConditionId_++);
   }
-
   if (a_editor.isNew) {
     conditions_.push_back(a_editor.draft);
     a_editor.sourceConditionId = a_editor.draft.id;
@@ -793,7 +1008,8 @@ bool Menu::DrawConditionTab() {
     const auto &condition = conditions_[index];
     const auto rowWrapWidth =
         (std::max)(ImGui::GetContentRegionAvail().x - 18.0f, 120.0f);
-    const auto rowHeight = MeasureConditionRowHeight(condition, rowWrapWidth);
+    const auto rowHeight =
+        MeasureConditionRowHeight(condition, conditions_, rowWrapWidth);
 
     ImGui::TableNextRow(0, rowHeight);
     ImGui::TableSetColumnIndex(0);
@@ -829,7 +1045,7 @@ bool Menu::DrawConditionTab() {
                                    min.y + ImGui::GetStyle().FramePadding.y);
     const auto textColor = ImGui::GetColorU32(
         ImVec4(condition.color.x, condition.color.y, condition.color.z, 1.0f));
-    const auto summary = BuildDefinitionSummary(condition);
+    const auto summary = BuildDefinitionSummary(condition, conditions_);
     const auto clipRect = ImVec4(contentMin.x, min.y, max.x - 8.0f, max.y);
     drawList->PushClipRect(ImVec2(clipRect.x, clipRect.y),
                            ImVec2(clipRect.z, clipRect.w), true);
@@ -920,9 +1136,18 @@ void Menu::DrawConditionEditorDialog() {
       ImGui::TextUnformatted("Clauses");
       ImGui::Separator();
 
-      const auto conditionFunctionNames = BuildConditionFunctionNames();
+      const auto conditionFunctionNames =
+          BuildConditionFunctionNames(conditions_, editor.sourceConditionId);
       const auto clausePaneHeight =
           (std::max)(220.0f, ImGui::GetContentRegionAvail().y);
+      const auto &style = ImGui::GetStyle();
+      const auto editButtonWidth =
+          ImGui::CalcTextSize("Edit").x + style.FramePadding.x * 2.0f;
+      const auto deleteButtonWidth =
+          ImGui::CalcTextSize(kIconTrash).x + style.FramePadding.x * 2.0f;
+      const auto actionsColumnWidth =
+          editButtonWidth + style.ItemSpacing.x + deleteButtonWidth +
+          style.CellPadding.x * 2.0f;
       if (ImGui::BeginChild("##condition-clauses",
                             ImVec2(0.0f, clausePaneHeight),
                             ImGuiChildFlags_Borders)) {
@@ -950,7 +1175,7 @@ void Menu::DrawConditionEditorDialog() {
           ImGui::TableSetupColumn("Join", ImGuiTableColumnFlags_WidthFixed,
                                   90.0f);
           ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed,
-                                  90.0f);
+                                  actionsColumnWidth);
 
           ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
           ImGui::TableSetColumnIndex(0);
@@ -999,8 +1224,11 @@ void Menu::DrawConditionEditorDialog() {
           for (std::size_t index = 0; index < editor.draft.clauses.size();) {
             ImGui::PushID(static_cast<int>(index));
             auto &clause = editor.draft.clauses[index];
+            std::optional<ConditionFunctionInfo> customFunctionInfo;
             const auto *functionInfo =
-                FindConditionFunctionInfo(clause.functionName);
+                ResolveConditionFunctionInfo(clause, conditions_, customFunctionInfo);
+            auto selectedFunctionName =
+                functionInfo ? functionInfo->name : clause.functionName;
 
             ImGui::TableNextRow();
 
@@ -1020,11 +1248,26 @@ void Menu::DrawConditionEditorDialog() {
             }
             ImGui::TableSetColumnIndex(1);
             if (ui::components::DrawSearchableDropdown(
-                    "##function", "Condition function", clause.functionName,
+                    "##function", "Condition function", selectedFunctionName,
                     conditionFunctionNames, ImGui::GetContentRegionAvail().x)) {
               clause.arguments[0].clear();
               clause.arguments[1].clear();
-              functionInfo = FindConditionFunctionInfo(clause.functionName);
+              if (const auto *customCondition = FindConditionDefinitionByName(
+                      conditions_, selectedFunctionName, editor.sourceConditionId);
+                  customCondition != nullptr) {
+                clause.customConditionId = customCondition->id;
+                clause.functionName.clear();
+              } else {
+                clause.customConditionId.clear();
+                clause.functionName = selectedFunctionName;
+              }
+              customFunctionInfo.reset();
+              functionInfo = ResolveConditionFunctionInfo(
+                  clause, conditions_, customFunctionInfo);
+              if (functionInfo && functionInfo->returnsBooleanResult &&
+                  !IsBooleanComparator(clause.comparator)) {
+                clause.comparator = ConditionComparator::Equal;
+              }
             }
             DrawHoverDescription(
                 "conditions:editor:function:" + std::to_string(index),
@@ -1076,21 +1319,47 @@ void Menu::DrawConditionEditorDialog() {
             }
 
             ImGui::TableSetColumnIndex(4);
-            const std::array comparatorLabels = {"==", "!=", ">",
-                                                 ">=", "<",  "<="};
-            int comparatorIndex = static_cast<int>(clause.comparator);
+            constexpr std::array kComparatorLabels = {"==", "!=", ">",
+                                                      ">=", "<",  "<="};
+            constexpr std::array kBooleanComparators = {
+                ConditionComparator::Equal, ConditionComparator::NotEqual};
+            constexpr std::array kAllComparators = {
+                ConditionComparator::Equal,
+                ConditionComparator::NotEqual,
+                ConditionComparator::Greater,
+                ConditionComparator::GreaterOrEqual,
+                ConditionComparator::Less,
+                ConditionComparator::LessOrEqual};
+            const std::span<const ConditionComparator> availableComparators =
+                functionInfo && functionInfo->returnsBooleanResult
+                    ? std::span<const ConditionComparator>(
+                          kBooleanComparators.begin(), kBooleanComparators.end())
+                    : std::span<const ConditionComparator>(
+                          kAllComparators.begin(), kAllComparators.end());
+            if (functionInfo && functionInfo->returnsBooleanResult &&
+                !IsBooleanComparator(clause.comparator)) {
+              clause.comparator = ConditionComparator::Equal;
+            }
+            const auto comparatorIt =
+                std::ranges::find(availableComparators, clause.comparator);
+            const int comparatorIndex =
+                comparatorIt != availableComparators.end()
+                    ? static_cast<int>(std::distance(availableComparators.begin(),
+                                                    comparatorIt))
+                    : 0;
             ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
             if (ImGui::BeginCombo("##comparator",
-                                  comparatorLabels[comparatorIndex])) {
+                                  ComparatorLabel(
+                                      availableComparators[comparatorIndex]))) {
               for (int optionIndex = 0;
-                   optionIndex < static_cast<int>(comparatorLabels.size());
+                   optionIndex <
+                   static_cast<int>(availableComparators.size());
                    ++optionIndex) {
                 const bool selected = comparatorIndex == optionIndex;
-                if (ImGui::Selectable(comparatorLabels[optionIndex],
-                                      selected)) {
-                  comparatorIndex = optionIndex;
-                  clause.comparator =
-                      static_cast<ConditionComparator>(comparatorIndex);
+                if (ImGui::Selectable(
+                        ComparatorLabel(availableComparators[optionIndex]),
+                        selected)) {
+                  clause.comparator = availableComparators[optionIndex];
                 }
                 if (selected) {
                   ImGui::SetItemDefaultFocus();
@@ -1155,6 +1424,18 @@ void Menu::DrawConditionEditorDialog() {
                 "How this clause combines with the next clause.");
 
             ImGui::TableSetColumnIndex(7);
+            const bool hasCustomEditTarget = !clause.customConditionId.empty();
+            if (hasCustomEditTarget) {
+              if (ImGui::Button("Edit", ImVec2(editButtonWidth, 0.0f))) {
+                OpenConditionEditorDialogById(clause.customConditionId);
+              }
+              DrawHoverDescription("conditions:editor:edit-custom:" +
+                                       std::to_string(index),
+                                   "Open the referenced custom condition.");
+              if (editor.draft.clauses.size() > 1) {
+                ImGui::SameLine();
+              }
+            }
             if (editor.draft.clauses.size() > 1) {
               auto *theme = ThemeConfig::GetSingleton();
               ImGui::PushStyleColor(ImGuiCol_Button,
@@ -1163,10 +1444,8 @@ void Menu::DrawConditionEditorDialog() {
                                     theme->GetColor("DECLINE", 0.95f));
               ImGui::PushStyleColor(ImGuiCol_ButtonActive,
                                     theme->GetColor("DECLINE", 0.90f));
-              ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-              if (ImGui::Button(
-                      kIconTrash,
-                      ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+              if (ImGui::Button(kIconTrash,
+                                ImVec2(deleteButtonWidth, 0.0f))) {
                 editor.draft.clauses.erase(editor.draft.clauses.begin() +
                                            static_cast<std::ptrdiff_t>(index));
                 ImGui::PopStyleColor(3);
@@ -1250,7 +1529,8 @@ void Menu::DrawConditionEditorDialog() {
     DrawHoverDescription("conditions:editor:add-clause",
                          "Append another clause to this condition.");
 
-    const auto draftValidationError = ValidateConditionDraft(editor.draft);
+    const auto draftValidationError =
+        ValidateConditionDraft(editor.draft, conditions_);
     if (draftValidationError.empty()) {
       editor.error.clear();
     }
