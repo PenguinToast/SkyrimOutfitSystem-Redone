@@ -709,6 +709,7 @@ void Menu::OnMenuHide() {
   pendingSmoothWheelDelta_ = 0.0f;
   smoothScrollWindowId_ = 0;
   smoothScrollTargetY_ = 0.0f;
+  focusedConditionEditorWindowSlot_ = 0;
   hideMessageQueued_ = false;
   visibilityState_ = VisibilityState::Closed;
   windowAlpha_ = 0.0f;
@@ -727,6 +728,28 @@ void Menu::HandleCancel() {
 
   if (awaitingToggleKeyCapture_ || openToggleKeyPopup_) {
     CloseToggleKeyCapture();
+    return;
+  }
+
+  if (!conditionEditors_.empty()) {
+    auto closeEditor = [&](ConditionEditorState &a_editor) {
+      a_editor.error.clear();
+      a_editor.open = false;
+    };
+
+    if (focusedConditionEditorWindowSlot_ > 0) {
+      const auto focusedIt = std::ranges::find(
+          conditionEditors_, focusedConditionEditorWindowSlot_,
+          &ConditionEditorState::windowSlot);
+      if (focusedIt != conditionEditors_.end()) {
+        closeEditor(*focusedIt);
+        focusedConditionEditorWindowSlot_ = 0;
+        return;
+      }
+    }
+
+    closeEditor(conditionEditors_.back());
+    focusedConditionEditorWindowSlot_ = 0;
     return;
   }
 

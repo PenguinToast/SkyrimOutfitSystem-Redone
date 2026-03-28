@@ -204,6 +204,7 @@ private:
   int outfitPluginIndex_{0};
   int kitCollectionIndex_{0};
   std::vector<bool> selectedSlotFilters_;
+  int focusedConditionEditorWindowSlot_{0};
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
   std::string fontPath_{kDefaultFontPath};

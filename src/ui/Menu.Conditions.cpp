@@ -881,6 +881,10 @@ void Menu::DrawConditionEditorDialog() {
       continue;
     }
 
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+      focusedConditionEditorWindowSlot_ = editor.windowSlot;
+    }
+
     const auto footerHeight =
         ImGui::GetFrameHeightWithSpacing() * 2.0f +
         ImGui::GetStyle().ItemSpacing.y * 3.0f +
@@ -1288,5 +1292,14 @@ void Menu::DrawConditionEditorDialog() {
           conditionEditors_.begin(), conditionEditors_.end(),
           [](const ConditionEditorState &a_editor) { return !a_editor.open; }),
       conditionEditors_.end());
+  if (conditionEditors_.empty()) {
+    focusedConditionEditorWindowSlot_ = 0;
+  } else if (focusedConditionEditorWindowSlot_ > 0 &&
+             std::ranges::find(conditionEditors_,
+                               focusedConditionEditorWindowSlot_,
+                               &ConditionEditorState::windowSlot) ==
+                 conditionEditors_.end()) {
+    focusedConditionEditorWindowSlot_ = 0;
+  }
 }
 } // namespace sosr
