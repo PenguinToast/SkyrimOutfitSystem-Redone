@@ -12,7 +12,7 @@
 #include <unordered_map>
 
 namespace {
-constexpr char kVariantItemPayloadType[] = "SOSR_VARIANT_ITEM";
+constexpr char kVariantItemPayloadType[] = "SVS_VARIANT_ITEM";
 constexpr char kIconEllipsis[] = "\xee\x82\xba"; // ICON_LC_ELLIPSIS
 constexpr float kWorkbenchRowGapY = 20.0f;
 constexpr float kWorkbenchOverrideGapY = 5.0f;

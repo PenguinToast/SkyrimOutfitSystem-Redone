@@ -24,6 +24,8 @@ using ConditionDefinition = ui::conditions::Definition;
 
 constexpr ImVec4 kDefaultConditionColor{0.55f, 0.55f, 0.55f, 1.0f};
 constexpr char kIconTrash[] = "\xee\x86\x8c"; // ICON_LC_TRASH
+constexpr char kIconGripVertical[] = "\xee\x83\xae"; // ICON_LC_GRIP_VERTICAL
+constexpr char kConditionClausePayloadType[] = "SVS_CONDITION_CLAUSE";
 
 enum class ConditionValueEditorKind : std::uint8_t {
   Unsupported,
@@ -40,6 +42,49 @@ struct ConditionFunctionInfo {
       RE::SCRIPT_PARAM_TYPE::kForm, RE::SCRIPT_PARAM_TYPE::kForm};
   std::uint16_t parameterCount{0};
 };
+
+void DrawClauseDragHandle(const char *a_id, const ImVec2 a_size) {
+  ImGui::InvisibleButton(a_id, a_size);
+
+  const auto min = ImGui::GetItemRectMin();
+  const auto max = ImGui::GetItemRectMax();
+  const auto color =
+      ImGui::GetColorU32(ImGui::IsItemHovered() ? ImGuiCol_Text
+                                                : ImGuiCol_TextDisabled);
+  auto *drawList = ImGui::GetWindowDrawList();
+  const auto iconSize = ImGui::CalcTextSize(kIconGripVertical);
+  drawList->AddText(
+      ImVec2(min.x + ((max.x - min.x) - iconSize.x) * 0.5f,
+             min.y + ((max.y - min.y) - iconSize.y) * 0.5f),
+      color, kIconGripVertical);
+}
+
+void MoveConditionClause(std::vector<ConditionClause> &a_clauses,
+                         const std::size_t a_sourceIndex,
+                         const std::size_t a_targetIndex,
+                         const bool a_insertAfter) {
+  if (a_sourceIndex >= a_clauses.size() || a_targetIndex >= a_clauses.size()) {
+    return;
+  }
+
+  auto destinationIndex = a_targetIndex;
+  if (a_insertAfter) {
+    ++destinationIndex;
+  }
+  if (a_sourceIndex < destinationIndex) {
+    --destinationIndex;
+  }
+  if (a_sourceIndex == destinationIndex) {
+    return;
+  }
+
+  auto clause = std::move(a_clauses[a_sourceIndex]);
+  a_clauses.erase(a_clauses.begin() +
+                  static_cast<std::ptrdiff_t>(a_sourceIndex));
+  a_clauses.insert(a_clauses.begin() +
+                       static_cast<std::ptrdiff_t>(destinationIndex),
+                   std::move(clause));
+}
 
 ConditionValueEditorKind
 GetEditorKindForParamType(RE::SCRIPT_PARAM_TYPE a_type);
@@ -851,8 +896,13 @@ void Menu::DrawConditionEditorDialog() {
             ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV |
             ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_ScrollX |
             ImGuiTableFlags_Resizable;
-        if (ImGui::BeginTable("##condition-clause-table", 7, clauseTableFlags,
+        if (ImGui::BeginTable("##condition-clause-table", 8, clauseTableFlags,
                               ImVec2(0.0f, 0.0f))) {
+          const auto tableOuterRect = ImGui::GetCurrentTable()->OuterRect;
+          ImGui::TableSetupColumn("",
+                                  ImGuiTableColumnFlags_WidthFixed |
+                                      ImGuiTableColumnFlags_NoResize,
+                                  18.0f);
           ImGui::TableSetupColumn("Function", ImGuiTableColumnFlags_WidthFixed,
                                   240.0f);
           ImGui::TableSetupColumn("Arg 1", ImGuiTableColumnFlags_WidthFixed,
@@ -870,30 +920,46 @@ void Menu::DrawConditionEditorDialog() {
 
           ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
           ImGui::TableSetColumnIndex(0);
+          ImGui::TextDisabled(" ");
+          DrawHoverDescription("conditions:help:move", "Drag to reorder clauses.");
+          ImGui::TableSetColumnIndex(1);
           DrawClauseHeaderCell(
               "conditions:help:function", "Function",
               "Condition function to evaluate for this clause.");
-          ImGui::TableSetColumnIndex(1);
+          ImGui::TableSetColumnIndex(2);
           DrawClauseHeaderCell("conditions:help:arg1", "Arg 1",
                                "First function argument. Input type follows "
                                "the selected function.");
-          ImGui::TableSetColumnIndex(2);
+          ImGui::TableSetColumnIndex(3);
           DrawClauseHeaderCell(
               "conditions:help:arg2", "Arg 2",
               "Second function argument when the selected function needs one.");
-          ImGui::TableSetColumnIndex(3);
+          ImGui::TableSetColumnIndex(4);
           DrawClauseHeaderCell("conditions:help:comparator", "Comparator",
                                "How the function result is compared.");
-          ImGui::TableSetColumnIndex(4);
+          ImGui::TableSetColumnIndex(5);
           DrawClauseHeaderCell(
               "conditions:help:value", "Value",
               "Numeric value compared against the function result.");
-          ImGui::TableSetColumnIndex(5);
+          ImGui::TableSetColumnIndex(6);
           DrawClauseHeaderCell("conditions:help:join", "Join",
                                "How this clause combines with the next one.");
-          ImGui::TableSetColumnIndex(6);
+          ImGui::TableSetColumnIndex(7);
           DrawClauseHeaderCell("conditions:help:actions", "Actions",
                                "Remove this clause.");
+
+          const auto *activePayload = ImGui::GetDragDropPayload();
+          const bool reorderPreviewActive =
+              activePayload && activePayload->Data != nullptr &&
+              activePayload->IsDataType(kConditionClausePayloadType) &&
+              activePayload->DataSize == sizeof(int);
+          float insertionLineY = -1.0f;
+          float insertionLineX1 = -1.0f;
+          float insertionLineX2 = -1.0f;
+          int hoveredClauseReorderIndex = -1;
+          bool hoveredClauseInsertAfter = false;
+          std::optional<std::size_t> acceptedSourceClauseIndex;
+          bool acceptedInsertAfter = false;
 
           for (std::size_t index = 0; index < editor.draft.clauses.size();) {
             ImGui::PushID(static_cast<int>(index));
@@ -904,6 +970,20 @@ void Menu::DrawConditionEditorDialog() {
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
+            DrawClauseDragHandle("##drag-handle",
+                                 ImVec2(ImGui::GetContentRegionAvail().x,
+                                        ImGui::GetFrameHeight()));
+            DrawHoverDescription(
+                "conditions:editor:drag:" + std::to_string(index),
+                "Drag this handle to reorder the clause.");
+            if (ImGui::BeginDragDropSource()) {
+              const int payloadIndex = static_cast<int>(index);
+              ImGui::SetDragDropPayload(kConditionClausePayloadType,
+                                        &payloadIndex, sizeof(payloadIndex));
+              ImGui::Text("Move clause %zu", index + 1);
+              ImGui::EndDragDropSource();
+            }
+            ImGui::TableSetColumnIndex(1);
             if (ui::components::DrawSearchableDropdown(
                     "##function", "Condition function", clause.functionName,
                     conditionFunctionNames, ImGui::GetContentRegionAvail().x)) {
@@ -919,7 +999,7 @@ void Menu::DrawConditionEditorDialog() {
             const auto argumentCount =
                 functionInfo ? functionInfo->parameterCount : std::uint16_t{2};
             for (std::uint16_t paramIndex = 0; paramIndex < 2; ++paramIndex) {
-              ImGui::TableSetColumnIndex(1 + paramIndex);
+              ImGui::TableSetColumnIndex(2 + paramIndex);
               ImGui::BeginDisabled(paramIndex >= argumentCount);
               if (functionInfo && paramIndex < argumentCount) {
                 DrawConditionParamEditor(
@@ -960,7 +1040,7 @@ void Menu::DrawConditionEditorDialog() {
               clause.arguments[paramIndex].clear();
             }
 
-            ImGui::TableSetColumnIndex(3);
+            ImGui::TableSetColumnIndex(4);
             const std::array comparatorLabels = {"==", "!=", ">",
                                                  ">=", "<",  "<="};
             int comparatorIndex = static_cast<int>(clause.comparator);
@@ -988,7 +1068,7 @@ void Menu::DrawConditionEditorDialog() {
                                  "Comparison operator applied to the function "
                                  "result.");
 
-            ImGui::TableSetColumnIndex(4);
+            ImGui::TableSetColumnIndex(5);
             DrawNumericClauseValueEditor("##comparand", clause.comparand,
                                          ConditionValueEditorKind::Number,
                                          ImGui::GetContentRegionAvail().x);
@@ -997,7 +1077,7 @@ void Menu::DrawConditionEditorDialog() {
                                  "Numeric value compared against the function "
                                  "result.");
 
-            ImGui::TableSetColumnIndex(5);
+            ImGui::TableSetColumnIndex(6);
             const bool hasNextClause = index + 1 < editor.draft.clauses.size();
             ImGui::BeginDisabled(!hasNextClause);
             int connectiveIndex =
@@ -1026,7 +1106,7 @@ void Menu::DrawConditionEditorDialog() {
                 "conditions:editor:join:" + std::to_string(index),
                 "How this clause combines with the next clause.");
 
-            ImGui::TableSetColumnIndex(6);
+            ImGui::TableSetColumnIndex(7);
             if (editor.draft.clauses.size() > 1) {
               auto *theme = ThemeConfig::GetSingleton();
               ImGui::PushStyleColor(ImGuiCol_Button,
@@ -1051,11 +1131,65 @@ void Menu::DrawConditionEditorDialog() {
                                    "Remove this clause from the condition.");
             }
 
+            if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
+              const auto firstCellRect = ImGui::TableGetCellBgRect(table, 0);
+              const auto lastCellRect = ImGui::TableGetCellBgRect(table, 7);
+              const auto rowDropRect =
+                  ImRect(ImVec2(tableOuterRect.Min.x, firstCellRect.Min.y),
+                         ImVec2(tableOuterRect.Max.x, lastCellRect.Max.y));
+              const bool insertAfter =
+                  ImGui::GetIO().MousePos.y >
+                  ((rowDropRect.Min.y + rowDropRect.Max.y) * 0.5f);
+              if (reorderPreviewActive &&
+                  ImGui::IsMouseHoveringRect(rowDropRect.Min, rowDropRect.Max,
+                                             false)) {
+                hoveredClauseReorderIndex = static_cast<int>(index);
+                hoveredClauseInsertAfter = insertAfter;
+                insertionLineY = insertAfter ? rowDropRect.Max.y : rowDropRect.Min.y;
+                insertionLineX1 = table->OuterRect.Min.x + 2.0f;
+                insertionLineX2 = table->OuterRect.Max.x - 2.0f;
+              }
+            }
+
             ImGui::PopID();
             ++index;
           }
 
+          if (reorderPreviewActive && insertionLineY >= 0.0f &&
+              insertionLineX2 > insertionLineX1) {
+            auto *drawList = ImGui::GetWindowDrawList();
+            if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
+              drawList->PushClipRect(table->OuterRect.Min, table->OuterRect.Max,
+                                     false);
+              drawList->AddLine(
+                  ImVec2(insertionLineX1, insertionLineY),
+                  ImVec2(insertionLineX2, insertionLineY),
+                  ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"), 2.0f);
+              drawList->PopClipRect();
+            }
+          }
+
           ImGui::EndTable();
+          if (hoveredClauseReorderIndex >= 0 &&
+              ImGui::BeginDragDropTargetCustom(
+                  tableOuterRect,
+                  ImGui::GetID("##condition-clause-reorder-target"))) {
+            if (const auto *payload = ImGui::AcceptDragDropPayload(
+                    kConditionClausePayloadType,
+                    ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+                payload && payload->Data != nullptr &&
+                payload->DataSize == sizeof(int)) {
+              acceptedSourceClauseIndex = static_cast<std::size_t>(
+                  *static_cast<const int *>(payload->Data));
+              acceptedInsertAfter = hoveredClauseInsertAfter;
+            }
+            ImGui::EndDragDropTarget();
+          }
+          if (acceptedSourceClauseIndex && hoveredClauseReorderIndex >= 0) {
+            MoveConditionClause(editor.draft.clauses, *acceptedSourceClauseIndex,
+                                static_cast<std::size_t>(hoveredClauseReorderIndex),
+                                acceptedInsertAfter);
+          }
         }
       }
       ImGui::EndChild();
