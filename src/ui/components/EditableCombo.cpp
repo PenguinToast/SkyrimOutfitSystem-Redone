@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <limits>
 #include <string_view>
 
 namespace {
@@ -221,6 +222,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   const bool acceptAutocompleteOnEnter = !a_allowCustomInput;
   const auto popupId = std::string(a_label) + "##popup";
   const auto openId = std::string(a_label) + "##open";
+  const auto highlightId = std::string(a_label) + "##highlight";
+  const auto filterHashId = std::string(a_label) + "##filterhash";
   const auto arrowAreaWidth = ImGui::GetFrameHeight();
   const auto inputWidth = (std::max)(1.0f, a_width - arrowAreaWidth);
   EditableDropdownAutocompleteData autocompleteData{std::addressof(a_options)};
@@ -233,6 +236,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   ImGui::PushID(a_label);
   auto *storage = ImGui::GetStateStorage();
   const auto openStorageId = ImGui::GetID(openId.c_str());
+  const auto highlightStorageId = ImGui::GetID(highlightId.c_str());
+  const auto filterHashStorageId = ImGui::GetID(filterHashId.c_str());
   const auto popupImGuiId = ImGui::GetID(popupId.c_str());
 
   ImGui::SetNextItemWidth(inputWidth);
@@ -241,6 +246,7 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       "##input", a_hint, a_buffer, a_bufferSize, inputFlags,
       EditableDropdownInputCallback, std::addressof(autocompleteData));
   ImGui::PopStyleVar();
+  const auto inputItemId = ImGui::GetItemID();
   if (submitted && a_allowCustomInput) {
     changed = true;
   }
@@ -302,9 +308,76 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
                                           : nullptr;
       const auto needle = exactMatch ? std::string{} : rawNeedle;
       bool anyVisible = false;
-      const std::string *topOption =
-          exactMatch ? exactMatch
-                     : FindTopAutocompleteOption(a_options, needle);
+      std::vector<const std::string *> visibleOptions;
+      visibleOptions.reserve(a_options.size());
+      for (const auto &option : a_options) {
+        if (IsSectionEntry(option)) {
+          continue;
+        }
+        if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
+          continue;
+        }
+        visibleOptions.push_back(std::addressof(option));
+      }
+
+      const std::string *topOption = visibleOptions.empty()
+                                         ? nullptr
+                                         : (exactMatch ? exactMatch
+                                                       : visibleOptions.front());
+      const auto findVisibleOptionIndex =
+          [&](const std::string *a_option) -> int {
+        if (!a_option) {
+          return -1;
+        }
+        for (std::size_t visibleIndex = 0; visibleIndex < visibleOptions.size();
+             ++visibleIndex) {
+          if (visibleOptions[visibleIndex] == a_option) {
+            return static_cast<int>(visibleIndex);
+          }
+        }
+        return -1;
+      };
+
+      int highlightedIndex = storage->GetInt(highlightStorageId, -1);
+      const int preferredHighlightIndex =
+          exactMatch ? findVisibleOptionIndex(exactMatch)
+                     : findVisibleOptionIndex(topOption);
+      const int filterHash =
+          static_cast<int>(ImHashStr(rawNeedle.c_str(), rawNeedle.size()));
+      const int previousFilterHash =
+          storage->GetInt(filterHashStorageId,
+                          (std::numeric_limits<int>::lowest)());
+      const bool filterChanged = filterHash != previousFilterHash;
+      storage->SetInt(filterHashStorageId, filterHash);
+      if (visibleOptions.empty()) {
+        highlightedIndex = -1;
+      } else {
+        if (filterChanged || highlightedIndex < 0 ||
+            highlightedIndex >= static_cast<int>(visibleOptions.size())) {
+          highlightedIndex =
+              preferredHighlightIndex >= 0 ? preferredHighlightIndex : 0;
+        }
+
+        ImGui::SetKeyOwner(ImGuiKey_DownArrow, inputItemId,
+                           ImGuiInputFlags_LockThisFrame);
+        ImGui::SetKeyOwner(ImGuiKey_UpArrow, inputItemId,
+                           ImGuiInputFlags_LockThisFrame);
+        ImGui::SetKeyOwner(ImGuiKey_Enter, inputItemId,
+                           ImGuiInputFlags_LockThisFrame);
+        ImGui::SetKeyOwner(ImGuiKey_KeypadEnter, inputItemId,
+                           ImGuiInputFlags_LockThisFrame);
+
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, 0, inputItemId)) {
+          highlightedIndex =
+              (highlightedIndex + 1) % static_cast<int>(visibleOptions.size());
+        } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, 0, inputItemId)) {
+          highlightedIndex =
+              (highlightedIndex + static_cast<int>(visibleOptions.size()) - 1) %
+              static_cast<int>(visibleOptions.size());
+        }
+      }
+      storage->SetInt(highlightStorageId, highlightedIndex);
+
       const auto commitOption = [&](const std::string &a_option) {
         std::snprintf(a_buffer, a_bufferSize, "%s", a_option.c_str());
         if (a_selectedOption) {
@@ -314,6 +387,7 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         dropdownOpen = false;
         ImGui::CloseCurrentPopup();
       };
+      int visibleIndex = 0;
       for (const auto &option : a_options) {
         if (IsSectionEntry(option)) {
           if (anyVisible) {
@@ -329,8 +403,7 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         }
 
         anyVisible = true;
-        const bool selected = exactMatch ? exactMatch == std::addressof(option)
-                                         : topOption == std::addressof(option);
+        const bool selected = visibleIndex == highlightedIndex;
         if (ImGui::Selectable(option.c_str(), selected,
                               ImGuiSelectableFlags_SelectOnClick)) {
           commitOption(option);
@@ -338,14 +411,18 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         }
         if (selected) {
           ImGui::SetItemDefaultFocus();
-          if (exactMatch) {
-            ImGui::SetScrollHereY();
-          }
+          ImGui::SetScrollHereY();
         }
+        ++visibleIndex;
       }
 
-      if (submitted && acceptAutocompleteOnEnter && topOption) {
-        commitOption(*topOption);
+      const bool enterPressed =
+          ImGui::IsKeyPressed(ImGuiKey_Enter, 0, inputItemId) ||
+          ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, 0, inputItemId);
+      if ((submitted || (acceptAutocompleteOnEnter && enterPressed)) &&
+          acceptAutocompleteOnEnter && highlightedIndex >= 0 &&
+          highlightedIndex < static_cast<int>(visibleOptions.size())) {
+        commitOption(*visibleOptions[static_cast<std::size_t>(highlightedIndex)]);
         ImGui::SetKeyboardFocusHere(-1);
       }
 
