@@ -2,6 +2,7 @@
 
 #include "ArmorUtils.h"
 #include "ConditionMaterializer.h"
+#include "ConditionRefreshTargets.h"
 #include "integrations/DynamicArmorVariantsExtendedClient.h"
 
 #include <nlohmann/json.hpp>
@@ -62,6 +63,7 @@ struct DavVariantPayload {
   std::string variantJson;
   std::string conditionSignature;
   std::shared_ptr<RE::TESCondition> condition;
+  sosr::conditions::RefreshTargets refreshTargets;
 };
 
 void UpdateRowIdentity(sosr::workbench::VariantWorkbenchRow &a_row) {
@@ -467,12 +469,16 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
         DavVariantPayload{.variantJson = std::move(descriptor->json),
                           .conditionSignature =
                               materializedCondition->signature,
-                          .condition = materializedCondition->condition});
+                          .condition = materializedCondition->condition,
+                          .refreshTargets =
+                              sosr::conditions::BuildRefreshTargets(
+                                  materializedCondition->condition)});
   }
 
   std::unordered_map<std::string, ActiveDavVariantState> syncedVariants;
   syncedVariants.reserve(desiredVariants.size());
   bool variantsChanged = false;
+  sosr::conditions::RefreshTargets refreshTargets;
 
   for (const auto &[variantName, payload] : desiredVariants) {
     if (const auto activeIt = activeDavVariants_.find(variantName);
@@ -481,10 +487,12 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
         activeIt->second.conditionSignature == payload.conditionSignature) {
       syncedVariants.emplace(
           variantName, ActiveDavVariantState{payload.variantJson,
-                                             payload.conditionSignature});
+                                             payload.conditionSignature,
+                                             payload.refreshTargets});
       continue;
     }
 
+    const auto activeIt = activeDavVariants_.find(variantName);
     if (!dav->RegisterVariantJson(variantName.c_str(),
                                   payload.variantJson.c_str())) {
       logger::warn("Failed to register DAV variant {}", variantName);
@@ -499,11 +507,17 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
 
     syncedVariants.emplace(
         variantName,
-        ActiveDavVariantState{payload.variantJson, payload.conditionSignature});
+        ActiveDavVariantState{payload.variantJson, payload.conditionSignature,
+                              payload.refreshTargets});
+    if (activeIt != activeDavVariants_.end()) {
+      sosr::conditions::MergeRefreshTargets(refreshTargets,
+                                            activeIt->second.refreshTargets);
+    }
+    sosr::conditions::MergeRefreshTargets(refreshTargets, payload.refreshTargets);
     variantsChanged = true;
   }
 
-  for (const auto &[variantName, _] : activeDavVariants_) {
+  for (const auto &[variantName, state] : activeDavVariants_) {
     if (syncedVariants.contains(variantName)) {
       continue;
     }
@@ -511,6 +525,8 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
     if (!dav->DeleteVariant(variantName.c_str())) {
       logger::warn("Failed to delete DAV variant {}", variantName);
     } else {
+      sosr::conditions::MergeRefreshTargets(refreshTargets,
+                                            state.refreshTargets);
       variantsChanged = true;
     }
   }
@@ -518,9 +534,7 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
   activeDavVariants_ = std::move(syncedVariants);
 
   if (variantsChanged) {
-    if (auto *player = RE::PlayerCharacter::GetSingleton()) {
-      dav->RefreshActor(player);
-    }
+    sosr::conditions::RefreshActors(*dav, refreshTargets);
   }
 }
 
@@ -654,20 +668,22 @@ void VariantWorkbench::Revert() {
   ClearPreview();
 
   auto *dav = GetDynamicArmorVariantsExtendedClient();
-  auto *player = RE::PlayerCharacter::GetSingleton();
   bool variantsChanged = false;
+  sosr::conditions::RefreshTargets refreshTargets;
 
   if (dav) {
-    for (const auto &[variantName, _] : activeDavVariants_) {
+    for (const auto &[variantName, state] : activeDavVariants_) {
       if (!dav->DeleteVariant(variantName.c_str())) {
         logger::warn("Failed to delete DAV variant {} during SOSR revert",
                      variantName);
       } else {
+        sosr::conditions::MergeRefreshTargets(refreshTargets,
+                                              state.refreshTargets);
         variantsChanged = true;
       }
     }
-    if (variantsChanged && player) {
-      dav->RefreshActor(player);
+    if (variantsChanged) {
+      sosr::conditions::RefreshActors(*dav, refreshTargets);
     }
   }
 

@@ -3,6 +3,7 @@
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 
+#include "ConditionRefreshTargets.h"
 #include "ui/ConditionData.h"
 
 #include <optional>
@@ -145,6 +146,7 @@ private:
   struct ActiveDavVariantState {
     std::string variantJson;
     std::string conditionSignature;
+    conditions::RefreshTargets refreshTargets;
   };
   std::unordered_map<std::string, ActiveDavVariantState> activeDavVariants_;
   std::string previewSelectionKey_;
