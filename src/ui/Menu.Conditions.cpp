@@ -89,6 +89,52 @@ void MoveConditionClause(std::vector<ConditionClause> &a_clauses,
                    std::move(clause));
 }
 
+void MoveConditionDefinition(std::vector<ConditionDefinition> &a_conditions,
+                             const std::size_t a_sourceIndex,
+                             const std::size_t a_targetIndex,
+                             const bool a_insertAfter) {
+  if (a_sourceIndex >= a_conditions.size() ||
+      a_targetIndex >= a_conditions.size()) {
+    return;
+  }
+
+  auto destinationIndex = a_targetIndex;
+  if (a_insertAfter) {
+    ++destinationIndex;
+  }
+  if (a_sourceIndex < destinationIndex) {
+    --destinationIndex;
+  }
+  if (a_sourceIndex == destinationIndex) {
+    return;
+  }
+
+  auto condition = std::move(a_conditions[a_sourceIndex]);
+  a_conditions.erase(a_conditions.begin() +
+                     static_cast<std::ptrdiff_t>(a_sourceIndex));
+  a_conditions.insert(a_conditions.begin() +
+                          static_cast<std::ptrdiff_t>(destinationIndex),
+                      std::move(condition));
+}
+
+void MoveConditionDefinitionToSlot(std::vector<ConditionDefinition> &a_conditions,
+                                   const std::size_t a_sourceIndex,
+                                   std::size_t a_slotIndex) {
+  if (a_sourceIndex >= a_conditions.size() || a_slotIndex > a_conditions.size()) {
+    return;
+  }
+
+  auto condition = std::move(a_conditions[a_sourceIndex]);
+  a_conditions.erase(a_conditions.begin() +
+                     static_cast<std::ptrdiff_t>(a_sourceIndex));
+  if (a_sourceIndex < a_slotIndex) {
+    --a_slotIndex;
+  }
+  a_conditions.insert(a_conditions.begin() +
+                          static_cast<std::ptrdiff_t>(a_slotIndex),
+                      std::move(condition));
+}
+
 ConditionValueEditorKind
 GetEditorKindForParamType(RE::SCRIPT_PARAM_TYPE a_type);
 RE::SCRIPT_PARAM_TYPE ResolveEditorParamType(std::string_view a_functionName,
@@ -1100,6 +1146,8 @@ bool Menu::DrawConditionTab() {
   ImGui::TableSetupColumn("Condition", ImGuiTableColumnFlags_WidthStretch);
   bool rowClicked = false;
   std::optional<std::size_t> pendingDeleteIndex;
+  std::vector<ImRect> conditionRowRects;
+  conditionRowRects.reserve(conditions_.size());
 
   for (std::size_t index = 0; index < conditions_.size(); ++index) {
     const auto &condition = conditions_[index];
@@ -1228,10 +1276,90 @@ bool Menu::DrawConditionTab() {
       ImGui::EndDragDropSource();
     }
 
+    conditionRowRects.emplace_back(min, max);
+
     ImGui::PopID();
   }
 
   ImGui::EndTable();
+
+  std::optional<std::size_t> hoveredInsertionSlot;
+  ImRect hoveredInsertionRect;
+  float insertionLineY = -1.0f;
+  float insertionLineXMin = 0.0f;
+  float insertionLineXMax = 0.0f;
+
+  if (ImGui::IsDragDropActive() && !conditionRowRects.empty()) {
+    const float fallbackBandHalfHeight =
+        (std::max)(6.0f, ImGui::GetStyle().ItemSpacing.y * 0.5f);
+    const auto xMin = conditionRowRects.front().Min.x;
+    const auto xMax = conditionRowRects.front().Max.x;
+    std::vector<float> insertionLineYs;
+    insertionLineYs.reserve(conditionRowRects.size() + 1);
+    insertionLineYs.push_back(conditionRowRects.front().Min.y -
+                              fallbackBandHalfHeight);
+    for (std::size_t index = 0; index + 1 < conditionRowRects.size(); ++index) {
+      const auto &currentRect = conditionRowRects[index];
+      const auto &nextRect = conditionRowRects[index + 1];
+      insertionLineYs.push_back((currentRect.Max.y + nextRect.Min.y) * 0.5f);
+    }
+    insertionLineYs.push_back(conditionRowRects.back().Max.y +
+                              fallbackBandHalfHeight);
+
+    for (std::size_t slotIndex = 0; slotIndex < insertionLineYs.size();
+         ++slotIndex) {
+      const float lineY = insertionLineYs[slotIndex];
+      const float bandMinY =
+          slotIndex == 0 ? (lineY - fallbackBandHalfHeight)
+                         : ((insertionLineYs[slotIndex - 1] + lineY) * 0.5f);
+      const float bandMaxY =
+          slotIndex + 1 == insertionLineYs.size()
+              ? (lineY + fallbackBandHalfHeight)
+              : ((lineY + insertionLineYs[slotIndex + 1]) * 0.5f);
+      const ImRect slotRect(ImVec2(xMin, bandMinY), ImVec2(xMax, bandMaxY));
+      if (!ImGui::IsMouseHoveringRect(slotRect.Min, slotRect.Max, false)) {
+        continue;
+      }
+
+      hoveredInsertionSlot = slotIndex;
+      hoveredInsertionRect = slotRect;
+      insertionLineY = lineY;
+      insertionLineXMin = xMin;
+      insertionLineXMax = xMax;
+      break;
+    }
+  }
+
+  if (insertionLineY >= 0.0f && insertionLineXMax > insertionLineXMin) {
+    ImGui::GetWindowDrawList()->AddLine(
+        ImVec2(insertionLineXMin, insertionLineY),
+        ImVec2(insertionLineXMax, insertionLineY),
+        ThemeConfig::GetSingleton()->GetColorU32("PRIMARY"), 2.0f);
+  }
+
+  if (hoveredInsertionSlot &&
+      ImGui::BeginDragDropTargetCustom(
+          hoveredInsertionRect,
+          ImGui::GetID(("##condition-reorder-slot-" +
+                        std::to_string(*hoveredInsertionSlot))
+                           .c_str()))) {
+    if (const auto *payload = ImGui::AcceptDragDropPayload(
+            "SVS_CONDITION", ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+        payload && payload->DataSize == sizeof(DraggedConditionPayload)) {
+      DraggedConditionPayload dragPayload{};
+      std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
+      if (const auto it = std::ranges::find(
+              conditions_, std::string_view(dragPayload.conditionId.data()),
+              &ConditionDefinition::id);
+          it != conditions_.end()) {
+        const auto sourceIndex =
+            static_cast<std::size_t>(std::distance(conditions_.begin(), it));
+        MoveConditionDefinitionToSlot(conditions_, sourceIndex,
+                                      *hoveredInsertionSlot);
+      }
+    }
+    ImGui::EndDragDropTarget();
+  }
 
   if (pendingDeleteIndex && *pendingDeleteIndex < conditions_.size()) {
     const auto deletedConditionId = conditions_[*pendingDeleteIndex].id;
