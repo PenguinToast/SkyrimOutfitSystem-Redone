@@ -746,7 +746,7 @@ void Menu::OnMenuShow() {
   pendingSmoothWheelDelta_ = 0.0f;
   smoothScrollWindowId_ = 0;
   smoothScrollTargetY_ = 0.0f;
-  workbench_.SyncRowsFromPlayer();
+  SyncWorkbenchRowsForCurrentFilter();
   enabled_ = true;
 }
 
@@ -846,6 +846,240 @@ bool Menu::QueueSmoothScroll(const float a_deltaY) {
 void Menu::ClearCatalogSelection() {
   selectedCatalogKey_.clear();
   workbench_.ClearPreview();
+}
+
+void Menu::BuildWorkbenchFilterOptions(
+    std::vector<WorkbenchFilterOption> &a_options,
+    std::vector<std::string> &a_labels) {
+  a_options.clear();
+  a_labels.clear();
+
+  a_options.push_back({.label = "Show All",
+                       .kind = WorkbenchFilterKind::All,
+                       .actorFormID = 0,
+                       .conditionId = {}});
+  a_labels.push_back(a_options.back().label);
+
+  std::vector<WorkbenchFilterOption> actorOptions;
+  std::unordered_set<RE::FormID> seenActorFormIDs;
+  const auto *player = RE::PlayerCharacter::GetSingleton();
+  const auto playerFormID = player ? player->GetFormID() : 0;
+
+  const auto buildActorLabel = [&](const RE::FormID a_actorFormID) {
+    if (playerFormID != 0 && a_actorFormID == playerFormID) {
+      return std::string("Player");
+    }
+
+    if (auto *actor = RE::TESForm::LookupByID<RE::Actor>(a_actorFormID);
+        actor != nullptr) {
+      const auto displayName = armor::GetDisplayName(actor);
+      if (!displayName.empty()) {
+        return displayName + " [" + armor::FormatFormID(a_actorFormID) + "]";
+      }
+    }
+
+    return std::string("Actor [") + armor::FormatFormID(a_actorFormID) + "]";
+  };
+
+  if (playerFormID != 0 && seenActorFormIDs.insert(playerFormID).second) {
+    actorOptions.push_back({.label = "Actor: " + buildActorLabel(playerFormID),
+                            .kind = WorkbenchFilterKind::ActorRef,
+                            .actorFormID = playerFormID,
+                            .conditionId = {}});
+  }
+
+  for (auto &condition : conditions_) {
+    const auto materialized =
+        conditions::MaterializeConditionById(condition.id, conditions_);
+    if (!materialized.has_value()) {
+      continue;
+    }
+
+    for (const auto actorFormID : materialized->refreshTargets.actorFormIDs) {
+      if (!seenActorFormIDs.insert(actorFormID).second) {
+        continue;
+      }
+
+      actorOptions.push_back({.label = "Actor: " + buildActorLabel(actorFormID),
+                              .kind = WorkbenchFilterKind::ActorRef,
+                              .actorFormID = actorFormID,
+                              .conditionId = {}});
+    }
+  }
+
+  if (!actorOptions.empty()) {
+    a_options.push_back({.label = "\x1fsection:Actor Ref Filter"});
+    a_labels.push_back(a_options.back().label);
+
+    std::stable_sort(actorOptions.begin(), actorOptions.end(),
+                     [&](const WorkbenchFilterOption &a_left,
+                         const WorkbenchFilterOption &a_right) {
+                       if (playerFormID != 0 &&
+                           a_left.actorFormID == playerFormID) {
+                         return true;
+                       }
+                       if (playerFormID != 0 &&
+                           a_right.actorFormID == playerFormID) {
+                         return false;
+                       }
+                       return CompareText(a_left.label, a_right.label) < 0;
+                     });
+
+    for (auto &option : actorOptions) {
+      a_labels.push_back(option.label);
+      a_options.push_back(std::move(option));
+    }
+  }
+
+  if (!conditions_.empty()) {
+    a_options.push_back({.label = "\x1fsection:Condition Filter"});
+    a_labels.push_back(a_options.back().label);
+    for (const auto &condition : conditions_) {
+      a_options.push_back({.label = "Condition: " + condition.name,
+                           .kind = WorkbenchFilterKind::Condition,
+                           .actorFormID = 0,
+                           .conditionId = condition.id});
+      a_labels.push_back(a_options.back().label);
+    }
+  }
+}
+
+void Menu::ValidateWorkbenchFilterSelection() {
+  std::vector<WorkbenchFilterOption> options;
+  std::vector<std::string> labels;
+  BuildWorkbenchFilterOptions(options, labels);
+
+  const auto matchesCurrentFilter = [&](const WorkbenchFilterOption &a_option) {
+    if (a_option.kind != workbenchFilter_.kind) {
+      return false;
+    }
+
+    switch (a_option.kind) {
+    case WorkbenchFilterKind::All:
+      return true;
+    case WorkbenchFilterKind::ActorRef:
+      return a_option.actorFormID == workbenchFilter_.actorFormID;
+    case WorkbenchFilterKind::Condition:
+      return a_option.conditionId == workbenchFilter_.conditionId;
+    }
+
+    return false;
+  };
+
+  if (std::ranges::find_if(options, matchesCurrentFilter) == options.end()) {
+    workbenchFilter_ = {};
+  }
+}
+
+bool Menu::MatchesWorkbenchFilter(
+    const workbench::VariantWorkbenchRow &a_row) {
+  switch (workbenchFilter_.kind) {
+  case WorkbenchFilterKind::All:
+    return true;
+  case WorkbenchFilterKind::Condition:
+    return a_row.conditionId.has_value() &&
+           *a_row.conditionId == workbenchFilter_.conditionId;
+  case WorkbenchFilterKind::ActorRef:
+    if (!a_row.conditionId.has_value()) {
+      return false;
+    }
+    if (const auto materialized = conditions::MaterializeConditionById(
+            *a_row.conditionId, conditions_);
+        materialized.has_value()) {
+      return std::ranges::find(materialized->refreshTargets.actorFormIDs,
+                               workbenchFilter_.actorFormID) !=
+             materialized->refreshTargets.actorFormIDs.end();
+    }
+    return false;
+  }
+
+  return true;
+}
+
+std::vector<int> Menu::BuildVisibleWorkbenchRowIndices() {
+  ValidateWorkbenchFilterSelection();
+
+  std::vector<int> visibleRowIndices;
+  const auto &rows = workbench_.GetRows();
+  visibleRowIndices.reserve(rows.size());
+  for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size()); ++rowIndex) {
+    if (MatchesWorkbenchFilter(rows[static_cast<std::size_t>(rowIndex)])) {
+      visibleRowIndices.push_back(rowIndex);
+    }
+  }
+
+  return visibleRowIndices;
+}
+
+std::optional<std::string>
+Menu::ResolveFirstConditionForActorFilter(const RE::FormID a_actorFormID) {
+  for (auto &condition : conditions_) {
+    const auto materialized =
+        conditions::MaterializeConditionById(condition.id, conditions_);
+    if (!materialized.has_value()) {
+      continue;
+    }
+
+    if (std::ranges::find(materialized->refreshTargets.actorFormIDs,
+                          a_actorFormID) !=
+        materialized->refreshTargets.actorFormIDs.end()) {
+      return condition.id;
+    }
+  }
+
+  return std::nullopt;
+}
+
+std::optional<std::string> Menu::ResolveNewWorkbenchRowConditionId() {
+  ValidateWorkbenchFilterSelection();
+
+  if (workbenchFilter_.kind == WorkbenchFilterKind::Condition &&
+      !workbenchFilter_.conditionId.empty()) {
+    return workbenchFilter_.conditionId;
+  }
+  if (workbenchFilter_.kind == WorkbenchFilterKind::ActorRef &&
+      workbenchFilter_.actorFormID != 0) {
+    if (const auto conditionId =
+            ResolveFirstConditionForActorFilter(workbenchFilter_.actorFormID);
+        conditionId.has_value()) {
+      return conditionId;
+    }
+  }
+
+  return std::string(ui::conditions::kDefaultConditionId);
+}
+
+RE::Actor *Menu::ResolveWorkbenchPreviewActor() {
+  ValidateWorkbenchFilterSelection();
+
+  if (workbenchFilter_.kind == WorkbenchFilterKind::ActorRef &&
+      workbenchFilter_.actorFormID != 0) {
+    if (auto *actor =
+            RE::TESForm::LookupByID<RE::Actor>(workbenchFilter_.actorFormID);
+        actor != nullptr) {
+      return actor;
+    }
+  }
+
+  return RE::PlayerCharacter::GetSingleton();
+}
+
+void Menu::SyncWorkbenchRowsForCurrentFilter() {
+  ValidateWorkbenchFilterSelection();
+
+  if (workbenchFilter_.kind == WorkbenchFilterKind::ActorRef &&
+      workbenchFilter_.actorFormID != 0) {
+    if (auto *actor =
+            RE::TESForm::LookupByID<RE::Actor>(workbenchFilter_.actorFormID);
+        actor != nullptr) {
+      workbench_.SyncRowsFromActor(
+          actor,
+          ResolveFirstConditionForActorFilter(workbenchFilter_.actorFormID));
+      return;
+    }
+  }
+
+  workbench_.SyncRowsFromPlayer();
 }
 
 std::string Menu::BuildFavoriteKey(const BrowserTab a_tab,
@@ -954,26 +1188,36 @@ void Menu::DrawCatalogLoadingPane() const {
 }
 
 void Menu::AddGearEntryToWorkbench(const GearEntry &a_entry) {
+  const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
   workbench_.AddCatalogSelectionToWorkbench(
-      std::vector<RE::FormID>{a_entry.formID});
+      std::vector<RE::FormID>{a_entry.formID}, &visibleRowIndices);
 }
 
 void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry,
                                      const bool a_replaceExisting) {
+  const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
   if (a_replaceExisting) {
-    workbench_.ReplaceCatalogSelectionInWorkbench(a_entry.armorFormIDs);
+    workbench_.ReplaceCatalogSelectionInWorkbench(a_entry.armorFormIDs,
+                                                  &visibleRowIndices);
   } else {
-    workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+    workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs,
+                                              &visibleRowIndices);
   }
 }
 
 void Menu::PreviewGearEntry(const GearEntry &a_entry) {
+  const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
   workbench_.ApplyCatalogPreview(a_entry.id,
-                                 std::vector<RE::FormID>{a_entry.formID});
+                                 std::vector<RE::FormID>{a_entry.formID},
+                                 ResolveWorkbenchPreviewActor(),
+                                 &visibleRowIndices);
 }
 
 void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {
-  workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs);
+  const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
+  workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs,
+                                 ResolveWorkbenchPreviewActor(),
+                                 &visibleRowIndices);
 }
 
 void Menu::QueueHideMessage() {
@@ -1256,22 +1500,21 @@ void Menu::DrawWindow() {
             EquipmentCatalog::Get().GetGear(), selectedCatalogKey_,
             [](const GearEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetGear().end()) {
-          workbench_.ApplyCatalogPreview(
-              entry->id, std::vector<RE::FormID>{entry->formID});
+          PreviewGearEntry(*entry);
         }
       } else if (activeTab_ == BrowserTab::Outfits) {
         const auto entry = std::ranges::find(
             EquipmentCatalog::Get().GetOutfits(), selectedCatalogKey_,
             [](const OutfitEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetOutfits().end()) {
-          workbench_.ApplyCatalogPreview(entry->id, entry->armorFormIDs);
+          PreviewOutfitEntry(*entry);
         }
       } else if (activeTab_ == BrowserTab::Kits) {
         const auto entry = std::ranges::find(
             EquipmentCatalog::Get().GetKits(), selectedCatalogKey_,
             [](const KitEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetKits().end()) {
-          workbench_.ApplyCatalogPreview(entry->id, entry->armorFormIDs);
+          PreviewKitEntry(*entry);
         }
       } else if (activeTab_ == BrowserTab::Slots ||
                  activeTab_ == BrowserTab::Conditions) {
@@ -1943,7 +2186,8 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           ImGui::Separator();
           if (ImGui::MenuItem("Add to Workbench")) {
             workbench_.AddCatalogSelectionAsRows(
-                std::vector<RE::FormID>{entry.formID});
+                std::vector<RE::FormID>{entry.formID},
+                ResolveNewWorkbenchRowConditionId());
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {
@@ -2054,7 +2298,8 @@ bool Menu::DrawOutfitTab() {
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add to Workbench")) {
-            workbench_.AddCatalogSelectionAsRows(outfit.armorFormIDs);
+            workbench_.AddCatalogSelectionAsRows(
+                outfit.armorFormIDs, ResolveNewWorkbenchRowConditionId());
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {
@@ -2180,7 +2425,8 @@ bool Menu::DrawKitTab() {
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add to Workbench")) {
-            workbench_.AddCatalogSelectionAsRows(kit.armorFormIDs);
+            workbench_.AddCatalogSelectionAsRows(
+                kit.armorFormIDs, ResolveNewWorkbenchRowConditionId());
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add Override")) {

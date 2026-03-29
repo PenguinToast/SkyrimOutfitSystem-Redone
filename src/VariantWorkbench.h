@@ -61,6 +61,9 @@ struct VariantWorkbenchRow {
 
 class VariantWorkbench {
 public:
+  void SyncRowsFromActor(RE::Actor *a_actor,
+                         std::optional<std::string> a_newRowConditionId =
+                             std::nullopt);
   void SyncRowsFromPlayer();
   bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
   bool BuildSlotItem(std::uint64_t a_slotMask,
@@ -72,13 +75,23 @@ public:
                                        int a_sourceRowIndex = -1,
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
-  bool AddCatalogSelectionToWorkbench(const std::vector<RE::FormID> &a_formIDs);
+  bool AddCatalogSelectionToWorkbench(
+      const std::vector<RE::FormID> &a_formIDs,
+      const std::vector<int> *a_candidateRowIndices = nullptr);
   bool
-  ReplaceCatalogSelectionInWorkbench(const std::vector<RE::FormID> &a_formIDs);
-  bool AddCatalogSelectionAsRows(const std::vector<RE::FormID> &a_formIDs);
-  bool AddSlotRow(std::uint64_t a_slotMask);
+  ReplaceCatalogSelectionInWorkbench(
+      const std::vector<RE::FormID> &a_formIDs,
+      const std::vector<int> *a_candidateRowIndices = nullptr);
+  bool AddCatalogSelectionAsRows(
+      const std::vector<RE::FormID> &a_formIDs,
+      std::optional<std::string> a_conditionId);
+  bool AddSlotRow(std::uint64_t a_slotMask,
+                  std::optional<std::string> a_conditionId);
   bool ApplyCatalogPreview(std::string_view a_selectionKey,
-                           const std::vector<RE::FormID> &a_formIDs);
+                           const std::vector<RE::FormID> &a_formIDs,
+                           RE::Actor *a_actor = nullptr,
+                           const std::vector<int> *a_candidateRowIndices =
+                               nullptr);
   void ClearPreview();
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
@@ -93,9 +106,11 @@ public:
   CollectOverrideArmorFormIDsFromEquippedRows() const;
   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
   bool InsertCatalogRow(RE::FormID a_formID, int a_targetRowIndex,
-                        bool a_insertAfter);
+                        bool a_insertAfter,
+                        std::optional<std::string> a_conditionId);
   bool InsertSlotRow(std::uint64_t a_slotMask, int a_targetRowIndex,
-                     bool a_insertAfter);
+                     bool a_insertAfter,
+                     std::optional<std::string> a_conditionId);
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
   bool SetConditionId(int a_rowIndex, std::optional<std::string> a_conditionId);
@@ -121,17 +136,21 @@ private:
                        std::vector<const RE::TESObjectARMO *> &a_armors) const;
   [[nodiscard]] int FindBestCatalogTargetRowIndex(
       const EquipmentWidgetItem &a_item, bool a_requireAcceptable,
-      const std::vector<PlannedCatalogAssignment> *a_pendingAssignments) const;
+      const std::vector<PlannedCatalogAssignment> *a_pendingAssignments,
+      const std::vector<int> *a_candidateRowIndices) const;
   [[nodiscard]] bool CanAcceptOverrideWithPendingAssignments(
       int a_targetRowIndex, const EquipmentWidgetItem &a_item,
       const std::vector<PlannedCatalogAssignment> &a_pendingAssignments) const;
   [[nodiscard]] bool PlanCatalogAssignments(
       const std::vector<RE::FormID> &a_formIDs,
-      std::vector<PlannedCatalogAssignment> &a_assignments) const;
+      std::vector<PlannedCatalogAssignment> &a_assignments,
+      const std::vector<int> *a_candidateRowIndices) const;
   [[nodiscard]] std::vector<VariantWorkbenchRow>
-  BuildCatalogRows(const std::vector<RE::FormID> &a_formIDs) const;
+  BuildCatalogRows(const std::vector<RE::FormID> &a_formIDs,
+                   std::optional<std::string> a_conditionId) const;
   [[nodiscard]] std::optional<VariantWorkbenchRow>
-  BuildSlotRow(std::uint64_t a_slotMask) const;
+  BuildSlotRow(std::uint64_t a_slotMask,
+               std::optional<std::string> a_conditionId) const;
   [[nodiscard]] int
   FindBestCatalogTargetRowIndex(const EquipmentWidgetItem &a_item,
                                 bool a_requireAcceptable) const;
@@ -146,6 +165,7 @@ private:
   };
   std::unordered_map<std::string, ActiveDavVariantState> activeDavVariants_;
   std::string previewSelectionKey_;
+  RE::FormID previewActorFormID_{0};
   std::unordered_map<std::string, std::string> previewDavVariants_;
 };
 } // namespace sosr::workbench

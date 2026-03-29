@@ -3,6 +3,7 @@
 #include "ConditionMaterializer.h"
 #include "imgui_internal.h"
 #include "ui/WorkbenchConflicts.h"
+#include "ui/components/EditableCombo.h"
 #include "ui/components/EquipmentWidget.h"
 #include "ui/components/PinnableTooltip.h"
 
@@ -205,11 +206,13 @@ bool Menu::ApplyWorkbenchRowDrop(const DraggedEquipmentPayload &a_dragPayload,
     if (a_dragPayload.sourceKind ==
         static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
       return workbench_.AddCatalogSelectionAsRows(
-          std::vector<RE::FormID>{a_dragPayload.formID});
+          std::vector<RE::FormID>{a_dragPayload.formID},
+          ResolveNewWorkbenchRowConditionId());
     }
     if (a_dragPayload.sourceKind ==
         static_cast<std::uint32_t>(DragSourceKind::SlotCatalog)) {
-      return workbench_.AddSlotRow(a_dragPayload.slotMask);
+      return workbench_.AddSlotRow(a_dragPayload.slotMask,
+                                   ResolveNewWorkbenchRowConditionId());
     }
     return false;
   }
@@ -227,11 +230,13 @@ void Menu::ApplyRowReorder(const DraggedEquipmentPayload &a_dragPayload,
   } else if (a_dragPayload.sourceKind ==
              static_cast<std::uint32_t>(DragSourceKind::Catalog)) {
     workbench_.InsertCatalogRow(a_dragPayload.formID, a_targetRowIndex,
-                                a_insertAfter);
+                                a_insertAfter,
+                                ResolveNewWorkbenchRowConditionId());
   } else if (a_dragPayload.sourceKind ==
              static_cast<std::uint32_t>(DragSourceKind::SlotCatalog)) {
     workbench_.InsertSlotRow(a_dragPayload.slotMask, a_targetRowIndex,
-                             a_insertAfter);
+                             a_insertAfter,
+                             ResolveNewWorkbenchRowConditionId());
   }
 }
 
@@ -253,7 +258,51 @@ void Menu::AcceptOverrideDeletePayload() {
 }
 
 void Menu::DrawVariantWorkbenchPane() {
-  ImGui::TextUnformatted("Variant workbench");
+  ValidateWorkbenchFilterSelection();
+
+  std::vector<WorkbenchFilterOption> filterOptions;
+  std::vector<std::string> filterLabels;
+  BuildWorkbenchFilterOptions(filterOptions, filterLabels);
+
+  const auto matchesCurrentFilter = [&](const WorkbenchFilterOption &a_option) {
+    if (a_option.kind != workbenchFilter_.kind) {
+      return false;
+    }
+
+    switch (a_option.kind) {
+    case WorkbenchFilterKind::All:
+      return true;
+    case WorkbenchFilterKind::ActorRef:
+      return a_option.actorFormID == workbenchFilter_.actorFormID;
+    case WorkbenchFilterKind::Condition:
+      return a_option.conditionId == workbenchFilter_.conditionId;
+    }
+
+    return false;
+  };
+
+  std::string selectedFilterLabel = "Show All";
+  if (const auto it =
+          std::ranges::find_if(filterOptions, matchesCurrentFilter);
+      it != filterOptions.end()) {
+    selectedFilterLabel = it->label;
+  }
+
+  if (ui::components::DrawSearchableDropdown(
+          "##workbench-filter", "Filter workbench...", selectedFilterLabel,
+          filterLabels, ImGui::GetContentRegionAvail().x)) {
+    if (const auto it = std::ranges::find_if(
+            filterOptions, [&](const WorkbenchFilterOption &a_option) {
+              return a_option.label == selectedFilterLabel;
+            });
+        it != filterOptions.end()) {
+      workbenchFilter_.kind = it->kind;
+      workbenchFilter_.actorFormID = it->actorFormID;
+      workbenchFilter_.conditionId = it->conditionId;
+      workbench_.ClearPreview();
+      SyncWorkbenchRowsForCurrentFilter();
+    }
+  }
   ImGui::Separator();
 
   const auto equippedKitFormIDs = workbench_.CollectEquippedArmorFormIDs();
@@ -279,7 +328,7 @@ void Menu::DrawVariantWorkbenchPane() {
               [&]() {
                 workbench_.ClearPreview();
                 workbench_.ResetAllRows();
-                workbench_.SyncRowsFromPlayer();
+                SyncWorkbenchRowsForCurrentFilter();
                 workbench_.SyncDynamicArmorVariantsExtended(conditions_);
               },
       },
@@ -403,6 +452,7 @@ void Menu::DrawVariantWorkbenchPane() {
   ImGui::Spacing();
 
   const auto &rows = workbench_.GetRows();
+  const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
   if (rows.empty()) {
     ImGui::TextWrapped("No workbench rows yet. Drag equipment or slot entries "
                        "to the Equipped column to create one.");
@@ -435,6 +485,62 @@ void Menu::DrawVariantWorkbenchPane() {
 
         if (ImGui::BeginDragDropTargetCustom(
                 leftCellRect, ImGui::GetID("##empty-workbench-row-target"))) {
+          if (const auto *payload =
+                  ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
+              payload && payload->Data != nullptr &&
+              payload->DataSize == sizeof(DraggedEquipmentPayload)) {
+            DraggedEquipmentPayload dragPayload{};
+            std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
+            ApplyWorkbenchRowDrop(dragPayload);
+          }
+          ImGui::EndDragDropTarget();
+        }
+      }
+
+      ImGui::TableSetColumnIndex(1);
+      ImGui::TextDisabled(
+          "Add a row first, then drop equipment overrides here.");
+
+      ImGui::TableSetColumnIndex(2);
+      ImGui::TextDisabled("-");
+
+      ImGui::EndTable();
+    }
+    return;
+  }
+
+  if (visibleRowIndices.empty()) {
+    ImGui::TextWrapped("No workbench rows match the current filter. Drag "
+                       "equipment or equipment slots here to create one.");
+
+    if (ImGui::BeginTable("##variant-workbench-filter-empty", 3,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_Resizable,
+                          ImVec2(0.0f, 180.0f))) {
+      ImGui::TableSetupColumn("Equipped", ImGuiTableColumnFlags_WidthStretch,
+                              0.80f);
+      ImGui::TableSetupColumn("Overrides", ImGuiTableColumnFlags_WidthStretch,
+                              1.05f);
+      ImGui::TableSetupColumn("Hide",
+                              ImGuiTableColumnFlags_WidthFixed |
+                                  ImGuiTableColumnFlags_NoResize,
+                              72.0f);
+      ImGui::TableHeadersRow();
+      ImGui::TableNextRow(ImGuiTableRowFlags_None, 116.0f);
+
+      ImGui::TableSetColumnIndex(0);
+      if (const auto *table = ImGui::GetCurrentTable(); table != nullptr) {
+        const ImRect leftCellRect = ImGui::TableGetCellBgRect(table, 0);
+        ImGui::SetCursorScreenPos(
+            ImVec2(leftCellRect.Min.x + ImGui::GetStyle().CellPadding.x,
+                   leftCellRect.Min.y + ImGui::GetStyle().CellPadding.y));
+        ImGui::PushTextWrapPos(leftCellRect.Max.x -
+                               ImGui::GetStyle().CellPadding.x);
+        ImGui::TextDisabled("Drop equipment or equipment slots here.");
+        ImGui::PopTextWrapPos();
+
+        if (ImGui::BeginDragDropTargetCustom(
+                leftCellRect, ImGui::GetID("##filtered-workbench-row-target"))) {
           if (const auto *payload =
                   ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
               payload && payload->Data != nullptr &&
@@ -518,18 +624,21 @@ void Menu::DrawVariantWorkbenchPane() {
       std::optional<DraggedEquipmentPayload> acceptedRowReorderPayload;
       int acceptedRowReorderIndex = -1;
       bool acceptedRowInsertAfter = false;
-      int hoveredRowReorderIndex = -1;
+      int hoveredVisibleReorderIndex = -1;
       bool hoveredRowInsertAfter = false;
       std::unordered_map<std::string, ImRect> widgetRects;
-      widgetRects.reserve(rows.size() * 3);
+      widgetRects.reserve(visibleRowIndices.size() * 3);
       std::vector<std::string> hoveredConflictWidgetIds;
       std::vector<float> rowTopY;
       std::vector<float> rowBottomY;
-      rowTopY.reserve(rows.size());
-      rowBottomY.reserve(rows.size());
+      rowTopY.reserve(visibleRowIndices.size());
+      rowBottomY.reserve(visibleRowIndices.size());
 
-      for (int rowIndex = 0; rowIndex < static_cast<int>(rows.size());
-           ++rowIndex) {
+      for (int visibleRowIndex = 0;
+           visibleRowIndex < static_cast<int>(visibleRowIndices.size());
+           ++visibleRowIndex) {
+        const int rowIndex =
+            visibleRowIndices[static_cast<std::size_t>(visibleRowIndex)];
         const auto overrideCount =
             rows[static_cast<std::size_t>(rowIndex)].overrides.size();
         const auto widgetHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
@@ -753,7 +862,7 @@ void Menu::DrawVariantWorkbenchPane() {
 
           if (reorderPreviewActive &&
               ImGui::IsMouseHoveringRect(leftCellRect.Min, leftCellRect.Max)) {
-            hoveredRowReorderIndex = rowIndex;
+            hoveredVisibleReorderIndex = visibleRowIndex;
             hoveredRowInsertAfter = insertAfter;
             insertionLineX1 = table->OuterRect.Min.x + 2.0f;
             insertionLineX2 = table->OuterRect.Max.x - 2.0f;
@@ -932,13 +1041,13 @@ void Menu::DrawVariantWorkbenchPane() {
         }
       }
 
-      if (hoveredRowReorderIndex >= 0 &&
-          hoveredRowReorderIndex < static_cast<int>(rowTopY.size()) &&
-          hoveredRowReorderIndex < static_cast<int>(rowBottomY.size())) {
+      if (hoveredVisibleReorderIndex >= 0 &&
+          hoveredVisibleReorderIndex < static_cast<int>(rowTopY.size()) &&
+          hoveredVisibleReorderIndex < static_cast<int>(rowBottomY.size())) {
         insertionLineY =
             hoveredRowInsertAfter
-                ? rowBottomY[static_cast<std::size_t>(hoveredRowReorderIndex)]
-                : rowTopY[static_cast<std::size_t>(hoveredRowReorderIndex)];
+                ? rowBottomY[static_cast<std::size_t>(hoveredVisibleReorderIndex)]
+                : rowTopY[static_cast<std::size_t>(hoveredVisibleReorderIndex)];
       }
 
       if (reorderPreviewActive && insertionLineY >= 0.0f &&

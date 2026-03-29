@@ -268,9 +268,11 @@ bool DeserializeRowSource(const nlohmann::json &a_serializedRow,
 
 namespace sosr::workbench {
 bool VariantWorkbench::ApplyCatalogPreview(
-    std::string_view a_selectionKey, const std::vector<RE::FormID> &a_formIDs) {
+    std::string_view a_selectionKey, const std::vector<RE::FormID> &a_formIDs,
+    RE::Actor *a_actor,
+    const std::vector<int> *a_candidateRowIndices) {
   std::vector<PlannedCatalogAssignment> assignments;
-  if (!PlanCatalogAssignments(a_formIDs, assignments)) {
+  if (!PlanCatalogAssignments(a_formIDs, assignments, a_candidateRowIndices)) {
     ClearPreview();
     return false;
   }
@@ -333,11 +335,6 @@ bool VariantWorkbench::ApplyCatalogPreview(
     return false;
   }
 
-  if (previewSelectionKey_ == a_selectionKey &&
-      previewDavVariants_ == desiredPreviewVariants) {
-    return true;
-  }
-
   auto *dav = GetDynamicArmorVariantsExtendedClient();
   if (!(dav = sosr::integrations::DynamicArmorVariantsExtendedClient::
             GetReady())) {
@@ -345,10 +342,18 @@ bool VariantWorkbench::ApplyCatalogPreview(
     return false;
   }
 
-  auto *player = RE::PlayerCharacter::GetSingleton();
-  if (!player) {
+  if (!a_actor) {
+    a_actor = RE::PlayerCharacter::GetSingleton();
+  }
+  if (!a_actor) {
     ClearPreview();
     return false;
+  }
+
+  if (previewSelectionKey_ == a_selectionKey &&
+      previewActorFormID_ == a_actor->GetFormID() &&
+      previewDavVariants_ == desiredPreviewVariants) {
+    return true;
   }
 
   ClearPreview();
@@ -359,19 +364,19 @@ bool VariantWorkbench::ApplyCatalogPreview(
     if (!dav->RegisterVariantJson(variantName.c_str(), variantJson.c_str())) {
       logger::warn("Failed to register SOSR preview variant {}", variantName);
       for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
-        dav->RemoveVariantOverride(player, appliedVariantName.c_str());
+        dav->RemoveVariantOverride(a_actor, appliedVariantName.c_str());
         dav->DeleteVariant(appliedVariantName.c_str());
       }
       ClearPreview();
       return false;
     }
 
-    if (!dav->ApplyVariantOverride(player, variantName.c_str(), true)) {
+    if (!dav->ApplyVariantOverride(a_actor, variantName.c_str(), true)) {
       logger::warn("Failed to apply SOSR preview variant override {}",
                    variantName);
       dav->DeleteVariant(variantName.c_str());
       for (const auto &[appliedVariantName, _] : appliedPreviewVariants) {
-        dav->RemoveVariantOverride(player, appliedVariantName.c_str());
+        dav->RemoveVariantOverride(a_actor, appliedVariantName.c_str());
         dav->DeleteVariant(appliedVariantName.c_str());
       }
       ClearPreview();
@@ -382,6 +387,7 @@ bool VariantWorkbench::ApplyCatalogPreview(
   }
 
   previewSelectionKey_ = a_selectionKey;
+  previewActorFormID_ = a_actor->GetFormID();
   previewDavVariants_ = std::move(desiredPreviewVariants);
   return true;
 }
@@ -392,13 +398,15 @@ void VariantWorkbench::ClearPreview() {
   }
 
   auto *dav = GetDynamicArmorVariantsExtendedClient();
-  auto *player = RE::PlayerCharacter::GetSingleton();
+  auto *actor = previewActorFormID_ != 0
+                    ? RE::TESForm::LookupByID<RE::Actor>(previewActorFormID_)
+                    : RE::PlayerCharacter::GetSingleton();
   bool variantsChanged = false;
 
   if (dav) {
-    if (player) {
+    if (actor) {
       for (const auto &[variantName, _] : previewDavVariants_) {
-        if (!dav->RemoveVariantOverride(player, variantName.c_str())) {
+        if (!dav->RemoveVariantOverride(actor, variantName.c_str())) {
           logger::warn("Failed to remove SOSR preview variant override {}",
                        variantName);
         }
@@ -411,12 +419,13 @@ void VariantWorkbench::ClearPreview() {
         variantsChanged = true;
       }
     }
-    if (variantsChanged && player) {
-      dav->RefreshActor(player);
+    if (variantsChanged && actor) {
+      dav->RefreshActor(actor);
     }
   }
 
   previewSelectionKey_.clear();
+  previewActorFormID_ = 0;
   previewDavVariants_.clear();
 }
 

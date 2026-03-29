@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <unordered_set>
 
 namespace sosr::workbench {
@@ -47,6 +48,15 @@ std::optional<std::string> GetDefaultRowConditionId() {
 void UpdateRowIdentity(VariantWorkbenchRow &a_row) {
   a_row.key = BuildRowKey(a_row.sourceKey, a_row.conditionId);
   a_row.equipped.key = a_row.key;
+}
+
+std::optional<std::string>
+ResolveNewRowConditionId(std::optional<std::string> a_conditionId) {
+  if (a_conditionId.has_value()) {
+    return a_conditionId;
+  }
+
+  return GetDefaultRowConditionId();
 }
 
 int ScorePreferredTargetSlots(
@@ -187,15 +197,15 @@ void VariantWorkbench::RebuildRowOrder() {
 
 int VariantWorkbench::FindBestCatalogTargetRowIndex(
     const EquipmentWidgetItem &a_item, bool a_requireAcceptable,
-    const std::vector<PlannedCatalogAssignment> *a_pendingAssignments) const {
+    const std::vector<PlannedCatalogAssignment> *a_pendingAssignments,
+    const std::vector<int> *a_candidateRowIndices) const {
   int fallbackRowIndex = -1;
   int bestPrecedenceRowIndex = -1;
   int bestPrecedenceScore = -1;
-  for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size());
-       ++rowIndex) {
+  const auto visitRow = [&](const int rowIndex) -> bool {
     const auto &row = rows_[static_cast<std::size_t>(rowIndex)];
     if (!row.isEquipped) {
-      continue;
+      return false;
     }
 
     if (a_requireAcceptable &&
@@ -203,11 +213,14 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
           !CanAcceptOverrideWithPendingAssignments(rowIndex, a_item,
                                                    *a_pendingAssignments)) ||
          (!a_pendingAssignments && !CanAcceptOverride(rowIndex, a_item)))) {
-      continue;
+      return false;
     }
 
     if ((row.equipped.slotMask & a_item.slotMask) != 0) {
-      return rowIndex;
+      fallbackRowIndex = rowIndex;
+      bestPrecedenceRowIndex = rowIndex;
+      bestPrecedenceScore = (std::numeric_limits<int>::max)();
+      return true;
     }
 
     if (fallbackRowIndex < 0) {
@@ -220,6 +233,26 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
       bestPrecedenceScore = precedenceScore;
       bestPrecedenceRowIndex = rowIndex;
     }
+    return false;
+  };
+
+  if (a_candidateRowIndices != nullptr) {
+    for (const auto rowIndex : *a_candidateRowIndices) {
+      if (rowIndex < 0 || rowIndex >= static_cast<int>(rows_.size())) {
+        continue;
+      }
+
+      if (visitRow(rowIndex)) {
+        return rowIndex;
+      }
+    }
+  } else {
+    for (int rowIndex = 0; rowIndex < static_cast<int>(rows_.size());
+         ++rowIndex) {
+      if (visitRow(rowIndex)) {
+        return rowIndex;
+      }
+    }
   }
 
   if (bestPrecedenceRowIndex >= 0) {
@@ -231,12 +264,14 @@ int VariantWorkbench::FindBestCatalogTargetRowIndex(
 
 int VariantWorkbench::FindBestCatalogTargetRowIndex(
     const EquipmentWidgetItem &a_item, bool a_requireAcceptable) const {
-  return FindBestCatalogTargetRowIndex(a_item, a_requireAcceptable, nullptr);
+  return FindBestCatalogTargetRowIndex(a_item, a_requireAcceptable, nullptr,
+                                       nullptr);
 }
 
 bool VariantWorkbench::PlanCatalogAssignments(
     const std::vector<RE::FormID> &a_formIDs,
-    std::vector<PlannedCatalogAssignment> &a_assignments) const {
+    std::vector<PlannedCatalogAssignment> &a_assignments,
+    const std::vector<int> *a_candidateRowIndices) const {
   a_assignments.clear();
 
   std::vector<const RE::TESObjectARMO *> armors;
@@ -251,7 +286,8 @@ bool VariantWorkbench::PlanCatalogAssignments(
     }
 
     const auto rowIndex =
-        FindBestCatalogTargetRowIndex(item, true, &a_assignments);
+        FindBestCatalogTargetRowIndex(item, true, &a_assignments,
+                                      a_candidateRowIndices);
     if (rowIndex < 0) {
       continue;
     }
@@ -262,14 +298,17 @@ bool VariantWorkbench::PlanCatalogAssignments(
   return !a_assignments.empty();
 }
 
-void VariantWorkbench::SyncRowsFromPlayer() {
-  auto *player = RE::PlayerCharacter::GetSingleton();
-  if (!player) {
+void VariantWorkbench::SyncRowsFromActor(
+    RE::Actor *a_actor, std::optional<std::string> a_newRowConditionId) {
+  if (!a_actor) {
     for (auto &row : rows_) {
       row.isEquipped = false;
     }
     return;
   }
+
+  const auto syncConditionId =
+      ResolveNewRowConditionId(std::move(a_newRowConditionId));
 
   for (auto &row : rows_) {
     row.isEquipped = false;
@@ -313,7 +352,7 @@ void VariantWorkbench::SyncRowsFromPlayer() {
         RE::BGSBipedObjectForm::BipedObjectSlot::kModArmRight,
         RE::BGSBipedObjectForm::BipedObjectSlot::kModMisc2,
         RE::BGSBipedObjectForm::BipedObjectSlot::kFX01}) {
-    auto *armor = player->GetWornArmor(slot);
+    auto *armor = a_actor->GetWornArmor(slot);
     if (!armor) {
       continue;
     }
@@ -331,7 +370,7 @@ void VariantWorkbench::SyncRowsFromPlayer() {
     occupiedSlotMask |= addonSlotMask != 0 ? addonSlotMask : equipped.slotMask;
 
     const auto sourceKey = BuildArmorSourceKey(formID);
-    bool hasDefaultConditionRow = false;
+    bool hasSyncConditionRow = false;
     for (auto &row : rows_) {
       if (row.sourceKey != sourceKey) {
         continue;
@@ -340,15 +379,15 @@ void VariantWorkbench::SyncRowsFromPlayer() {
       row.equipped = equipped;
       row.isEquipped = true;
       UpdateRowIdentity(row);
-      hasDefaultConditionRow |= row.conditionId == GetDefaultRowConditionId();
+      hasSyncConditionRow |= row.conditionId == syncConditionId;
     }
-    if (hasDefaultConditionRow) {
+    if (hasSyncConditionRow) {
       continue;
     }
 
     VariantWorkbenchRow row{};
     row.sourceKey = sourceKey;
-    row.conditionId = GetDefaultRowConditionId();
+    row.conditionId = syncConditionId;
     row.equipped = std::move(equipped);
     row.isEquipped = true;
     UpdateRowIdentity(row);
@@ -370,6 +409,10 @@ void VariantWorkbench::SyncRowsFromPlayer() {
       row.isEquipped = (row.equipped.slotMask & occupiedSlotMask) != 0;
     }
   }
+}
+
+void VariantWorkbench::SyncRowsFromPlayer() {
+  SyncRowsFromActor(RE::PlayerCharacter::GetSingleton());
 }
 
 bool VariantWorkbench::BuildCatalogItem(RE::FormID a_formID,
@@ -464,9 +507,10 @@ bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
 }
 
 bool VariantWorkbench::AddCatalogSelectionToWorkbench(
-    const std::vector<RE::FormID> &a_formIDs) {
+    const std::vector<RE::FormID> &a_formIDs,
+    const std::vector<int> *a_candidateRowIndices) {
   std::vector<PlannedCatalogAssignment> assignments;
-  if (!PlanCatalogAssignments(a_formIDs, assignments)) {
+  if (!PlanCatalogAssignments(a_formIDs, assignments, a_candidateRowIndices)) {
     return false;
   }
 
@@ -479,9 +523,10 @@ bool VariantWorkbench::AddCatalogSelectionToWorkbench(
 }
 
 bool VariantWorkbench::ReplaceCatalogSelectionInWorkbench(
-    const std::vector<RE::FormID> &a_formIDs) {
+    const std::vector<RE::FormID> &a_formIDs,
+    const std::vector<int> *a_candidateRowIndices) {
   std::vector<PlannedCatalogAssignment> assignments;
-  if (!PlanCatalogAssignments(a_formIDs, assignments)) {
+  if (!PlanCatalogAssignments(a_formIDs, assignments, a_candidateRowIndices)) {
     return false;
   }
 
@@ -505,8 +550,9 @@ bool VariantWorkbench::ReplaceCatalogSelectionInWorkbench(
 }
 
 bool VariantWorkbench::AddCatalogSelectionAsRows(
-    const std::vector<RE::FormID> &a_formIDs) {
-  auto newRows = BuildCatalogRows(a_formIDs);
+    const std::vector<RE::FormID> &a_formIDs,
+    std::optional<std::string> a_conditionId) {
+  auto newRows = BuildCatalogRows(a_formIDs, std::move(a_conditionId));
   bool addedAny = false;
   for (auto &row : newRows) {
     rowOrder_.push_back(row.key);
@@ -517,8 +563,9 @@ bool VariantWorkbench::AddCatalogSelectionAsRows(
   return addedAny;
 }
 
-bool VariantWorkbench::AddSlotRow(const std::uint64_t a_slotMask) {
-  auto row = BuildSlotRow(a_slotMask);
+bool VariantWorkbench::AddSlotRow(const std::uint64_t a_slotMask,
+                                  std::optional<std::string> a_conditionId) {
+  auto row = BuildSlotRow(a_slotMask, std::move(a_conditionId));
   if (!row) {
     return false;
   }
@@ -529,8 +576,11 @@ bool VariantWorkbench::AddSlotRow(const std::uint64_t a_slotMask) {
 }
 
 std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
-    const std::vector<RE::FormID> &a_formIDs) const {
+    const std::vector<RE::FormID> &a_formIDs,
+    std::optional<std::string> a_conditionId) const {
   std::vector<VariantWorkbenchRow> newRows;
+  const auto resolvedConditionId =
+      ResolveNewRowConditionId(std::move(a_conditionId));
 
   std::vector<const RE::TESObjectARMO *> armors;
   if (!ResolveCatalogArmors(a_formIDs, armors)) {
@@ -548,7 +598,7 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
     }
 
     const auto sourceKey = BuildArmorSourceKey(armor->GetFormID());
-    const auto rowKey = BuildRowKey(sourceKey, GetDefaultRowConditionId());
+    const auto rowKey = BuildRowKey(sourceKey, resolvedConditionId);
     if (!seenRowKeys.insert(rowKey).second) {
       continue;
     }
@@ -560,7 +610,7 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
 
     VariantWorkbenchRow row{};
     row.sourceKey = sourceKey;
-    row.conditionId = GetDefaultRowConditionId();
+    row.conditionId = resolvedConditionId;
     row.equipped = std::move(equipped);
     UpdateRowIdentity(row);
     newRows.push_back(std::move(row));
@@ -570,13 +620,16 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
 }
 
 std::optional<VariantWorkbenchRow>
-VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask) const {
+VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask,
+                               std::optional<std::string> a_conditionId) const {
   const auto sourceKey = BuildSlotKey(a_slotMask);
   if (sourceKey.empty()) {
     return std::nullopt;
   }
 
-  const auto rowKey = BuildRowKey(sourceKey, GetDefaultRowConditionId());
+  const auto resolvedConditionId =
+      ResolveNewRowConditionId(std::move(a_conditionId));
+  const auto rowKey = BuildRowKey(sourceKey, resolvedConditionId);
   if (std::ranges::find(rows_, rowKey, &VariantWorkbenchRow::key) !=
       rows_.end()) {
     return std::nullopt;
@@ -589,7 +642,7 @@ VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask) const {
 
   VariantWorkbenchRow row{};
   row.sourceKey = sourceKey;
-  row.conditionId = GetDefaultRowConditionId();
+  row.conditionId = resolvedConditionId;
   row.equipped = std::move(slotItem);
   UpdateRowIdentity(row);
   return row;
@@ -742,13 +795,16 @@ VariantWorkbench::CollectOverrideArmorFormIDsFromEquippedRows() const {
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
                                         int a_targetRowIndex,
-                                        bool a_insertAfter) {
+                                        bool a_insertAfter,
+                                        std::optional<std::string> a_conditionId) {
   if (a_targetRowIndex < 0 ||
       a_targetRowIndex >= static_cast<int>(rows_.size())) {
     return false;
   }
 
-  auto newRows = BuildCatalogRows(std::vector<RE::FormID>{a_formID});
+  auto newRows =
+      BuildCatalogRows(std::vector<RE::FormID>{a_formID},
+                       std::move(a_conditionId));
   if (newRows.empty()) {
     return false;
   }
@@ -762,13 +818,14 @@ bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
 }
 
 bool VariantWorkbench::InsertSlotRow(const std::uint64_t a_slotMask,
-                                     int a_targetRowIndex, bool a_insertAfter) {
+                                     int a_targetRowIndex, bool a_insertAfter,
+                                     std::optional<std::string> a_conditionId) {
   if (a_targetRowIndex < 0 ||
       a_targetRowIndex >= static_cast<int>(rows_.size())) {
     return false;
   }
 
-  auto row = BuildSlotRow(a_slotMask);
+  auto row = BuildSlotRow(a_slotMask, std::move(a_conditionId));
   if (!row) {
     return false;
   }

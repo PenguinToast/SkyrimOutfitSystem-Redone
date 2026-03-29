@@ -166,7 +166,8 @@ bool Menu::DrawSlotTab() {
         ImGui::PopStyleColor(3);
         if (ImGui::BeginPopupContextItem()) {
           if (ImGui::MenuItem("Add to Workbench")) {
-            workbench_.AddSlotRow(row.slotItem.slotMask);
+            workbench_.AddSlotRow(row.slotItem.slotMask,
+                                  ResolveNewWorkbenchRowConditionId());
           }
           ImGui::EndPopup();
         }
@@ -199,7 +200,8 @@ bool Menu::DrawSlotTab() {
              ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
             widgetResult.doubleClicked) {
           rowClicked = true;
-          workbench_.AddSlotRow(row.slotItem.slotMask);
+          workbench_.AddSlotRow(row.slotItem.slotMask,
+                                ResolveNewWorkbenchRowConditionId());
         }
 
         ImGui::TableSetColumnIndex(1);

@@ -72,10 +72,13 @@ int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
 namespace sosr {
 void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry,
                                   const bool a_replaceExisting) {
+  const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
   if (a_replaceExisting) {
-    workbench_.ReplaceCatalogSelectionInWorkbench(a_entry.armorFormIDs);
+    workbench_.ReplaceCatalogSelectionInWorkbench(a_entry.armorFormIDs,
+                                                  &visibleRowIndices);
   } else {
-    workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs);
+    workbench_.AddCatalogSelectionToWorkbench(a_entry.armorFormIDs,
+                                              &visibleRowIndices);
   }
 }
 
@@ -239,7 +242,10 @@ bool Menu::DeletePendingKit() {
 }
 
 void Menu::PreviewKitEntry(const KitEntry &a_entry) {
-  workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs);
+  const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
+  workbench_.ApplyCatalogPreview(a_entry.id, a_entry.armorFormIDs,
+                                 ResolveWorkbenchPreviewActor(),
+                                 &visibleRowIndices);
 }
 
 void Menu::DrawCreateKitDialog() {

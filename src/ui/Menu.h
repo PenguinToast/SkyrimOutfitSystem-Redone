@@ -106,6 +106,7 @@ private:
   enum class CatalogRefreshMode : std::uint8_t { Full, KitsOnly };
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
+  enum class WorkbenchFilterKind : std::uint8_t { All, ActorRef, Condition };
 
   struct ConditionEditorState {
     int windowSlot{0};
@@ -115,6 +116,19 @@ private:
     bool isNew{false};
     bool open{true};
     bool focusOnNextDraw{false};
+  };
+
+  struct WorkbenchFilterState {
+    WorkbenchFilterKind kind{WorkbenchFilterKind::All};
+    RE::FormID actorFormID{0};
+    std::string conditionId;
+  };
+
+  struct WorkbenchFilterOption {
+    std::string label;
+    WorkbenchFilterKind kind{WorkbenchFilterKind::All};
+    RE::FormID actorFormID{0};
+    std::string conditionId;
   };
 
   Menu() = default;
@@ -193,6 +207,18 @@ private:
   void PreviewGearEntry(const GearEntry &a_entry);
   void PreviewOutfitEntry(const OutfitEntry &a_entry);
   void PreviewKitEntry(const KitEntry &a_entry);
+  void SyncWorkbenchRowsForCurrentFilter();
+  void ValidateWorkbenchFilterSelection();
+  [[nodiscard]] std::vector<int> BuildVisibleWorkbenchRowIndices();
+  [[nodiscard]] bool
+  MatchesWorkbenchFilter(const workbench::VariantWorkbenchRow &a_row);
+  void BuildWorkbenchFilterOptions(
+      std::vector<WorkbenchFilterOption> &a_options,
+      std::vector<std::string> &a_labels);
+  [[nodiscard]] std::optional<std::string>
+  ResolveFirstConditionForActorFilter(RE::FormID a_actorFormID);
+  [[nodiscard]] std::optional<std::string> ResolveNewWorkbenchRowConditionId();
+  [[nodiscard]] RE::Actor *ResolveWorkbenchPreviewActor();
   void EnsureDefaultConditions();
   [[nodiscard]] int AllocateConditionEditorWindowSlot() const;
   void OpenNewConditionDialog();
@@ -222,6 +248,7 @@ private:
   int outfitPluginIndex_{0};
   int kitCollectionIndex_{0};
   std::vector<bool> selectedSlotFilters_;
+  WorkbenchFilterState workbenchFilter_;
   int focusedConditionEditorWindowSlot_{0};
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
