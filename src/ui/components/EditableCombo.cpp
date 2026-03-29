@@ -183,10 +183,11 @@ bool DrawSearchableStringCombo(const char *a_label, const char *a_allLabel,
   options.emplace_back(a_allLabel);
   options.insert(options.end(), a_options.begin(), a_options.end());
 
+  const std::string fallbackSelection = preview;
   std::string selectedOption;
   const bool changed = DrawEditableDropdown(
       a_label, preview, a_filter.InputBuf, IM_ARRAYSIZE(a_filter.InputBuf),
-      options, width, &selectedOption, false);
+      options, width, &selectedOption, false, &fallbackSelection);
 
   if (!selectedOption.empty()) {
     std::snprintf(a_filter.InputBuf, IM_ARRAYSIZE(a_filter.InputBuf), "%s",
@@ -217,7 +218,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
                           char *a_buffer, const std::size_t a_bufferSize,
                           const std::vector<std::string> &a_options,
                           const float a_width, std::string *a_selectedOption,
-                          const bool a_allowCustomInput) {
+                          const bool a_allowCustomInput,
+                          const std::string *a_fallbackSelection) {
   bool changed = false;
   const bool acceptAutocompleteOnEnter = !a_allowCustomInput;
   const auto popupId = std::string(a_label) + "##popup";
@@ -480,8 +482,11 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         std::ranges::find_if(a_options, [&](const std::string &option) {
           return EqualsCaseInsensitive(option, a_buffer);
         });
-    if (exactMatch == a_options.end()) {
-      if (a_selectedOption) {
+    if (exactMatch == a_options.end() && !inputTextActive && !dropdownOpen) {
+      if (a_fallbackSelection && !a_fallbackSelection->empty()) {
+        std::snprintf(a_buffer, a_bufferSize, "%s",
+                      a_fallbackSelection->c_str());
+      } else if (a_selectedOption && !a_selectedOption->empty()) {
         std::snprintf(a_buffer, a_bufferSize, "%s", a_selectedOption->c_str());
       } else if (const auto *topOption =
                      FindTopAutocompleteOption(a_options, a_buffer);
@@ -504,10 +509,12 @@ bool DrawSearchableDropdown(const char *a_label, const char *a_hint,
                             const float a_width) {
   char buffer[128];
   std::snprintf(buffer, sizeof(buffer), "%s", a_value.c_str());
-  std::string selectedOption = a_value;
+  const std::string fallbackSelection = a_value;
+  std::string selectedOption;
   const bool changed =
       DrawEditableDropdown(a_label, a_hint, buffer, sizeof(buffer), a_options,
-                           a_width, &selectedOption, false);
+                           a_width, &selectedOption, false,
+                           &fallbackSelection);
   a_value = selectedOption.empty() ? buffer : selectedOption;
   return changed;
 }

@@ -16,7 +16,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
                           const std::vector<std::string> &a_options,
                           float a_width,
                           std::string *a_selectedOption = nullptr,
-                          bool a_allowCustomInput = true);
+                          bool a_allowCustomInput = true,
+                          const std::string *a_fallbackSelection = nullptr);
 
 bool DrawSearchableDropdown(const char *a_label, const char *a_hint,
                             std::string &a_value,
