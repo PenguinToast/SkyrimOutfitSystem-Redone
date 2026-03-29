@@ -153,8 +153,7 @@ RowConditionVisualState ResolveRowConditionVisualState(
   RowConditionVisualState state;
   if (!a_row.conditionId.has_value()) {
     state.name = "Disabled";
-    state.description =
-        "This row has no condition and will not be sent to DAVE.";
+    state.description = "This row has no condition and will not apply.";
     state.disabled = true;
     return state;
   }
@@ -169,8 +168,8 @@ RowConditionVisualState ResolveRowConditionVisualState(
   }
 
   state.name = "Missing Condition";
-  state.description = "The referenced condition no longer exists. This row "
-                      "will not be sent to DAVE.";
+  state.description =
+      "The referenced condition no longer exists. This row will not apply.";
   state.disabled = true;
   state.missing = true;
   return state;
@@ -607,8 +606,10 @@ void Menu::DrawVariantWorkbenchPane() {
                          }
                          ImGui::TextUnformatted(conditionState.name.c_str());
                          if (!conditionState.description.empty()) {
+                           ImGui::PushTextWrapPos(0.0f);
                            ImGui::TextDisabled(
                                "%s", conditionState.description.c_str());
+                           ImGui::PopTextWrapPos();
                          }
 
                          const auto conflictIt = rowConflicts.find(row.key);
@@ -670,8 +671,10 @@ void Menu::DrawVariantWorkbenchPane() {
                          }
                          ImGui::TextUnformatted(conditionState.name.c_str());
                          if (!conditionState.description.empty()) {
+                           ImGui::PushTextWrapPos(0.0f);
                            ImGui::TextDisabled(
                                "%s", conditionState.description.c_str());
+                           ImGui::PopTextWrapPos();
                          }
                        }}});
         if (!equippedWidget.deleteHovered && ImGui::BeginDragDropSource()) {

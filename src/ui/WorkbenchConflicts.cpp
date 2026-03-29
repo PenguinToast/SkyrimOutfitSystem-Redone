@@ -7,6 +7,7 @@ struct ActiveWorkbenchVisual {
   std::string widgetId;
   std::string primaryName;
   std::string secondaryName;
+  std::string conditionId;
   bool isOverride{false};
   std::string slotText;
   std::uint64_t slotMask{0};
@@ -22,7 +23,8 @@ bool HasVariantSelectionConflictSource(
 bool IsVariantSelectionConflictPair(
     const sosr::workbench::VariantWorkbenchRow &a_left,
     const sosr::workbench::VariantWorkbenchRow &a_right) {
-  return a_left.IsSlotRow() || a_right.IsSlotRow();
+  return a_left.conditionId == a_right.conditionId &&
+         (a_left.IsSlotRow() || a_right.IsSlotRow());
 }
 
 std::string
@@ -103,6 +105,7 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
                          std::to_string(overrideIndex),
              .primaryName = item.name,
              .secondaryName = row.equipped.name,
+             .conditionId = *row.conditionId,
              .isOverride = true,
              .slotText = item.slotText,
              .slotMask = row.GetOverrideVisualSlotMask(item),
@@ -111,6 +114,7 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
     } else if (!row.IsSlotRow() && !row.hideEquipped && row.isEquipped) {
       activeVisuals.push_back({.widgetId = row.key,
                                .primaryName = row.equipped.name,
+                               .conditionId = *row.conditionId,
                                .slotText = row.equipped.slotText,
                                .slotMask = row.equipped.slotMask,
                                .rowIndex = rowIndex});
@@ -133,6 +137,7 @@ BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows) {
       OverrideConflictInfo info{};
       for (const auto &activeVisual : activeVisuals) {
         if (activeVisual.rowIndex == rowIndex ||
+            activeVisual.conditionId != *row.conditionId ||
             (activeVisual.slotMask & affectedSlotMask) == 0) {
           continue;
         }
