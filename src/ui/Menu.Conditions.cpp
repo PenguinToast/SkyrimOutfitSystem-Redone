@@ -1,6 +1,7 @@
 #include "Menu.h"
 
 #include "ConditionMaterializer.h"
+#include "conditions/Defaults.h"
 #include "RE/C/CommandTable.h"
 #include "imgui_internal.h"
 #include "ui/ConditionFunctionMetadata.h"
@@ -22,11 +23,11 @@
 namespace sosr {
 namespace {
 using ConditionClause = ui::conditions::Clause;
+using ConditionColor = ui::conditions::Color;
 using ConditionComparator = ui::conditions::Comparator;
 using ConditionConnective = ui::conditions::Connective;
 using ConditionDefinition = ui::conditions::Definition;
 
-constexpr ImVec4 kDefaultConditionColor{0.55f, 0.55f, 0.55f, 1.0f};
 constexpr char kIconTrash[] = "\xee\x86\x8c";        // ICON_LC_TRASH
 constexpr char kIconGripVertical[] = "\xee\x83\xae"; // ICON_LC_GRIP_VERTICAL
 constexpr char kConditionClausePayloadType[] = "SVS_CONDITION_CLAUSE";
@@ -227,27 +228,8 @@ const char *ConnectiveLabel(const ConditionConnective a_connective) {
   return a_connective == ConditionConnective::Or ? "OR" : "AND";
 }
 
-ConditionClause BuildDefaultPlayerClause() {
-  ConditionClause clause;
-  clause.functionName = "GetIsReference";
-  clause.arguments[0] = "Player";
-  clause.comparator = ConditionComparator::Equal;
-  clause.comparand = "1";
-  clause.connectiveToNext = ConditionConnective::And;
-  return clause;
-}
-
-ConditionDefinition BuildDefaultPlayerCondition() {
-  ConditionDefinition definition;
-  definition.id = std::string(ui::conditions::kDefaultConditionId);
-  definition.name = "Player";
-  definition.description = "Applies to Player";
-  definition.color = kDefaultConditionColor;
-  definition.clauses.push_back(BuildDefaultPlayerClause());
-  return definition;
-}
-
-float ComputeColorDistanceSq(const ImVec4 &a_left, const ImVec4 &a_right) {
+float ComputeColorDistanceSq(const ConditionColor &a_left,
+                            const ConditionColor &a_right) {
   const auto dr = a_left.x - a_right.x;
   const auto dg = a_left.y - a_right.y;
   const auto db = a_left.z - a_right.z;
@@ -255,15 +237,20 @@ float ComputeColorDistanceSq(const ImVec4 &a_left, const ImVec4 &a_right) {
 }
 
 template <class Range>
-ImVec4 PickDistinctConditionColor(const Range &a_existingColors) {
-  static const std::array<ImVec4, 10> kPalette{
-      ImVec4{0.86f, 0.25f, 0.28f, 1.0f}, ImVec4{0.17f, 0.62f, 0.32f, 1.0f},
-      ImVec4{0.19f, 0.48f, 0.85f, 1.0f}, ImVec4{0.86f, 0.58f, 0.16f, 1.0f},
-      ImVec4{0.55f, 0.30f, 0.86f, 1.0f}, ImVec4{0.10f, 0.67f, 0.67f, 1.0f},
-      ImVec4{0.84f, 0.35f, 0.63f, 1.0f}, ImVec4{0.61f, 0.50f, 0.18f, 1.0f},
-      ImVec4{0.24f, 0.71f, 0.86f, 1.0f}, ImVec4{0.93f, 0.40f, 0.13f, 1.0f}};
+ConditionColor PickDistinctConditionColor(const Range &a_existingColors) {
+  static const std::array<ConditionColor, 10> kPalette{
+      ConditionColor{0.86f, 0.25f, 0.28f, 1.0f},
+      ConditionColor{0.17f, 0.62f, 0.32f, 1.0f},
+      ConditionColor{0.19f, 0.48f, 0.85f, 1.0f},
+      ConditionColor{0.86f, 0.58f, 0.16f, 1.0f},
+      ConditionColor{0.55f, 0.30f, 0.86f, 1.0f},
+      ConditionColor{0.10f, 0.67f, 0.67f, 1.0f},
+      ConditionColor{0.84f, 0.35f, 0.63f, 1.0f},
+      ConditionColor{0.61f, 0.50f, 0.18f, 1.0f},
+      ConditionColor{0.24f, 0.71f, 0.86f, 1.0f},
+      ConditionColor{0.93f, 0.40f, 0.13f, 1.0f}};
 
-  auto scoreColor = [&](const ImVec4 &a_candidate) {
+  auto scoreColor = [&](const ConditionColor &a_candidate) {
     float minDistanceSq = FLT_MAX;
     bool hasExisting = false;
     for (const auto &existing : a_existingColors) {
@@ -274,7 +261,7 @@ ImVec4 PickDistinctConditionColor(const Range &a_existingColors) {
     return hasExisting ? minDistanceSq : FLT_MAX;
   };
 
-  ImVec4 bestColor = kPalette.front();
+  ConditionColor bestColor = kPalette.front();
   float bestScore = -1.0f;
   for (const auto &candidate : kPalette) {
     const float score = scoreColor(candidate);
@@ -289,7 +276,7 @@ ImVec4 PickDistinctConditionColor(const Range &a_existingColors) {
     float g = 0.0f;
     float b = 0.0f;
     ImGui::ColorConvertHSVtoRGB(index / 24.0f, 0.70f, 0.88f, r, g, b);
-    const ImVec4 candidate(r, g, b, 1.0f);
+    const ConditionColor candidate{r, g, b, 1.0f};
     const float score = scoreColor(candidate);
     if (score > bestScore) {
       bestScore = score;
@@ -321,16 +308,12 @@ std::string BuildSuggestedConditionName(
 }
 
 ConditionDefinition BuildNewConditionTemplate(const std::string &a_name,
-                                              const ImVec4 &a_color) {
+                                              const ConditionColor &a_color) {
   ConditionDefinition definition;
   definition.name = a_name;
   definition.color = a_color;
-  definition.clauses.push_back(BuildDefaultPlayerClause());
+  definition.clauses.push_back(conditions::BuildDefaultPlayerClause());
   return definition;
-}
-
-std::string BuildConditionId(const int a_nextConditionId) {
-  return "condition-" + std::to_string((std::max)(a_nextConditionId, 1));
 }
 
 std::string BuildSectionEntry(std::string_view a_label) {
@@ -792,10 +775,10 @@ void DrawClauseHeaderCell(const char *a_id, const char *a_label,
   DrawHoverDescription(a_id, a_tooltip);
 }
 
-void DrawConditionColorSwatch(const char *a_id, const ImVec4 &a_color,
+void DrawConditionColorSwatch(const char *a_id, const ConditionColor &a_color,
                               const std::string_view a_tooltip) {
   ImGui::ColorButton(
-      a_id, a_color,
+      a_id, ui::conditions::ToImGuiColor(a_color),
       ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop |
           ImGuiColorEditFlags_NoBorder,
       ImVec2(ImGui::GetFrameHeight() - 2.0f, ImGui::GetFrameHeight() - 2.0f));
@@ -916,7 +899,7 @@ void Menu::EnsureDefaultConditions() {
     return;
   }
 
-  conditions_.push_back(BuildDefaultPlayerCondition());
+  conditions_.push_back(conditions::BuildDefaultPlayerCondition());
   nextConditionId_ = 2;
   sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
   sosr::conditions::InvalidateConditionMaterializationCaches(conditions_);
@@ -935,7 +918,7 @@ int Menu::AllocateConditionEditorWindowSlot() const {
 }
 
 void Menu::OpenNewConditionDialog() {
-  std::vector<ImVec4> existingColors;
+  std::vector<ConditionColor> existingColors;
   existingColors.reserve(conditions_.size() + conditionEditors_.size());
   for (const auto &condition : conditions_) {
     existingColors.push_back(condition.color);
@@ -1107,7 +1090,7 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
   a_editor.draft.name = TrimText(a_editor.draft.name);
   a_editor.draft.color.w = 1.0f;
   if (a_editor.draft.id.empty()) {
-    a_editor.draft.id = BuildConditionId(nextConditionId_++);
+    a_editor.draft.id = conditions::BuildConditionId(nextConditionId_++);
   }
   if (a_editor.isNew) {
     conditions_.push_back(a_editor.draft);
@@ -1212,11 +1195,14 @@ bool Menu::DrawConditionTab() {
     drawList->AddRectFilled(min, max, bodyColor, rounding);
     drawList->AddRect(
         min, max,
-        ImGui::GetColorU32(ImVec4(condition.color.x, condition.color.y,
-                                  condition.color.z, 0.75f)),
+        ImGui::GetColorU32(
+            ImVec4(condition.color.x, condition.color.y, condition.color.z,
+                   0.75f)),
         rounding);
     drawList->AddRectFilled(min, ImVec2(min.x + stripeWidth, max.y),
-                            ImGui::GetColorU32(condition.color), rounding,
+                            ImGui::GetColorU32(
+                                ui::conditions::ToImGuiColor(condition.color)),
+                            rounding,
                             ImDrawFlags_RoundCornersTopLeft |
                                 ImDrawFlags_RoundCornersBottomLeft);
 
@@ -1457,12 +1443,13 @@ void Menu::DrawConditionEditorDialog() {
           "conditions:editor:description",
           "Optional description shown on the condition widget.");
 
-      ImVec4 color = editor.draft.color;
+      auto color = editor.draft.color;
       ImGui::SetNextItemWidth(
           (std::min)(260.0f, ImGui::GetContentRegionAvail().x));
       if (ImGui::ColorEdit3("##color", &color.x,
                             ImGuiColorEditFlags_DisplayRGB)) {
-        editor.draft.color = ImVec4(color.x, color.y, color.z, 1.0f);
+        color.w = 1.0f;
+        editor.draft.color = color;
       }
       DrawHoverDescription(
           "conditions:editor:color",
@@ -1883,7 +1870,7 @@ void Menu::DrawConditionEditorDialog() {
     ImGui::EndChild();
 
     if (ImGui::Button("Add Clause")) {
-      editor.draft.clauses.push_back(BuildDefaultPlayerClause());
+      editor.draft.clauses.push_back(conditions::BuildDefaultPlayerClause());
     }
     DrawHoverDescription("conditions:editor:add-clause",
                          "Append another clause to this condition.");

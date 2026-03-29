@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ConditionRefreshTargets.h"
-#include "ui/ConditionData.h"
+#include "conditions/Definition.h"
 
 #include <RE/Skyrim.h>
 
@@ -18,25 +18,22 @@ struct MaterializedCondition {
   RefreshTargets refreshTargets;
 };
 
-[[nodiscard]] const ui::conditions::Definition *
-FindDefinitionById(const std::vector<ui::conditions::Definition> &a_conditions,
+[[nodiscard]] const Definition *
+FindDefinitionById(const std::vector<Definition> &a_conditions,
                    std::string_view a_id);
 
-[[nodiscard]] ui::conditions::Definition *
-FindDefinitionById(std::vector<ui::conditions::Definition> &a_conditions,
+[[nodiscard]] Definition *
+FindDefinitionById(std::vector<Definition> &a_conditions,
                    std::string_view a_id);
 
-void RebuildConditionDependencyMetadata(
-    std::vector<ui::conditions::Definition> &a_conditions);
+void RebuildConditionDependencyMetadata(std::vector<Definition> &a_conditions);
 
 void InvalidateConditionMaterializationCaches(
-    std::vector<ui::conditions::Definition> &a_conditions);
+    std::vector<Definition> &a_conditions);
 
 void InvalidateConditionMaterializationCachesFrom(
-    std::vector<ui::conditions::Definition> &a_conditions,
-    std::string_view a_conditionId);
+    std::vector<Definition> &a_conditions, std::string_view a_conditionId);
 
 [[nodiscard]] std::optional<MaterializedCondition> MaterializeConditionById(
-    std::string_view a_conditionId,
-    std::vector<ui::conditions::Definition> &a_conditions);
+    std::string_view a_conditionId, std::vector<Definition> &a_conditions);
 } // namespace sosr::conditions

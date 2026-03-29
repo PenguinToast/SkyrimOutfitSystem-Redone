@@ -430,7 +430,7 @@ void VariantWorkbench::ClearPreview() {
 }
 
 void VariantWorkbench::SyncDynamicArmorVariantsExtended(
-    std::vector<ui::conditions::Definition> &a_conditions) {
+    std::vector<conditions::Definition> &a_conditions) {
   auto *dav =
       sosr::integrations::DynamicArmorVariantsExtendedClient::GetReady();
   if (!dav) {
@@ -634,13 +634,13 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
                                 ? std::nullopt
                                 : std::optional<std::string>(conditionId);
         } else {
-          row.conditionId = std::string(ui::conditions::kDefaultConditionId);
+          row.conditionId = std::string(conditions::kDefaultConditionId);
         }
       } else {
-        row.conditionId = std::string(ui::conditions::kDefaultConditionId);
+        row.conditionId = std::string(conditions::kDefaultConditionId);
       }
     } else {
-      row.conditionId = std::string(ui::conditions::kDefaultConditionId);
+      row.conditionId = std::string(conditions::kDefaultConditionId);
     }
     UpdateRowIdentity(row);
     row.hideEquipped = serializedRow.value("hideEquipped", false);

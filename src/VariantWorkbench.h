@@ -4,7 +4,7 @@
 #include <SKSE/SKSE.h>
 
 #include "ConditionRefreshTargets.h"
-#include "ui/ConditionData.h"
+#include "conditions/Definition.h"
 
 #include <optional>
 #include <string>
@@ -114,8 +114,8 @@ public:
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
   bool SetConditionId(int a_rowIndex, std::optional<std::string> a_conditionId);
-  void SyncDynamicArmorVariantsExtended(
-      std::vector<ui::conditions::Definition> &a_conditions);
+  void
+  SyncDynamicArmorVariantsExtended(std::vector<conditions::Definition> &a_conditions);
   void Serialize(SKSE::SerializationInterface *a_skse) const;
   void Deserialize(SKSE::SerializationInterface *a_skse);
   void Revert();

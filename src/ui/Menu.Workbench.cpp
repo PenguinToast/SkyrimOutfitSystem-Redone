@@ -162,7 +162,7 @@ RowConditionVisualState ResolveRowConditionVisualState(
   if (const auto *condition = sosr::conditions::FindDefinitionById(
           a_conditions, *a_row.conditionId);
       condition != nullptr) {
-    state.color = condition->color;
+    state.color = sosr::ui::conditions::ToImGuiColor(condition->color);
     state.name = condition->name;
     state.description = condition->description;
     return state;

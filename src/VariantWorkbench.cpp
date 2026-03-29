@@ -42,7 +42,7 @@ std::string BuildRowKey(const std::string_view a_sourceKey,
 }
 
 std::optional<std::string> GetDefaultRowConditionId() {
-  return std::string(sosr::ui::conditions::kDefaultConditionId);
+  return std::string(sosr::conditions::kDefaultConditionId);
 }
 
 void UpdateRowIdentity(VariantWorkbenchRow &a_row) {

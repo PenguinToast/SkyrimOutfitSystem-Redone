@@ -18,10 +18,10 @@
 #include <vector>
 
 namespace {
-using Clause = sosr::ui::conditions::Clause;
-using Comparator = sosr::ui::conditions::Comparator;
-using Connective = sosr::ui::conditions::Connective;
-using Definition = sosr::ui::conditions::Definition;
+using Clause = sosr::conditions::Clause;
+using Comparator = sosr::conditions::Comparator;
+using Connective = sosr::conditions::Connective;
+using Definition = sosr::conditions::Definition;
 using ParamType = RE::SCRIPT_PARAM_TYPE;
 
 struct NativeLiteral {

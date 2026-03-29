@@ -73,6 +73,7 @@ constexpr char kIconCollection[] = "\xee\x97\xbf"; // ICON_LC_FOLDER_CODE
 constexpr char kIconFile[] = "\xee\x83\x87";       // ICON_LC_FILE_CODE
 
 using ConditionComparator = sosr::ui::conditions::Comparator;
+using ConditionColor = sosr::ui::conditions::Color;
 using ConditionConnective = sosr::ui::conditions::Connective;
 
 std::string SerializeConditionComparator(const ConditionComparator a_value) {
@@ -121,13 +122,13 @@ ConditionConnective ParseConditionConnective(const std::string_view a_value) {
   return a_value == "OR" ? ConditionConnective::Or : ConditionConnective::And;
 }
 
-ImVec4 ParseConditionColor(const nlohmann::json &a_value,
-                           const ImVec4 &a_fallback) {
+ConditionColor ParseConditionColor(const nlohmann::json &a_value,
+                                   const ConditionColor &a_fallback) {
   if (!a_value.is_array() || a_value.size() < 3) {
     return a_fallback;
   }
 
-  ImVec4 color = a_fallback;
+  ConditionColor color = a_fallback;
   color.x = a_value[0].is_number() ? a_value[0].get<float>() : color.x;
   color.y = a_value[1].is_number() ? a_value[1].get<float>() : color.y;
   color.z = a_value[2].is_number() ? a_value[2].get<float>() : color.z;
@@ -137,7 +138,7 @@ ImVec4 ParseConditionColor(const nlohmann::json &a_value,
   return color;
 }
 
-nlohmann::json SerializeConditionColor(const ImVec4 &a_color) {
+nlohmann::json SerializeConditionColor(const ConditionColor &a_color) {
   return nlohmann::json::array({a_color.x, a_color.y, a_color.z, a_color.w});
 }
 
