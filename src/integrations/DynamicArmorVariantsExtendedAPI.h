@@ -30,9 +30,9 @@ struct IDynamicArmorVariantsExtendedInterface001 {
                                     bool a_keepExistingOverrides = false) = 0;
   virtual bool RemoveVariantOverride(RE::Actor *a_actor,
                                      const char *a_variant) = 0;
-  virtual bool SetCondition(
-      const char *a_name,
-      const std::shared_ptr<RE::TESCondition> &a_condition) = 0;
+  virtual bool
+  SetCondition(const char *a_name,
+               const std::shared_ptr<RE::TESCondition> &a_condition) = 0;
 };
 } // namespace DynamicArmorVariantsExtendedAPI
 

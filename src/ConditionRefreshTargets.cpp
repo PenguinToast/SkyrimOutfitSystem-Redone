@@ -27,8 +27,8 @@ bool IsPositiveGetIsReferenceCheck(const RE::CONDITION_ITEM_DATA &a_data) {
 } // namespace
 
 namespace sosr::conditions {
-RefreshTargets BuildRefreshTargets(
-    const std::shared_ptr<RE::TESCondition> &a_condition) {
+RefreshTargets
+BuildRefreshTargets(const std::shared_ptr<RE::TESCondition> &a_condition) {
   RefreshTargets targets;
   std::unordered_set<RE::FormID> seenActorFormIDs;
 
@@ -104,13 +104,11 @@ bool RefreshActors(
   }
 
   bool refreshedAny = a_dav.RefreshActor(player);
-  std::unordered_set<RE::FormID> refreshedActorFormIDs{
-      player->GetFormID()};
+  std::unordered_set<RE::FormID> refreshedActorFormIDs{player->GetFormID()};
 
   if (auto *tes = RE::TES::GetSingleton(); tes != nullptr) {
     tes->ForEachReferenceInRange(
-        player, kNearbyRefreshRadius,
-        [&](RE::TESObjectREFR *a_ref) {
+        player, kNearbyRefreshRadius, [&](RE::TESObjectREFR *a_ref) {
           auto *actor = a_ref ? a_ref->As<RE::Actor>() : nullptr;
           if (!actor ||
               !refreshedActorFormIDs.insert(actor->GetFormID()).second) {

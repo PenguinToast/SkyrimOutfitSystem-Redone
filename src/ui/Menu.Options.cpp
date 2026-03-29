@@ -21,8 +21,8 @@ bool IsFontFile(const std::filesystem::path &a_path) {
   std::string lowerExtension;
   lowerExtension.reserve(extension.size());
   for (const auto ch : extension) {
-    lowerExtension.push_back(static_cast<char>(
-        std::tolower(static_cast<unsigned char>(ch))));
+    lowerExtension.push_back(
+        static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
   }
 
   return lowerExtension == ".ttf" || lowerExtension == ".otf" ||
@@ -72,8 +72,8 @@ void SortFontOptions(std::vector<Menu::FontOption> &a_options) {
 
 std::vector<std::filesystem::path> BuildSystemFontDirectories() {
   std::vector<std::filesystem::path> directories;
-  auto getEnvironmentPath = [](const char *name)
-      -> std::optional<std::filesystem::path> {
+  auto getEnvironmentPath =
+      [](const char *name) -> std::optional<std::filesystem::path> {
     char *value = nullptr;
     std::size_t length = 0;
     if (_dupenv_s(&value, &length, name) != 0 || value == nullptr ||
@@ -107,12 +107,13 @@ std::vector<std::filesystem::path> BuildSystemFontDirectories() {
   return uniqueDirectories;
 }
 
-const char *FindSelectedFontLabel(const std::vector<Menu::FontOption> &a_options,
-                                  const std::string &a_fontPath) {
-  if (const auto it = std::ranges::find_if(
-          a_options, [&](const Menu::FontOption &option) {
-            return option.path == a_fontPath;
-          });
+const char *
+FindSelectedFontLabel(const std::vector<Menu::FontOption> &a_options,
+                      const std::string &a_fontPath) {
+  if (const auto it = std::ranges::find_if(a_options,
+                                           [&](const Menu::FontOption &option) {
+                                             return option.path == a_fontPath;
+                                           });
       it != a_options.end()) {
     return it->label.c_str();
   }
@@ -254,7 +255,8 @@ void Menu::DrawOptionsTab() {
       const char *selectedFontLabel =
           FindSelectedFontLabel(bundledFontOptions_, fontPath_);
       if (!selectedFontLabel) {
-        selectedFontLabel = FindSelectedFontLabel(systemFontOptions_, fontPath_);
+        selectedFontLabel =
+            FindSelectedFontLabel(systemFontOptions_, fontPath_);
       }
       if (!selectedFontLabel) {
         selectedFontLabel = "Default";

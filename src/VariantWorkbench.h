@@ -13,10 +13,7 @@
 #include <vector>
 
 namespace sosr::workbench {
-enum class EquipmentWidgetItemKind : std::uint8_t {
-  Armor,
-  Slot
-};
+enum class EquipmentWidgetItemKind : std::uint8_t { Armor, Slot };
 
 struct EquipmentWidgetItem {
   EquipmentWidgetItemKind kind{EquipmentWidgetItemKind::Armor};
@@ -48,9 +45,7 @@ struct VariantWorkbenchRow {
 
   [[nodiscard]] bool HasCondition() const { return conditionId.has_value(); }
 
-  [[nodiscard]] bool IsSlotRow() const {
-    return equipped.IsSlot();
-  }
+  [[nodiscard]] bool IsSlotRow() const { return equipped.IsSlot(); }
 
   [[nodiscard]] bool IsVisualConflictSource() const {
     return IsSlotRow() || isEquipped;
@@ -68,7 +63,8 @@ class VariantWorkbench {
 public:
   void SyncRowsFromPlayer();
   bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
-  bool BuildSlotItem(std::uint64_t a_slotMask, EquipmentWidgetItem &a_item) const;
+  bool BuildSlotItem(std::uint64_t a_slotMask,
+                     EquipmentWidgetItem &a_item) const;
   [[nodiscard]] bool
   IsPreviewingSelection(std::string_view a_selectionKey) const;
   [[nodiscard]] bool CanAcceptOverride(int a_targetRowIndex,
@@ -77,8 +73,8 @@ public:
                                        int a_sourceItemIndex = -1) const;
   bool AddCatalogOverride(int a_targetRowIndex, RE::FormID a_formID);
   bool AddCatalogSelectionToWorkbench(const std::vector<RE::FormID> &a_formIDs);
-  bool ReplaceCatalogSelectionInWorkbench(
-      const std::vector<RE::FormID> &a_formIDs);
+  bool
+  ReplaceCatalogSelectionInWorkbench(const std::vector<RE::FormID> &a_formIDs);
   bool AddCatalogSelectionAsRows(const std::vector<RE::FormID> &a_formIDs);
   bool AddSlotRow(std::uint64_t a_slotMask);
   bool ApplyCatalogPreview(std::string_view a_selectionKey,

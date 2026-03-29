@@ -63,11 +63,11 @@ std::string TrimText(std::string_view a_text) {
 
 bool EqualsInsensitive(std::string_view a_left, std::string_view a_right) {
   return a_left.size() == a_right.size() &&
-         std::ranges::equal(a_left, a_right, [](const char a_lhs,
-                                                const char a_rhs) {
-           return std::tolower(static_cast<unsigned char>(a_lhs)) ==
-                  std::tolower(static_cast<unsigned char>(a_rhs));
-         });
+         std::ranges::equal(
+             a_left, a_right, [](const char a_lhs, const char a_rhs) {
+               return std::tolower(static_cast<unsigned char>(a_lhs)) ==
+                      std::tolower(static_cast<unsigned char>(a_rhs));
+             });
 }
 
 ParamType ResolveEditorParamType(const std::string_view a_functionName,
@@ -82,9 +82,10 @@ ParamType ResolveEditorParamType(const std::string_view a_functionName,
 
 std::string Uppercase(std::string_view a_text) {
   std::string result(a_text);
-  std::ranges::transform(result, result.begin(), [](const unsigned char a_char) {
-    return static_cast<char>(std::toupper(a_char));
-  });
+  std::ranges::transform(result, result.begin(),
+                         [](const unsigned char a_char) {
+                           return static_cast<char>(std::toupper(a_char));
+                         });
   return result;
 }
 
@@ -145,7 +146,8 @@ RE::CONDITION_ITEM_DATA::OpCode ToOpCode(const Comparator a_comparator) {
   return RE::CONDITION_ITEM_DATA::OpCode::kEqualTo;
 }
 
-const RE::SCRIPT_FUNCTION *FindConditionFunction(const std::string_view a_name) {
+const RE::SCRIPT_FUNCTION *
+FindConditionFunction(const std::string_view a_name) {
   const auto trimmed = TrimText(a_name);
   if (trimmed.empty()) {
     return nullptr;
@@ -231,7 +233,8 @@ ConditionParam ParseParam(const std::string &a_text, const ParamType a_type) {
     param.f = std::stof(trimmed);
     break;
   case ParamType::kActorValue: {
-    auto actorValue = RE::ActorValueList::LookupActorValueByName(trimmed.c_str());
+    auto actorValue =
+        RE::ActorValueList::LookupActorValueByName(trimmed.c_str());
     if (actorValue == RE::ActorValue::kNone) {
       actorValue = RE::ActorValueList::LookupActorValueByName(
           Uppercase(trimmed).c_str());
@@ -332,7 +335,7 @@ ConditionParam ParseParam(const std::string &a_text, const ParamType a_type) {
 std::string BuildLiteralSignature(const NativeLiteral &a_literal) {
   std::string signature = a_literal.functionName;
   for (std::uint16_t paramIndex = 0; paramIndex < a_literal.parameterCount &&
-                                    paramIndex < a_literal.arguments.size();
+                                     paramIndex < a_literal.arguments.size();
        ++paramIndex) {
     signature.push_back('(');
     signature.append(a_literal.arguments[paramIndex]);
@@ -368,6 +371,7 @@ std::string BuildCnfSignature(const ConditionCnf &a_cnf) {
   return signature;
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 ConditionCnf AndCnf(const ConditionCnf &a_left, const ConditionCnf &a_right) {
   ConditionCnf result = a_left;
   result.insert(result.end(), a_right.begin(), a_right.end());
@@ -450,23 +454,24 @@ std::optional<NativeLiteral> BuildNativeLiteral(const Clause &a_clause) {
   for (std::uint16_t paramIndex = 0;
        paramIndex < command->numParams && paramIndex < 2; ++paramIndex) {
     literal.arguments[paramIndex] = TrimText(a_clause.arguments[paramIndex]);
-    literal.parameterTypes[paramIndex] =
-        ResolveEditorParamType(literal.functionName, paramIndex,
-                               command->params ? command->params[paramIndex]
-                                                     .paramType.get()
-                                               : ParamType::kForm);
+    literal.parameterTypes[paramIndex] = ResolveEditorParamType(
+        literal.functionName, paramIndex,
+        command->params ? command->params[paramIndex].paramType.get()
+                        : ParamType::kForm);
   }
 
   return literal;
 }
 
-std::optional<ConditionCnf> BuildConditionCnf(
-    const Definition &a_definition, const std::vector<Definition> &a_conditions,
-    ConditionVisitSet &a_visiting);
+std::optional<ConditionCnf>
+BuildConditionCnf(const Definition &a_definition,
+                  const std::vector<Definition> &a_conditions,
+                  ConditionVisitSet &a_visiting);
 
-std::optional<ConditionCnf> BuildClauseCnf(
-    const Clause &a_clause, const std::vector<Definition> &a_conditions,
-    ConditionVisitSet &a_visiting) {
+std::optional<ConditionCnf>
+BuildClauseCnf(const Clause &a_clause,
+               const std::vector<Definition> &a_conditions,
+               ConditionVisitSet &a_visiting) {
   if (!a_clause.customConditionId.empty()) {
     const auto *definition = sosr::conditions::FindDefinitionById(
         a_conditions, a_clause.customConditionId);
@@ -498,14 +503,14 @@ std::optional<ConditionCnf> BuildClauseCnf(
   return ConditionCnf{OrClause{std::move(*literal)}};
 }
 
-std::optional<ConditionCnf> BuildConditionCnf(
-    const Definition &a_definition, const std::vector<Definition> &a_conditions,
-    ConditionVisitSet &a_visiting) {
+std::optional<ConditionCnf>
+BuildConditionCnf(const Definition &a_definition,
+                  const std::vector<Definition> &a_conditions,
+                  ConditionVisitSet &a_visiting) {
   if (a_definition.clauses.empty()) {
     return std::nullopt;
   }
-  if (!a_definition.id.empty() &&
-      !a_visiting.insert(a_definition.id).second) {
+  if (!a_definition.id.empty() && !a_visiting.insert(a_definition.id).second) {
     return std::nullopt;
   }
 
@@ -557,8 +562,9 @@ std::optional<ConditionCnf> BuildConditionCnf(
   return result;
 }
 
-std::optional<RE::CONDITION_ITEM_DATA> BuildConditionItemData(
-    const NativeLiteral &a_literal, const bool a_isORToNext) {
+std::optional<RE::CONDITION_ITEM_DATA>
+BuildConditionItemData(const NativeLiteral &a_literal,
+                       const bool a_isORToNext) {
   RE::CONDITION_ITEM_DATA data{};
 
   const auto functionIndex =
@@ -607,9 +613,9 @@ FindDefinitionById(const std::vector<Definition> &a_conditions,
   return it != a_conditions.end() ? std::addressof(*it) : nullptr;
 }
 
-std::optional<MaterializedCondition> MaterializeConditionById(
-    const std::string_view a_conditionId,
-    const std::vector<Definition> &a_conditions) {
+std::optional<MaterializedCondition>
+MaterializeConditionById(const std::string_view a_conditionId,
+                         const std::vector<Definition> &a_conditions) {
   const auto *definition = FindDefinitionById(a_conditions, a_conditionId);
   if (!definition) {
     return std::nullopt;
@@ -627,9 +633,8 @@ std::optional<MaterializedCondition> MaterializeConditionById(
   for (const auto &group : *cnf) {
     for (std::size_t literalIndex = 0; literalIndex < group.size();
          ++literalIndex) {
-      const auto data =
-          BuildConditionItemData(group[literalIndex],
-                                 literalIndex + 1 < group.size());
+      const auto data = BuildConditionItemData(group[literalIndex],
+                                               literalIndex + 1 < group.size());
       if (!data) {
         return std::nullopt;
       }

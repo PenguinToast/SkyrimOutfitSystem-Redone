@@ -58,20 +58,19 @@ bool Menu::DrawSlotTab() {
         continue;
       }
 
-      const auto *armor =
-          RE::TESForm::LookupByID<RE::TESObjectARMO>(workbenchRow.equipped.formID);
-      if (!armor ||
-          (armor::GetArmorAddonSlotMask(armor) & slotMask) == 0) {
+      const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(
+          workbenchRow.equipped.formID);
+      if (!armor || (armor::GetArmorAddonSlotMask(armor) & slotMask) == 0) {
         continue;
       }
 
       row.occupantItems.push_back(workbenchRow.equipped);
     }
 
-    std::ranges::sort(row.occupantItems, [](const auto &a_left,
-                                            const auto &a_right) {
-      return CompareText(a_left.name, a_right.name) < 0;
-    });
+    std::ranges::sort(row.occupantItems,
+                      [](const auto &a_left, const auto &a_right) {
+                        return CompareText(a_left.name, a_right.name) < 0;
+                      });
     for (const auto &item : row.occupantItems) {
       if (!row.occupantSortText.empty()) {
         row.occupantSortText.append(", ");
@@ -138,12 +137,12 @@ bool Menu::DrawSlotTab() {
       for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
            ++rowIndex) {
         auto &row = rows[static_cast<std::size_t>(rowIndex)];
-        const auto widgetHeight =
-            18.0f + (ImGui::GetTextLineHeight() * 2.0f);
+        const auto widgetHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
         const auto occupantHeight =
             row.occupantItems.empty()
                 ? widgetHeight
-                : (static_cast<float>(row.occupantItems.size()) * widgetHeight) +
+                : (static_cast<float>(row.occupantItems.size()) *
+                   widgetHeight) +
                       ((row.occupantItems.size() > 1)
                            ? static_cast<float>(row.occupantItems.size() - 1) *
                                  5.0f
@@ -196,7 +195,8 @@ bool Menu::DrawSlotTab() {
           }
         }
 
-        if ((rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
+        if ((rowHovered &&
+             ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
             widgetResult.doubleClicked) {
           rowClicked = true;
           workbench_.AddSlotRow(row.slotItem.slotMask);

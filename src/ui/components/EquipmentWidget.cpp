@@ -187,21 +187,21 @@ void DrawEquipmentInfoTooltip(const std::string_view a_tooltipId,
                           ? (form ? sosr::armor::FormatFormID(form->GetFormID())
                                   : sosr::armor::FormatFormID(a_item.formID))
                           : std::string{};
-  const auto identifier =
-      hasInfoBody && form ? sosr::armor::GetFormIdentifier(form) : std::string{};
-  const auto slotLabels =
-      hasInfoBody ? sosr::armor::GetArmorSlotLabels(a_item.slotMask)
-                  : std::vector<std::string>{};
+  const auto identifier = hasInfoBody && form
+                              ? sosr::armor::GetFormIdentifier(form)
+                              : std::string{};
+  const auto slotLabels = hasInfoBody
+                              ? sosr::armor::GetArmorSlotLabels(a_item.slotMask)
+                              : std::vector<std::string>{};
   const auto addonSlotLabels =
       hasInfoBody && form && form->As<RE::TESObjectARMO>()
           ? sosr::armor::GetArmorAddonSlotLabels(form->As<RE::TESObjectARMO>())
           : std::vector<std::string>{};
   const auto tooltipContentWidth =
-      hasInfoBody
-          ? ComputeEquipmentTooltipWidth(displayName, editorID, plugin, formID,
-                                        identifier, slotLabels,
-                                        addonSlotLabels)
-          : 360.0f;
+      hasInfoBody ? ComputeEquipmentTooltipWidth(displayName, editorID, plugin,
+                                                 formID, identifier, slotLabels,
+                                                 addonSlotLabels)
+                  : 360.0f;
   ImGui::SetNextWindowSize(
       ImVec2(tooltipContentWidth + ImGui::GetStyle().WindowPadding.x * 2.0f,
              0.0f),
@@ -295,14 +295,15 @@ DrawEquipmentWidget(const char *a_id,
   drawList->AddRectFilled(rectMin, rectMax, fillColor, 8.0f);
   drawList->AddRect(rectMin, rectMax, borderColor, 8.0f);
   if (a_options.accentColor.has_value()) {
-    drawList->AddRectFilled(
-        rectMin, ImVec2(rectMin.x + accentWidth, rectMax.y),
-        ImGui::GetColorU32(*a_options.accentColor), 8.0f,
-        ImDrawFlags_RoundCornersTopLeft | ImDrawFlags_RoundCornersBottomLeft);
+    drawList->AddRectFilled(rectMin, ImVec2(rectMin.x + accentWidth, rectMax.y),
+                            ImGui::GetColorU32(*a_options.accentColor), 8.0f,
+                            ImDrawFlags_RoundCornersTopLeft |
+                                ImDrawFlags_RoundCornersBottomLeft);
   }
 
   const auto contentStartX =
-      rectMin.x + paddingX + (a_options.accentColor.has_value() ? accentWidth : 0.0f);
+      rectMin.x + paddingX +
+      (a_options.accentColor.has_value() ? accentWidth : 0.0f);
   const auto namePos = ImVec2(contentStartX, rectMin.y + paddingY);
   const auto slotPos =
       ImVec2(contentStartX, rectMin.y + paddingY + lineHeight + 4.0f);
@@ -314,9 +315,9 @@ DrawEquipmentWidget(const char *a_id,
   const auto buttonMax = rectMax;
   result.deleteHovered = a_options.showDeleteButton &&
                          ImGui::IsMouseHoveringRect(buttonMin, buttonMax);
-  const auto nameColor =
-      a_options.disabledAppearance ? theme->GetColorU32("TEXT_DISABLED")
-                                   : theme->GetColorU32("TEXT");
+  const auto nameColor = a_options.disabledAppearance
+                             ? theme->GetColorU32("TEXT_DISABLED")
+                             : theme->GetColorU32("TEXT");
   const auto slotColor = a_options.disabledAppearance
                              ? theme->GetColorU32("TEXT_DISABLED", 0.82f)
                              : theme->GetColorU32("TEXT_HEADER", 0.92f);
@@ -351,8 +352,7 @@ DrawEquipmentWidget(const char *a_id,
   const auto tooltipId = "equipment:" + a_item.key;
   if ((a_item.SupportsInfoTooltip() || a_item.IsSlot() ||
        a_options.drawTooltipExtras) &&
-      !result.deleteHovered &&
-      !ImGui::IsDragDropActive()) {
+      !result.deleteHovered && !ImGui::IsDragDropActive()) {
     DrawEquipmentInfoTooltip(tooltipId, result.hovered, a_item,
                              a_options.drawTooltipExtras);
   }

@@ -71,7 +71,8 @@ auto DynamicArmorVariantsExtendedClient::HasMinimumVersion() -> bool {
     RefreshDetectedVersion();
   }
 
-  return detectedVersion_.has_value() && *detectedVersion_ >= kMinimumDavVersion;
+  return detectedVersion_.has_value() &&
+         *detectedVersion_ >= kMinimumDavVersion;
 }
 
 auto DynamicArmorVariantsExtendedClient::GetDetectedVersion()

@@ -153,13 +153,14 @@ RowConditionVisualState ResolveRowConditionVisualState(
   RowConditionVisualState state;
   if (!a_row.conditionId.has_value()) {
     state.name = "Disabled";
-    state.description = "This row has no condition and will not be sent to DAVE.";
+    state.description =
+        "This row has no condition and will not be sent to DAVE.";
     state.disabled = true;
     return state;
   }
 
-  if (const auto *condition =
-          sosr::conditions::FindDefinitionById(a_conditions, *a_row.conditionId);
+  if (const auto *condition = sosr::conditions::FindDefinitionById(
+          a_conditions, *a_row.conditionId);
       condition != nullptr) {
     state.color = condition->color;
     state.name = condition->name;
@@ -168,8 +169,8 @@ RowConditionVisualState ResolveRowConditionVisualState(
   }
 
   state.name = "Missing Condition";
-  state.description =
-      "The referenced condition no longer exists. This row will not be sent to DAVE.";
+  state.description = "The referenced condition no longer exists. This row "
+                      "will not be sent to DAVE.";
   state.disabled = true;
   state.missing = true;
   return state;
@@ -286,7 +287,8 @@ void Menu::DrawVariantWorkbenchPane() {
       WorkbenchToolbarAction{
           .label = "Kit from Equipped",
           .enabled = canCreateEquippedKit,
-          .callback = [&]() { OpenCreateKitDialog(KitCreationSource::Equipped); },
+          .callback =
+              [&]() { OpenCreateKitDialog(KitCreationSource::Equipped); },
           .tooltip =
               []() {
                 ImGui::TextUnformatted("Create a Modex kit from the player's "
@@ -567,13 +569,11 @@ void Menu::DrawVariantWorkbenchPane() {
                      leftCellRect.Min.y + ImGui::GetStyle().CellPadding.y +
                          leftCellContentOffsetY));
         }
-        const auto &row =
-            rows[static_cast<std::size_t>(rowIndex)];
+        const auto &row = rows[static_cast<std::size_t>(rowIndex)];
         const auto &conditionState =
             rowConditionStates[static_cast<std::size_t>(rowIndex)];
         const auto equippedWidget = ui::components::DrawEquipmentWidget(
-            rows[static_cast<std::size_t>(rowIndex)].key.c_str(),
-            row.equipped,
+            rows[static_cast<std::size_t>(rowIndex)].key.c_str(), row.equipped,
             {.showDeleteButton = true,
              .disabledAppearance = conditionState.disabled,
              .accentColor = conditionState.color,
@@ -589,7 +589,8 @@ void Menu::DrawVariantWorkbenchPane() {
                          const auto &row =
                              rows[static_cast<std::size_t>(rowIndex)];
                          const auto &conditionState =
-                             rowConditionStates[static_cast<std::size_t>(rowIndex)];
+                             rowConditionStates[static_cast<std::size_t>(
+                                 rowIndex)];
                          ImGui::Separator();
                          ImGui::TextDisabled("Condition");
                          if (conditionState.color.has_value()) {
@@ -606,8 +607,8 @@ void Menu::DrawVariantWorkbenchPane() {
                          }
                          ImGui::TextUnformatted(conditionState.name.c_str());
                          if (!conditionState.description.empty()) {
-                           ImGui::TextDisabled("%s",
-                                               conditionState.description.c_str());
+                           ImGui::TextDisabled(
+                               "%s", conditionState.description.c_str());
                          }
 
                          const auto conflictIt = rowConflicts.find(row.key);
@@ -651,7 +652,8 @@ void Menu::DrawVariantWorkbenchPane() {
                        }}
                      : std::function<void()>{[&, rowIndex]() {
                          const auto &conditionState =
-                             rowConditionStates[static_cast<std::size_t>(rowIndex)];
+                             rowConditionStates[static_cast<std::size_t>(
+                                 rowIndex)];
                          ImGui::Separator();
                          ImGui::TextDisabled("Condition");
                          if (conditionState.color.has_value()) {
@@ -668,10 +670,10 @@ void Menu::DrawVariantWorkbenchPane() {
                          }
                          ImGui::TextUnformatted(conditionState.name.c_str());
                          if (!conditionState.description.empty()) {
-                           ImGui::TextDisabled("%s",
-                                               conditionState.description.c_str());
+                           ImGui::TextDisabled(
+                               "%s", conditionState.description.c_str());
                          }
-                     }}});
+                       }}});
         if (!equippedWidget.deleteHovered && ImGui::BeginDragDropSource()) {
           DraggedEquipmentPayload payload{};
           payload.sourceKind = static_cast<std::uint32_t>(DragSourceKind::Row);
@@ -690,13 +692,13 @@ void Menu::DrawVariantWorkbenchPane() {
           ImGui::EndDragDropSource();
         }
         if (ImGui::BeginPopupContextItem(
-                ("##row-condition-context-" + std::to_string(rowIndex)).c_str())) {
+                ("##row-condition-context-" + std::to_string(rowIndex))
+                    .c_str())) {
           if (ImGui::BeginMenu(conditionState.disabled ? "Enable Condition"
                                                        : "Set Condition")) {
             for (const auto &condition : conditions_) {
-              const bool isCurrent =
-                  row.conditionId.has_value() &&
-                  *row.conditionId == condition.id;
+              const bool isCurrent = row.conditionId.has_value() &&
+                                     *row.conditionId == condition.id;
               if (ImGui::MenuItem(condition.name.c_str(), nullptr, isCurrent)) {
                 workbench_.SetConditionId(rowIndex, condition.id);
               }
@@ -717,8 +719,8 @@ void Menu::DrawVariantWorkbenchPane() {
             ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()));
         if (ImGui::BeginDragDropTargetCustom(
                 ImRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax()),
-                ImGui::GetID(("##row-condition-" + std::to_string(rowIndex))
-                                 .c_str()))) {
+                ImGui::GetID(
+                    ("##row-condition-" + std::to_string(rowIndex)).c_str()))) {
           if (const auto *payload =
                   ImGui::AcceptDragDropPayload(kConditionPayloadType);
               payload && payload->Data != nullptr &&

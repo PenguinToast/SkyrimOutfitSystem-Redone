@@ -81,28 +81,25 @@ int ScoreFallbackTargetRow(const std::uint64_t a_itemMask,
       ScorePreferredTargetSlots(a_itemMask, a_targetMask, {BipedSlot::kHead},
                                 {BipedSlot::kCirclet, BipedSlot::kHair,
                                  BipedSlot::kLongHair, BipedSlot::kEars}),
-      ScorePreferredTargetSlots(a_itemMask, a_targetMask,
-                                {BipedSlot::kHair, BipedSlot::kLongHair,
-                                 BipedSlot::kEars},
-                                {BipedSlot::kHead, BipedSlot::kCirclet}),
+      ScorePreferredTargetSlots(
+          a_itemMask, a_targetMask,
+          {BipedSlot::kHair, BipedSlot::kLongHair, BipedSlot::kEars},
+          {BipedSlot::kHead, BipedSlot::kCirclet}),
       ScorePreferredTargetSlots(
           a_itemMask, a_targetMask, {BipedSlot::kAmulet, BipedSlot::kModNeck},
           {BipedSlot::kModNeck, BipedSlot::kAmulet, BipedSlot::kBody}),
       ScorePreferredTargetSlots(
           a_itemMask, a_targetMask, {BipedSlot::kRing},
           {BipedSlot::kModFaceJewelry, BipedSlot::kCirclet, BipedSlot::kEars}),
-      ScorePreferredTargetSlots(
-          a_itemMask, a_targetMask, {BipedSlot::kHands},
-          {BipedSlot::kForearms, BipedSlot::kBody}),
-      ScorePreferredTargetSlots(
-          a_itemMask, a_targetMask, {BipedSlot::kForearms},
-          {BipedSlot::kHands, BipedSlot::kBody}),
-      ScorePreferredTargetSlots(
-          a_itemMask, a_targetMask, {BipedSlot::kFeet},
-          {BipedSlot::kCalves, BipedSlot::kBody}),
-      ScorePreferredTargetSlots(
-          a_itemMask, a_targetMask, {BipedSlot::kCalves},
-          {BipedSlot::kFeet, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(a_itemMask, a_targetMask, {BipedSlot::kHands},
+                                {BipedSlot::kForearms, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(a_itemMask, a_targetMask,
+                                {BipedSlot::kForearms},
+                                {BipedSlot::kHands, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(a_itemMask, a_targetMask, {BipedSlot::kFeet},
+                                {BipedSlot::kCalves, BipedSlot::kBody}),
+      ScorePreferredTargetSlots(a_itemMask, a_targetMask, {BipedSlot::kCalves},
+                                {BipedSlot::kFeet, BipedSlot::kBody}),
       ScorePreferredTargetSlots(
           a_itemMask, a_targetMask,
           {BipedSlot::kModFaceJewelry, BipedSlot::kModMouth},
@@ -136,7 +133,8 @@ std::uint64_t VariantWorkbenchRow::GetSelectionConflictSlotMask() const {
     return equipped.slotMask;
   }
 
-  const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(equipped.formID);
+  const auto *armor =
+      RE::TESForm::LookupByID<RE::TESObjectARMO>(equipped.formID);
   if (!armor) {
     return equipped.slotMask;
   }
@@ -150,7 +148,8 @@ bool VariantWorkbench::ResolveCatalogArmors(
     std::vector<const RE::TESObjectARMO *> &a_armors) const {
   a_armors.clear();
 
-  for (const auto formID : EquipmentCatalog::Get().ResolveArmorFormIDs(a_formIDs)) {
+  for (const auto formID :
+       EquipmentCatalog::Get().ResolveArmorFormIDs(a_formIDs)) {
     const auto *armor = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID);
     if (!armor) {
       continue;
@@ -655,8 +654,8 @@ bool VariantWorkbench::SetConditionId(
 
   auto &row = rows_[static_cast<std::size_t>(a_rowIndex)];
   const auto nextKey = BuildRowKey(row.sourceKey, a_conditionId);
-  const auto duplicateIt = std::ranges::find_if(
-      rows_, [&](const VariantWorkbenchRow &a_other) {
+  const auto duplicateIt =
+      std::ranges::find_if(rows_, [&](const VariantWorkbenchRow &a_other) {
         return &a_other != &row && a_other.key == nextKey;
       });
   if (duplicateIt != rows_.end()) {
@@ -763,8 +762,7 @@ bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
 }
 
 bool VariantWorkbench::InsertSlotRow(const std::uint64_t a_slotMask,
-                                     int a_targetRowIndex,
-                                     bool a_insertAfter) {
+                                     int a_targetRowIndex, bool a_insertAfter) {
   if (a_targetRowIndex < 0 ||
       a_targetRowIndex >= static_cast<int>(rows_.size())) {
     return false;

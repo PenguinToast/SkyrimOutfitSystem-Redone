@@ -41,8 +41,7 @@ bool StartsWithInsensitive(std::string_view a_text, std::string_view a_prefix) {
              0;
 }
 
-bool ContainsInsensitive(std::string_view a_text,
-                         std::string_view a_pattern) {
+bool ContainsInsensitive(std::string_view a_text, std::string_view a_pattern) {
   if (a_pattern.empty()) {
     return true;
   }
@@ -51,8 +50,8 @@ bool ContainsInsensitive(std::string_view a_text,
     std::string text;
     text.reserve(a_value.size());
     for (const auto ch : a_value) {
-      text.push_back(static_cast<char>(
-          std::tolower(static_cast<unsigned char>(ch))));
+      text.push_back(
+          static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
     }
     return text;
   };

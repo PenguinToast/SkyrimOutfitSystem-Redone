@@ -13,8 +13,8 @@ struct RefreshTargets {
   bool useNearbyFallback{false};
 };
 
-[[nodiscard]] RefreshTargets BuildRefreshTargets(
-    const std::shared_ptr<RE::TESCondition> &a_condition);
+[[nodiscard]] RefreshTargets
+BuildRefreshTargets(const std::shared_ptr<RE::TESCondition> &a_condition);
 
 void MergeRefreshTargets(RefreshTargets &a_target,
                          const RefreshTargets &a_source);

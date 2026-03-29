@@ -142,11 +142,10 @@ auto BuildDavVariantJson(
 
   nlohmann::json root{
       {"displayName",
-       a_hideEquipped
-           ? "Hidden " + sosr::armor::GetDisplayName(a_sourceArmor)
-           : (replacementData.displayName.empty()
-                  ? sosr::armor::GetDisplayName(a_sourceArmor)
-                  : replacementData.displayName)},
+       a_hideEquipped ? "Hidden " + sosr::armor::GetDisplayName(a_sourceArmor)
+                      : (replacementData.displayName.empty()
+                             ? sosr::armor::GetDisplayName(a_sourceArmor)
+                             : replacementData.displayName)},
       {"priority", a_priority},
       {"replaceByForm", replaceByForm}};
   return root.dump();
@@ -179,11 +178,10 @@ auto BuildDavSlotVariantJson(
   const auto slotLabel =
       sosr::armor::JoinStrings(sosr::armor::GetArmorSlotLabels(a_slotMask));
   nlohmann::json root{
-      {"displayName",
-       a_hideEquipped
-           ? "Hidden " + slotLabel
-           : (replacementData.displayName.empty() ? slotLabel
-                                                  : replacementData.displayName)},
+      {"displayName", a_hideEquipped ? "Hidden " + slotLabel
+                                     : (replacementData.displayName.empty()
+                                            ? slotLabel
+                                            : replacementData.displayName)},
       {"priority", a_priority},
       {"replaceBySlot", replaceBySlot}};
   return root.dump();
@@ -192,15 +190,14 @@ auto BuildDavSlotVariantJson(
 auto BuildDavVariantDescriptor(
     const sosr::workbench::VariantWorkbenchRow &a_row,
     const std::vector<const RE::TESObjectARMO *> &a_overrideArmors,
-    const std::int32_t a_priority)
-    -> std::optional<DavVariantDescriptor> {
+    const std::int32_t a_priority) -> std::optional<DavVariantDescriptor> {
   DavVariantDescriptor descriptor;
   descriptor.name = "SOSR|Row|" + a_row.key;
 
   if (a_row.IsSlotRow()) {
-    descriptor.json = BuildDavSlotVariantJson(a_row.equipped.slotMask,
-                                              a_overrideArmors,
-                                              a_row.hideEquipped, a_priority);
+    descriptor.json =
+        BuildDavSlotVariantJson(a_row.equipped.slotMask, a_overrideArmors,
+                                a_row.hideEquipped, a_priority);
   } else {
     const auto *sourceArmor =
         RE::TESForm::LookupByID<RE::TESObjectARMO>(a_row.equipped.formID);
@@ -223,7 +220,8 @@ bool SerializeRowSource(const sosr::workbench::VariantWorkbenchRow &a_row,
                         nlohmann::json &a_serializedRow) {
   a_serializedRow["type"] = a_row.IsSlotRow() ? "slot" : "armor";
   if (a_row.IsSlotRow()) {
-    const auto slotNumber = sosr::armor::GetArmorSlotNumber(a_row.equipped.slotMask);
+    const auto slotNumber =
+        sosr::armor::GetArmorSlotNumber(a_row.equipped.slotMask);
     if (slotNumber == 0) {
       return false;
     }
@@ -236,10 +234,9 @@ bool SerializeRowSource(const sosr::workbench::VariantWorkbenchRow &a_row,
   return !a_serializedRow["equipped"].get_ref<const std::string &>().empty();
 }
 
-bool DeserializeRowSource(
-    const nlohmann::json &a_serializedRow,
-    sosr::workbench::VariantWorkbench &a_workbench,
-    sosr::workbench::VariantWorkbenchRow &a_row) {
+bool DeserializeRowSource(const nlohmann::json &a_serializedRow,
+                          sosr::workbench::VariantWorkbench &a_workbench,
+                          sosr::workbench::VariantWorkbenchRow &a_row) {
   const auto rowType = a_serializedRow.value("type", std::string{"armor"});
   if (rowType == "slot") {
     const auto slotMask =
@@ -262,7 +259,8 @@ bool DeserializeRowSource(
     return false;
   }
 
-  a_row.sourceKey = "armor:" + sosr::armor::FormatFormID(equippedForm->GetFormID());
+  a_row.sourceKey =
+      "armor:" + sosr::armor::FormatFormID(equippedForm->GetFormID());
   a_row.equipped = std::move(equipped);
   return true;
 }
@@ -319,9 +317,9 @@ bool VariantWorkbench::ApplyCatalogPreview(
       continue;
     }
 
-    const auto variantJson = BuildDavVariantJson(
-        sourceArmor, overrideArmors, false,
-        BuildDavVariantPriority(rowIndex, rows_.size()));
+    const auto variantJson =
+        BuildDavVariantJson(sourceArmor, overrideArmors, false,
+                            BuildDavVariantPriority(rowIndex, rows_.size()));
     if (variantJson.empty()) {
       continue;
     }
@@ -424,7 +422,8 @@ void VariantWorkbench::ClearPreview() {
 
 void VariantWorkbench::SyncDynamicArmorVariantsExtended(
     const std::vector<ui::conditions::Definition> &a_conditions) {
-  auto *dav = sosr::integrations::DynamicArmorVariantsExtendedClient::GetReady();
+  auto *dav =
+      sosr::integrations::DynamicArmorVariantsExtendedClient::GetReady();
   if (!dav) {
     return;
   }
@@ -457,7 +456,8 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
     }
 
     const auto materializedCondition =
-        sosr::conditions::MaterializeConditionById(*row.conditionId, a_conditions);
+        sosr::conditions::MaterializeConditionById(*row.conditionId,
+                                                   a_conditions);
     if (!materializedCondition.has_value()) {
       logger::warn("Failed to materialize SVS condition {} for row {}",
                    *row.conditionId, row.key);
@@ -466,13 +466,12 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
 
     desiredVariants.insert_or_assign(
         descriptor->name,
-        DavVariantPayload{.variantJson = std::move(descriptor->json),
-                          .conditionSignature =
-                              materializedCondition->signature,
-                          .condition = materializedCondition->condition,
-                          .refreshTargets =
-                              sosr::conditions::BuildRefreshTargets(
-                                  materializedCondition->condition)});
+        DavVariantPayload{
+            .variantJson = std::move(descriptor->json),
+            .conditionSignature = materializedCondition->signature,
+            .condition = materializedCondition->condition,
+            .refreshTargets = sosr::conditions::BuildRefreshTargets(
+                materializedCondition->condition)});
   }
 
   std::unordered_map<std::string, ActiveDavVariantState> syncedVariants;
@@ -485,10 +484,10 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
         activeIt != activeDavVariants_.end() &&
         activeIt->second.variantJson == payload.variantJson &&
         activeIt->second.conditionSignature == payload.conditionSignature) {
-      syncedVariants.emplace(
-          variantName, ActiveDavVariantState{payload.variantJson,
-                                             payload.conditionSignature,
-                                             payload.refreshTargets});
+      syncedVariants.emplace(variantName,
+                             ActiveDavVariantState{payload.variantJson,
+                                                   payload.conditionSignature,
+                                                   payload.refreshTargets});
       continue;
     }
 
@@ -505,15 +504,16 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
       continue;
     }
 
-    syncedVariants.emplace(
-        variantName,
-        ActiveDavVariantState{payload.variantJson, payload.conditionSignature,
-                              payload.refreshTargets});
+    syncedVariants.emplace(variantName,
+                           ActiveDavVariantState{payload.variantJson,
+                                                 payload.conditionSignature,
+                                                 payload.refreshTargets});
     if (activeIt != activeDavVariants_.end()) {
       sosr::conditions::MergeRefreshTargets(refreshTargets,
                                             activeIt->second.refreshTargets);
     }
-    sosr::conditions::MergeRefreshTargets(refreshTargets, payload.refreshTargets);
+    sosr::conditions::MergeRefreshTargets(refreshTargets,
+                                          payload.refreshTargets);
     variantsChanged = true;
   }
 
@@ -622,12 +622,11 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
           row.conditionId = std::nullopt;
         } else if (conditionIt->is_string()) {
           const auto conditionId = conditionIt->get<std::string>();
-          row.conditionId =
-              conditionId.empty() ? std::nullopt
-                                  : std::optional<std::string>(conditionId);
+          row.conditionId = conditionId.empty()
+                                ? std::nullopt
+                                : std::optional<std::string>(conditionId);
         } else {
-          row.conditionId =
-              std::string(ui::conditions::kDefaultConditionId);
+          row.conditionId = std::string(ui::conditions::kDefaultConditionId);
         }
       } else {
         row.conditionId = std::string(ui::conditions::kDefaultConditionId);

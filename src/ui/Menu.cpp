@@ -516,8 +516,9 @@ void Menu::SerializeConditions(SKSE::SerializationInterface *a_skse) const {
   }
 
   const auto payload = root.dump();
-  a_skse->WriteRecord(kConditionSerializationType, kConditionSerializationVersion,
-                      payload.data(), static_cast<std::uint32_t>(payload.size()));
+  a_skse->WriteRecord(kConditionSerializationType,
+                      kConditionSerializationVersion, payload.data(),
+                      static_cast<std::uint32_t>(payload.size()));
 }
 
 void Menu::DeserializeConditions(SKSE::SerializationInterface *a_skse) {
@@ -537,8 +538,9 @@ void Menu::DeserializeConditions(SKSE::SerializationInterface *a_skse) {
   }
 
   if (version != kConditionSerializationVersion) {
-    logger::warn("Skipping SOSR serialized conditions from unsupported version {}",
-                 version);
+    logger::warn(
+        "Skipping SOSR serialized conditions from unsupported version {}",
+        version);
     EnsureDefaultConditions();
     return;
   }
@@ -571,8 +573,7 @@ void Menu::DeserializeConditions(SKSE::SerializationInterface *a_skse) {
       ui::conditions::Definition condition;
       condition.id = conditionJson.value("id", std::string{});
       condition.name = conditionJson.value("name", std::string{});
-      condition.description =
-          conditionJson.value("description", std::string{});
+      condition.description = conditionJson.value("description", std::string{});
       condition.color = ParseConditionColor(
           conditionJson.value("color", nlohmann::json{}), condition.color);
 

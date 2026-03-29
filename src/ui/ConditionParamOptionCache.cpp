@@ -13,8 +13,8 @@
 #include <ranges>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 using ParamType = RE::SCRIPT_PARAM_TYPE;
@@ -100,7 +100,8 @@ void AppendFormToken(CacheEntryLoadState &a_state, RE::TESForm *a_form) {
   }
 }
 
-void AppendCellRefTokens(CacheEntryLoadState &a_state, RE::TESObjectCELL *a_cell) {
+void AppendCellRefTokens(CacheEntryLoadState &a_state,
+                         RE::TESObjectCELL *a_cell) {
   if (!a_cell) {
     return;
   }
@@ -414,8 +415,9 @@ public:
     if (UsesGenericFormSource(a_type)) {
       auto *dataHandler = RE::TESDataHandler::GetSingleton();
       const auto arrayCount =
-          dataHandler ? static_cast<std::size_t>(std::size(dataHandler->formArrays))
-                      : std::size_t{0};
+          dataHandler
+              ? static_cast<std::size_t>(std::size(dataHandler->formArrays))
+              : std::size_t{0};
       std::size_t totalFormCount = 0;
       if (dataHandler) {
         for (const auto &formArray : dataHandler->formArrays) {
@@ -432,29 +434,32 @@ public:
       std::vector<sosr::IncrementalLoader::Phase> phases;
       phases.reserve(arrayCount + 1);
       if (dataHandler) {
-        for (std::size_t arrayIndex = 0; arrayIndex < arrayCount; ++arrayIndex) {
+        for (std::size_t arrayIndex = 0; arrayIndex < arrayCount;
+             ++arrayIndex) {
           phases.push_back(
               {GetStatusLabel(a_type),
-               static_cast<std::size_t>(dataHandler->formArrays[arrayIndex].size()),
+               static_cast<std::size_t>(
+                   dataHandler->formArrays[arrayIndex].size()),
                [statePtr, dataHandler, arrayIndex](const std::size_t a_index) {
-                 const auto formIndex = static_cast<decltype(
-                     dataHandler->formArrays[arrayIndex].size())>(a_index);
-                 AppendFormToken(*statePtr,
-                                 dataHandler->formArrays[arrayIndex][formIndex]);
+                 const auto formIndex = static_cast<
+                     decltype(dataHandler->formArrays[arrayIndex].size())>(
+                     a_index);
+                 AppendFormToken(
+                     *statePtr, dataHandler->formArrays[arrayIndex][formIndex]);
                }});
         }
       }
-      phases.push_back({"Finalizing options...", 1,
-                        [statePtr](const std::size_t) {
-                          SortUniqueStrings(statePtr->stagedOptions);
-                        }});
+      phases.push_back(
+          {"Finalizing options...", 1, [statePtr](const std::size_t) {
+             SortUniqueStrings(statePtr->stagedOptions);
+           }});
       loadState->loader.Start(std::move(phases));
     } else if (a_type == ParamType::kObjectRef) {
       auto *dataHandler = RE::TESDataHandler::GetSingleton();
-      const auto interiorCount = dataHandler
-                                     ? static_cast<std::size_t>(
-                                           dataHandler->interiorCells.size())
-                                     : std::size_t{0};
+      const auto interiorCount =
+          dataHandler
+              ? static_cast<std::size_t>(dataHandler->interiorCells.size())
+              : std::size_t{0};
       const auto worldspaceCount =
           dataHandler
               ? static_cast<std::size_t>(
@@ -467,11 +472,12 @@ public:
               : std::size_t{0};
 
       statePtr->stagedOptions.push_back("Player");
-      logger::info(
-          "Condition param cache loading: {} (type {}) from {} interior cell(s), "
-          "{} worldspace(s), {} cell form(s)",
-          std::string(GetParamTypeLabel(a_type)), static_cast<int>(a_type),
-          interiorCount, worldspaceCount, cellCount);
+      logger::info("Condition param cache loading: {} (type {}) from {} "
+                   "interior cell(s), "
+                   "{} worldspace(s), {} cell form(s)",
+                   std::string(GetParamTypeLabel(a_type)),
+                   static_cast<int>(a_type), interiorCount, worldspaceCount,
+                   cellCount);
 
       loadState->loader.Start({
           {"Loading interior references...", interiorCount,
@@ -490,11 +496,13 @@ public:
              if (!dataHandler) {
                return;
              }
-             const auto worldspaceIndex = static_cast<decltype(
-                 dataHandler->GetFormArray<RE::TESWorldSpace>().size())>(
-                 a_index);
+             const auto worldspaceIndex =
+                 static_cast<decltype(dataHandler
+                                          ->GetFormArray<RE::TESWorldSpace>()
+                                          .size())>(a_index);
              auto *worldspace =
-                 dataHandler->GetFormArray<RE::TESWorldSpace>()[worldspaceIndex];
+                 dataHandler
+                     ->GetFormArray<RE::TESWorldSpace>()[worldspaceIndex];
              if (!worldspace) {
                return;
              }
@@ -508,11 +516,13 @@ public:
              if (!dataHandler) {
                return;
              }
-             const auto cellIndex = static_cast<decltype(
-                 dataHandler->GetFormArray<RE::TESObjectCELL>().size())>(
-                 a_index);
+             const auto cellIndex =
+                 static_cast<decltype(dataHandler
+                                          ->GetFormArray<RE::TESObjectCELL>()
+                                          .size())>(a_index);
              AppendCellRefTokens(
-                 *statePtr, dataHandler->GetFormArray<RE::TESObjectCELL>()[cellIndex]);
+                 *statePtr,
+                 dataHandler->GetFormArray<RE::TESObjectCELL>()[cellIndex]);
            }},
           {"Finalizing options...", 1,
            [statePtr](const std::size_t) {
@@ -521,9 +531,10 @@ public:
       });
     } else {
       loadState->forms = CollectFormsForType(a_type);
-      logger::info("Condition param cache loading: {} (type {}) from {} form(s)",
-                   std::string(GetParamTypeLabel(a_type)),
-                   static_cast<int>(a_type), loadState->forms.size());
+      logger::info(
+          "Condition param cache loading: {} (type {}) from {} form(s)",
+          std::string(GetParamTypeLabel(a_type)), static_cast<int>(a_type),
+          loadState->forms.size());
       loadState->loader.Start({
           {GetStatusLabel(a_type), loadState->forms.size(),
            [statePtr](const std::size_t a_index) {

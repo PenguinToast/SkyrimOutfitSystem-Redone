@@ -98,13 +98,9 @@ void EndPinnableTooltipFrame() {
   }
 }
 
-bool HasPinnedTooltips() {
-  return !GetPinnedTooltipManager().stack.empty();
-}
+bool HasPinnedTooltips() { return !GetPinnedTooltipManager().stack.empty(); }
 
-void ClearPinnedTooltips() {
-  GetPinnedTooltipManager().stack.clear();
-}
+void ClearPinnedTooltips() { GetPinnedTooltipManager().stack.clear(); }
 
 bool ShouldDrawPinnableTooltip(const std::string_view a_id,
                                const bool a_hoveredSource) {
@@ -125,10 +121,9 @@ void DrawPinnableTooltip(const std::string_view a_id,
   }
 }
 
-PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
-                                         const bool a_hoveredSource,
-                                         const HoveredTooltipOptions
-                                             &a_hoveredOptions) {
+PinnableTooltipMode
+BeginPinnableTooltip(const std::string_view a_id, const bool a_hoveredSource,
+                     const HoveredTooltipOptions &a_hoveredOptions) {
   auto &manager = GetPinnedTooltipManager();
   const auto pinnedIt = FindPinnedTooltip(manager.stack, a_id);
   if (pinnedIt != manager.stack.end()) {
@@ -171,8 +166,8 @@ PinnableTooltipMode BeginPinnableTooltip(const std::string_view a_id,
   }
   if (!ImGui::Begin(windowName.c_str(), nullptr,
                     ImGuiWindowFlags_Tooltip | ImGuiWindowFlags_NoInputs |
-                        ImGuiWindowFlags_NoTitleBar |
-                        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
+                        ImGuiWindowFlags_NoResize |
                         ImGuiWindowFlags_NoSavedSettings |
                         ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::End();

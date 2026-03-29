@@ -170,8 +170,8 @@ std::uint64_t GetArmorAddonSlotMask(const RE::TESObjectARMO *a_armor) {
   return slotMask;
 }
 
-std::vector<std::string> GetArmorAddonSlotLabels(
-    const RE::TESObjectARMO *a_armor) {
+std::vector<std::string>
+GetArmorAddonSlotLabels(const RE::TESObjectARMO *a_armor) {
   return GetArmorSlotLabels(GetArmorAddonSlotMask(a_armor));
 }
 
