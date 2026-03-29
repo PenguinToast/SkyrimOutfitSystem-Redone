@@ -367,10 +367,12 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         ImGui::SetKeyOwner(ImGuiKey_KeypadEnter, inputItemId,
                            ImGuiInputFlags_LockThisFrame);
 
-        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, 0, inputItemId)) {
+        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, ImGuiInputFlags_Repeat,
+                                inputItemId)) {
           highlightedIndex =
               (highlightedIndex + 1) % static_cast<int>(visibleOptions.size());
-        } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, 0, inputItemId)) {
+        } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow,
+                                       ImGuiInputFlags_Repeat, inputItemId)) {
           highlightedIndex =
               (highlightedIndex + static_cast<int>(visibleOptions.size()) - 1) %
               static_cast<int>(visibleOptions.size());

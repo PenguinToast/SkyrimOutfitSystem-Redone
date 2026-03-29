@@ -1,10 +1,78 @@
 #include "InputManager.h"
 
+#include <Windows.h>
+
 #include "imgui.h"
 #include "ui/Menu.h"
 
 namespace sosr {
 namespace {
+auto NormalizeScanCodeForWindows(const std::uint32_t a_scanCode)
+    -> std::uint32_t {
+  return (a_scanCode & 0x100U) != 0U
+             ? (((a_scanCode & 0xFFU) << 8U) | 0xE000U)
+             : (a_scanCode & 0xFFU);
+}
+
+auto MapScanCodeToVirtualKey(const std::uint32_t a_scanCode) -> std::uint32_t {
+  const auto layout = GetKeyboardLayout(0);
+  return MapVirtualKeyExW(NormalizeScanCodeForWindows(a_scanCode),
+                          MAPVK_VSC_TO_VK_EX, layout);
+}
+
+auto MapVirtualKeyToImGuiKey(const std::uint32_t a_virtualKey) -> ImGuiKey {
+  if (a_virtualKey >= 'A' && a_virtualKey <= 'Z') {
+    return static_cast<ImGuiKey>(ImGuiKey_A + (a_virtualKey - 'A'));
+  }
+  if (a_virtualKey >= '0' && a_virtualKey <= '9') {
+    return static_cast<ImGuiKey>(ImGuiKey_0 + (a_virtualKey - '0'));
+  }
+  if (a_virtualKey >= VK_F1 && a_virtualKey <= VK_F24) {
+    return static_cast<ImGuiKey>(ImGuiKey_F1 + (a_virtualKey - VK_F1));
+  }
+  if (a_virtualKey >= VK_NUMPAD0 && a_virtualKey <= VK_NUMPAD9) {
+    return static_cast<ImGuiKey>(ImGuiKey_Keypad0 +
+                                 (a_virtualKey - VK_NUMPAD0));
+  }
+
+  switch (a_virtualKey) {
+  case VK_OEM_1:
+    return ImGuiKey_Semicolon;
+  case VK_OEM_PLUS:
+    return ImGuiKey_Equal;
+  case VK_OEM_COMMA:
+    return ImGuiKey_Comma;
+  case VK_OEM_MINUS:
+    return ImGuiKey_Minus;
+  case VK_OEM_PERIOD:
+    return ImGuiKey_Period;
+  case VK_OEM_2:
+    return ImGuiKey_Slash;
+  case VK_OEM_3:
+    return ImGuiKey_GraveAccent;
+  case VK_OEM_4:
+    return ImGuiKey_LeftBracket;
+  case VK_OEM_5:
+    return ImGuiKey_Backslash;
+  case VK_OEM_6:
+    return ImGuiKey_RightBracket;
+  case VK_OEM_7:
+    return ImGuiKey_Apostrophe;
+  case VK_DECIMAL:
+    return ImGuiKey_KeypadDecimal;
+  case VK_DIVIDE:
+    return ImGuiKey_KeypadDivide;
+  case VK_MULTIPLY:
+    return ImGuiKey_KeypadMultiply;
+  case VK_SUBTRACT:
+    return ImGuiKey_KeypadSubtract;
+  case VK_ADD:
+    return ImGuiKey_KeypadAdd;
+  default:
+    return ImGuiKey_None;
+  }
+}
+
 auto MapScanCodeToImGuiKey(std::uint32_t a_scanCode) -> ImGuiKey {
   switch (a_scanCode) {
   case 0x01:
@@ -74,45 +142,13 @@ auto MapScanCodeToImGuiKey(std::uint32_t a_scanCode) -> ImGuiKey {
   case 0x58:
     return ImGuiKey_F12;
   default:
-    return ImGuiKey_None;
+    break;
   }
+
+  const auto virtualKey = MapScanCodeToVirtualKey(a_scanCode);
+  return MapVirtualKeyToImGuiKey(virtualKey);
 }
 
-[[nodiscard]] bool IsModifierKey(const ImGuiKey a_key) {
-  switch (a_key) {
-  case ImGuiKey_LeftShift:
-  case ImGuiKey_RightShift:
-  case ImGuiKey_LeftCtrl:
-  case ImGuiKey_RightCtrl:
-  case ImGuiKey_LeftAlt:
-  case ImGuiKey_RightAlt:
-    return true;
-  default:
-    return false;
-  }
-}
-
-[[nodiscard]] bool IsTextNavigationKey(const ImGuiKey a_key) {
-  switch (a_key) {
-  case ImGuiKey_Backspace:
-  case ImGuiKey_Tab:
-  case ImGuiKey_Enter:
-  case ImGuiKey_Escape:
-  case ImGuiKey_LeftArrow:
-  case ImGuiKey_RightArrow:
-  case ImGuiKey_UpArrow:
-  case ImGuiKey_DownArrow:
-  case ImGuiKey_Home:
-  case ImGuiKey_End:
-  case ImGuiKey_PageUp:
-  case ImGuiKey_PageDown:
-  case ImGuiKey_Insert:
-  case ImGuiKey_Delete:
-    return true;
-  default:
-    return false;
-  }
-}
 } // namespace
 
 auto InputManager::GetSingleton() -> InputManager * {
@@ -208,15 +244,35 @@ void InputManager::ProcessInputEvents() {
       const auto *buttonEvent = static_cast<const RE::ButtonEvent *>(event);
       const auto scanCode = buttonEvent->GetIDCode();
       const auto imguiKey = MapScanCodeToImGuiKey(scanCode);
+      const bool keyWentDown = buttonEvent->IsDown();
+      const bool keyWentUp = buttonEvent->IsUp();
 
       if (imguiKey == ImGuiKey_LeftShift || imguiKey == ImGuiKey_RightShift) {
-        shiftDown_ = buttonEvent->IsPressed();
+        if (keyWentDown) {
+          shiftDown_ = true;
+          io.AddKeyEvent(ImGuiMod_Shift, true);
+        } else if (keyWentUp) {
+          shiftDown_ = false;
+          io.AddKeyEvent(ImGuiMod_Shift, false);
+        }
       } else if (imguiKey == ImGuiKey_LeftCtrl ||
                  imguiKey == ImGuiKey_RightCtrl) {
-        ctrlDown_ = buttonEvent->IsPressed();
+        if (keyWentDown) {
+          ctrlDown_ = true;
+          io.AddKeyEvent(ImGuiMod_Ctrl, true);
+        } else if (keyWentUp) {
+          ctrlDown_ = false;
+          io.AddKeyEvent(ImGuiMod_Ctrl, false);
+        }
       } else if (imguiKey == ImGuiKey_LeftAlt ||
                  imguiKey == ImGuiKey_RightAlt) {
-        altDown_ = buttonEvent->IsPressed();
+        if (keyWentDown) {
+          altDown_ = true;
+          io.AddKeyEvent(ImGuiMod_Alt, true);
+        } else if (keyWentUp) {
+          altDown_ = false;
+          io.AddKeyEvent(ImGuiMod_Alt, false);
+        }
       }
 
       switch (buttonEvent->device.get()) {
@@ -224,11 +280,10 @@ void InputManager::ProcessInputEvents() {
         break;
       case RE::INPUT_DEVICE::kKeyboard:
         if (wantsTextInput) {
-          const bool isShortcutChord = ctrlDown_ || altDown_;
-          if (imguiKey != ImGuiKey_None &&
-              (IsModifierKey(imguiKey) || IsTextNavigationKey(imguiKey) ||
-               isShortcutChord)) {
-            io.AddKeyEvent(imguiKey, buttonEvent->IsPressed());
+          if (imguiKey != ImGuiKey_None && keyWentDown) {
+            io.AddKeyEvent(imguiKey, true);
+          } else if (imguiKey != ImGuiKey_None && keyWentUp) {
+            io.AddKeyEvent(imguiKey, false);
           }
           break;
         }
