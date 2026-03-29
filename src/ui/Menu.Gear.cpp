@@ -1,0 +1,129 @@
+#include "Menu.h"
+
+namespace {
+enum class GearColumn : ImGuiID { Name = 1, Plugin };
+}
+
+namespace sosr {
+bool Menu::DrawGearTab() {
+  auto rows = BuildFilteredGear();
+  ImGui::Text("Results: %zu", rows.size());
+  ImGui::SameLine();
+  ImGui::Text("| Equipped rows: %zu", workbench_.GetRowCount());
+  return DrawGearCatalogTable(rows);
+}
+
+bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
+  bool rowClicked = false;
+  if (ImGui::BeginTable("##gear-table", 2,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_Resizable |
+                            ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY,
+                        ImVec2(0.0f, 0.0f))) {
+    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_DefaultSort, 0.0f,
+                            static_cast<ImGuiID>(GearColumn::Name));
+    ImGui::TableSetupColumn("Plugin", ImGuiTableColumnFlags_None, 0.0f,
+                            static_cast<ImGuiID>(GearColumn::Plugin));
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableHeadersRow();
+
+    auto rows = a_rows;
+    SortGearRows(rows, ImGui::TableGetSortSpecs());
+
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(rows.size()));
+    while (clipper.Step()) {
+      for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
+           ++rowIndex) {
+        const auto &entry = *rows[static_cast<std::size_t>(rowIndex)];
+        const auto favorite = IsFavorite(BrowserTab::Gear, entry.id);
+        workbench::EquipmentWidgetItem item{};
+        if (!workbench_.BuildCatalogItem(entry.formID, item)) {
+          item.formID = entry.formID;
+          item.key = "catalog:" + entry.id;
+          item.name = entry.name;
+        }
+        item.name = BuildFavoriteLabel(item.name, favorite);
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        const auto rowContentPos = ImGui::GetCursorScreenPos();
+        const auto rowHeight = 18.0f + (ImGui::GetTextLineHeight() * 2.0f);
+        ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+        const bool selected =
+            selectedCatalogKey_ == entry.id &&
+            (!previewSelected_ || workbench_.IsPreviewingSelection(entry.id));
+        const bool clicked = ImGui::Selectable(
+            ("##catalog-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
+            ImGuiSelectableFlags_SpanAllColumns |
+                ImGuiSelectableFlags_AllowOverlap |
+                ImGuiSelectableFlags_AllowDoubleClick,
+            ImVec2(0.0f, rowHeight));
+        const bool rowHovered = ImGui::IsItemHovered();
+        ImGui::PopStyleColor(3);
+        if (ImGui::BeginPopupContextItem()) {
+          const auto favoriteLabel =
+              favorite ? "Remove from Favorites" : "Add to Favorites";
+          if (ImGui::MenuItem(favoriteLabel)) {
+            SetFavorite(BrowserTab::Gear, entry.id, !favorite);
+          }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Add to Workbench")) {
+            workbench_.AddCatalogSelectionAsRows(
+                std::vector<RE::FormID>{entry.formID},
+                ResolveNewWorkbenchRowConditionId());
+          }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Add Override")) {
+            AddGearEntryToWorkbench(entry);
+          }
+          ImGui::EndPopup();
+        }
+        ImGui::SetCursorScreenPos(rowContentPos);
+        const auto widgetResult =
+            DrawCatalogDragWidget(item, DragSourceKind::Catalog);
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextUnformatted(entry.plugin.data());
+
+        if (selected) {
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY", 0.40f));
+        } else if (rowHovered) {
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
+        }
+
+        if (clicked || widgetResult.clicked) {
+          rowClicked = true;
+          if (selectedCatalogKey_ == entry.id) {
+            ClearCatalogSelection();
+          } else {
+            selectedCatalogKey_ = entry.id;
+            if (previewSelected_) {
+              PreviewGearEntry(entry);
+            } else {
+              workbench_.ClearPreview();
+            }
+          }
+        }
+
+        if ((rowHovered &&
+             ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) ||
+            widgetResult.doubleClicked) {
+          rowClicked = true;
+          AddGearEntryToWorkbench(entry);
+        }
+      }
+    }
+
+    ImGui::EndTable();
+  }
+
+  return rowClicked;
+}
+} // namespace sosr

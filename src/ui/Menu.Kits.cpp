@@ -1,7 +1,10 @@
 #include "Menu.h"
 
 #include "ArmorUtils.h"
+#include "imgui_internal.h"
+#include "ui/catalog/Widgets.h"
 #include "ui/components/EditableCombo.h"
+#include "ui/components/PinnableTooltip.h"
 
 #include <algorithm>
 #include <cctype>
@@ -12,6 +15,7 @@
 
 namespace {
 constexpr auto kModexKitDirectory = "data/interface/modex/user/kits";
+enum class KitColumn : ImGuiID { Name = 1, Collection, Pieces };
 
 std::string TrimText(std::string_view a_text) {
   std::size_t start = 0;
@@ -70,6 +74,141 @@ int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
 } // namespace
 
 namespace sosr {
+bool Menu::DrawKitTab() {
+  auto rows = BuildFilteredKits();
+  ImGui::Text("Results: %zu", rows.size());
+  bool rowClicked = false;
+
+  const auto tableHeight = ImGui::GetContentRegionAvail().y;
+  if (ImGui::BeginTable("##kit-table", 3,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_Resizable |
+                            ImGuiTableFlags_Sortable | ImGuiTableFlags_ScrollY,
+                        ImVec2(0.0f, tableHeight))) {
+    ImGui::TableSetupColumn("Kit", ImGuiTableColumnFlags_DefaultSort, 0.0f,
+                            static_cast<ImGuiID>(KitColumn::Name));
+    ImGui::TableSetupColumn("Collection", ImGuiTableColumnFlags_None, 0.0f,
+                            static_cast<ImGuiID>(KitColumn::Collection));
+    ImGui::TableSetupColumn("Pieces",
+                            ImGuiTableColumnFlags_PreferSortDescending, 0.0f,
+                            static_cast<ImGuiID>(KitColumn::Pieces));
+    ImGui::TableSetupScrollFreeze(0, 1);
+    ImGui::TableHeadersRow();
+
+    SortKitRows(rows, ImGui::TableGetSortSpecs());
+
+    ImGuiListClipper clipper;
+    clipper.Begin(static_cast<int>(rows.size()));
+    while (clipper.Step()) {
+      for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
+           ++rowIndex) {
+        const auto &kit = *rows[static_cast<std::size_t>(rowIndex)];
+        const auto favorite = IsFavorite(BrowserTab::Kits, kit.id);
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        const auto rowContentPos = ImGui::GetCursorScreenPos();
+        const auto rowHeight = ImGui::GetTextLineHeightWithSpacing();
+        ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+        ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+        const bool selected =
+            selectedCatalogKey_ == kit.id &&
+            (!previewSelected_ || workbench_.IsPreviewingSelection(kit.id));
+        const bool clicked = ImGui::Selectable(
+            ("##kit-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
+            ImGuiSelectableFlags_SpanAllColumns |
+                ImGuiSelectableFlags_AllowOverlap |
+                ImGuiSelectableFlags_AllowDoubleClick,
+            ImVec2(0.0f, rowHeight));
+        const bool rowHovered = ImGui::IsItemHovered();
+        ImGui::PopStyleColor(3);
+        if (ImGui::BeginPopupContextItem()) {
+          const auto favoriteLabel =
+              favorite ? "Remove from Favorites" : "Add to Favorites";
+          if (ImGui::MenuItem(favoriteLabel)) {
+            SetFavorite(BrowserTab::Kits, kit.id, !favorite);
+          }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Add to Workbench")) {
+            workbench_.AddCatalogSelectionAsRows(
+                kit.armorFormIDs, ResolveNewWorkbenchRowConditionId());
+          }
+          ImGui::Separator();
+          if (ImGui::MenuItem("Add Override")) {
+            AddKitEntryToWorkbench(kit, true);
+          }
+          if (ImGui::MenuItem("Append Overrides")) {
+            AddKitEntryToWorkbench(kit, false);
+          }
+          ImGui::Separator();
+          ImGui::PushStyleColor(
+              ImGuiCol_Text,
+              ImGui::ColorConvertU32ToFloat4(
+                  ThemeConfig::GetSingleton()->GetColorU32("DECLINE")));
+          if (ImGui::MenuItem("Delete Kit")) {
+            OpenDeleteKitDialog(kit);
+          }
+          ImGui::PopStyleColor();
+          ImGui::EndPopup();
+        }
+        ImGui::SetCursorScreenPos(rowContentPos);
+
+        if (selected) {
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("PRIMARY", 0.40f));
+        } else if (rowHovered) {
+          ImGui::TableSetBgColor(
+              ImGuiTableBgTarget_RowBg0,
+              ThemeConfig::GetSingleton()->GetColorU32("TABLE_HOVER", 0.12f));
+        }
+
+        if (clicked) {
+          rowClicked = true;
+          if (selectedCatalogKey_ == kit.id) {
+            ClearCatalogSelection();
+          } else {
+            selectedCatalogKey_ = kit.id;
+            if (previewSelected_) {
+              PreviewKitEntry(kit);
+            } else {
+              workbench_.ClearPreview();
+            }
+          }
+        }
+
+        if (rowHovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+          rowClicked = true;
+          AddKitEntryToWorkbench(kit, true);
+        }
+        if (!ImGui::IsDragDropActive() &&
+            ui::components::ShouldDrawPinnableTooltip("kit:" + kit.id,
+                                                      rowHovered)) {
+          ui::catalog::DrawKitTooltip(kit, rowHovered);
+        }
+
+        const auto displayName = BuildFavoriteLabel(kit.name, favorite);
+        ImGui::TextUnformatted(displayName.c_str());
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::TextUnformatted(kit.collection.empty() ? "Root"
+                                                      : kit.collection.c_str());
+
+        ImGui::TableSetColumnIndex(2);
+        const auto availableWidth = ImGui::GetContentRegionAvail().x;
+        const auto displayText =
+            ui::catalog::TruncateTextToWidth(kit.piecesText, availableWidth);
+        ImGui::TextUnformatted(displayText.c_str());
+      }
+    }
+
+    ImGui::EndTable();
+  }
+
+  return rowClicked;
+}
+
 void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry,
                                   const bool a_replaceExisting) {
   const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
