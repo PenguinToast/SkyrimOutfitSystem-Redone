@@ -11,7 +11,8 @@ void SaveCallback(SKSE::SerializationInterface *a_skse) {
 
 void LoadCallback(SKSE::SerializationInterface *a_skse) {
   ui::conditions::ConditionParamOptionCache::Get().Reset();
-  Menu::GetSingleton()->GetWorkbench().Deserialize(a_skse);
+  Menu::GetSingleton()->GetWorkbench().Deserialize(
+      a_skse, std::string(ui::conditions::kDefaultConditionId));
   Menu::GetSingleton()->DeserializeConditions(a_skse);
   Menu::GetSingleton()->GetWorkbench().SyncDynamicArmorVariantsExtended(
       Menu::GetSingleton()->GetConditions());

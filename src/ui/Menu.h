@@ -168,6 +168,11 @@ private:
   [[nodiscard]] bool DrawConditionTab();
   void DrawOptionsTab();
   void DrawConditionEditorDialog();
+  void DrawConditionEditorClauseTable(
+      ConditionEditorState &a_editor,
+      const std::vector<std::string> &a_conditionFunctionNames,
+      float a_editButtonWidth, float a_deleteButtonWidth,
+      float a_actionsColumnWidth);
   void DrawCreateKitDialog();
   void DrawDeleteKitDialog();
   void AcceptOverridePayload(int a_targetRowIndex);

@@ -41,22 +41,9 @@ std::string BuildRowKey(const std::string_view a_sourceKey,
   return key;
 }
 
-std::optional<std::string> GetDefaultRowConditionId() {
-  return std::string(sosr::conditions::kDefaultConditionId);
-}
-
 void UpdateRowIdentity(VariantWorkbenchRow &a_row) {
   a_row.key = BuildRowKey(a_row.sourceKey, a_row.conditionId);
   a_row.equipped.key = a_row.key;
-}
-
-std::optional<std::string>
-ResolveNewRowConditionId(std::optional<std::string> a_conditionId) {
-  if (a_conditionId.has_value()) {
-    return a_conditionId;
-  }
-
-  return GetDefaultRowConditionId();
 }
 
 int ScorePreferredTargetSlots(
@@ -307,8 +294,7 @@ void VariantWorkbench::SyncRowsFromActor(
     return;
   }
 
-  const auto syncConditionId =
-      ResolveNewRowConditionId(std::move(a_newRowConditionId));
+  const auto syncConditionId = std::move(a_newRowConditionId);
 
   for (auto &row : rows_) {
     row.isEquipped = false;
@@ -411,8 +397,10 @@ void VariantWorkbench::SyncRowsFromActor(
   }
 }
 
-void VariantWorkbench::SyncRowsFromPlayer() {
-  SyncRowsFromActor(RE::PlayerCharacter::GetSingleton());
+void VariantWorkbench::SyncRowsFromPlayer(
+    std::optional<std::string> a_newRowConditionId) {
+  SyncRowsFromActor(RE::PlayerCharacter::GetSingleton(),
+                    std::move(a_newRowConditionId));
 }
 
 bool VariantWorkbench::BuildCatalogItem(RE::FormID a_formID,
@@ -579,8 +567,7 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
     const std::vector<RE::FormID> &a_formIDs,
     std::optional<std::string> a_conditionId) const {
   std::vector<VariantWorkbenchRow> newRows;
-  const auto resolvedConditionId =
-      ResolveNewRowConditionId(std::move(a_conditionId));
+  const auto resolvedConditionId = std::move(a_conditionId);
 
   std::vector<const RE::TESObjectARMO *> armors;
   if (!ResolveCatalogArmors(a_formIDs, armors)) {
@@ -627,8 +614,7 @@ VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask,
     return std::nullopt;
   }
 
-  const auto resolvedConditionId =
-      ResolveNewRowConditionId(std::move(a_conditionId));
+  const auto resolvedConditionId = std::move(a_conditionId);
   const auto rowKey = BuildRowKey(sourceKey, resolvedConditionId);
   if (std::ranges::find(rows_, rowKey, &VariantWorkbenchRow::key) !=
       rows_.end()) {

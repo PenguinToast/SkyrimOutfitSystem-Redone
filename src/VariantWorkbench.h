@@ -62,9 +62,8 @@ struct VariantWorkbenchRow {
 class VariantWorkbench {
 public:
   void SyncRowsFromActor(RE::Actor *a_actor,
-                         std::optional<std::string> a_newRowConditionId =
-                             std::nullopt);
-  void SyncRowsFromPlayer();
+                         std::optional<std::string> a_newRowConditionId);
+  void SyncRowsFromPlayer(std::optional<std::string> a_newRowConditionId);
   bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
   bool BuildSlotItem(std::uint64_t a_slotMask,
                      EquipmentWidgetItem &a_item) const;
@@ -117,7 +116,8 @@ public:
   void
   SyncDynamicArmorVariantsExtended(std::vector<conditions::Definition> &a_conditions);
   void Serialize(SKSE::SerializationInterface *a_skse) const;
-  void Deserialize(SKSE::SerializationInterface *a_skse);
+  void Deserialize(SKSE::SerializationInterface *a_skse,
+                   std::optional<std::string> a_missingConditionId);
   void Revert();
 
   [[nodiscard]] const std::vector<VariantWorkbenchRow> &GetRows() const {

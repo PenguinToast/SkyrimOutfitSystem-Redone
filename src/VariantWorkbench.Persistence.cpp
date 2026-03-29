@@ -582,7 +582,9 @@ void VariantWorkbench::Serialize(SKSE::SerializationInterface *a_skse) const {
                       static_cast<std::uint32_t>(payload.size()));
 }
 
-void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
+void VariantWorkbench::Deserialize(
+    SKSE::SerializationInterface *a_skse,
+    std::optional<std::string> a_missingConditionId) {
   Revert();
 
   std::uint32_t type = 0;
@@ -634,13 +636,13 @@ void VariantWorkbench::Deserialize(SKSE::SerializationInterface *a_skse) {
                                 ? std::nullopt
                                 : std::optional<std::string>(conditionId);
         } else {
-          row.conditionId = std::string(conditions::kDefaultConditionId);
+          row.conditionId = a_missingConditionId;
         }
       } else {
-        row.conditionId = std::string(conditions::kDefaultConditionId);
+        row.conditionId = a_missingConditionId;
       }
     } else {
-      row.conditionId = std::string(conditions::kDefaultConditionId);
+      row.conditionId = a_missingConditionId;
     }
     UpdateRowIdentity(row);
     row.hideEquipped = serializedRow.value("hideEquipped", false);

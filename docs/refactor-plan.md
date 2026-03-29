@@ -16,7 +16,7 @@
 
 ### Phase 1: Extract Condition Core Types
 
-Status: in progress
+Status: completed
 
 Deliverables:
 
@@ -33,6 +33,8 @@ Notes:
 
 ### Phase 2: Split Condition Domain from Condition UI
 
+Status: in progress
+
 Deliverables:
 
 - Move default condition creation, name/color suggestion, dependency validation, and cycle checks into `src/conditions/`.
@@ -42,7 +44,26 @@ Deliverables:
   - `src/ui/conditions/ConditionEditorWindow.cpp`
   - `src/ui/conditions/ConditionClauseTable.cpp`
 
+Progress:
+
+- Completed:
+  - `src/conditions/Definition.h`
+  - `src/conditions/Defaults.cpp`
+  - `src/conditions/Validation.cpp`
+  - `src/ui/conditions/EditorSupport.cpp`
+  - `src/ui/conditions/Widgets.cpp`
+  - `src/ui/Menu.Conditions.State.cpp`
+  - `src/ui/Menu.Conditions.Catalog.cpp`
+  - `src/ui/Menu.Conditions.Editor.cpp`
+  - `src/ui/Menu.Conditions.ClauseTable.cpp`
+  - `src/ui/Menu.Conditions.Serialization.cpp`
+- Remaining:
+  - move more condition-only helpers out of `Menu.cpp`
+  - decide whether the next step is a `src/ui/conditions/` move/rename pass or to leave the current `Menu.Conditions.*.cpp` split as the stable intermediate state
+
 ### Phase 3: Refactor Workbench Boundaries
+
+Status: in progress
 
 Deliverables:
 
@@ -50,6 +71,16 @@ Deliverables:
 - Make row-condition selection an explicit caller policy.
 - Split workbench core logic from DAV persistence/sync logic.
 - Keep row ordering and filtered reorder logic in a single focused module.
+
+Progress:
+
+- Completed:
+  - `VariantWorkbench` no longer silently defaults missing new-row conditions to `Player`
+  - caller-side policy now lives in menu/workbench filter code
+  - workbench filter/default-target logic moved out of `Menu.cpp` into `src/ui/Menu.Workbench.Filters.cpp`
+- Remaining:
+  - split DAV sync/persistence further from row storage/manipulation if the file continues to grow
+  - consider moving workbench core into `src/workbench/` once the boundary is stable
 
 ### Phase 4: Reduce Menu Surface Area
 
@@ -79,3 +110,39 @@ Deliverables:
 3. Move condition validation/defaults/graph helpers out of `Menu.Conditions.cpp`.
 4. Split workbench policy from workbench storage/sync.
 5. Shrink `Menu` after the lower-level seams are established.
+
+
+### Context
+
+ 1. Menu is a god object that currently owns too many unrelated subsystems, which makes every feature change cross-cut multiple tabs and increases regression risk. The same class owns
+     menu lifecycle, input capture, font/theme settings, catalog filtering, workbench filtering/sync, kit CRUD, and condition editing in one header and one implementation surface:
+     SkyrimVanitySystem/src/ui/Menu.h:26, SkyrimVanitySystem/src/ui/Menu.h:137, SkyrimVanitySystem/src/ui/Menu.cpp:729, SkyrimVanitySystem/src/ui/Menu.cpp:851, SkyrimVanitySystem/src/
+     ui/Menu.cpp:1190, SkyrimVanitySystem/src/ui/Menu.cpp:1406. This is the main place to refactor first. A better boundary would be: MenuShell for lifecycle/frame orchestration,
+     CatalogBrowserController, WorkbenchController, ConditionController, and OptionsController, with per-tab rendering moved out of Menu entirely.
+  2. The condition model is not a true domain model yet; it is still UI-coupled and execution-coupled. ui::conditions::Definition stores an ImVec4 color and also stores transient
+     materialization/runtime cache state (shared_ptr<RE::TESCondition>, signatures, refresh targets), while non-UI code consumes it directly: SkyrimVanitySystem/src/ui/
+     ConditionData.h:16, SkyrimVanitySystem/src/ui/ConditionData.h:39, SkyrimVanitySystem/src/ConditionMaterializer.cpp:21, SkyrimVanitySystem/src/VariantWorkbench.cpp:44. This makes
+     the condition core depend on ImGui/UI types and forces workbench/materializer code to reach into ui::conditions. I would split this into:
+
+  - conditions/Definition.h: pure persisted model
+  - conditions/GraphMetadata.h: refs/reverse-deps
+
+  3. VariantWorkbench still embeds UI/policy decisions that should be injected from above. The workbench core decides what the default condition is and uses the UI constant directly,
+     then uses that during actor sync and row creation: SkyrimVanitySystem/src/VariantWorkbench.cpp:44, SkyrimVanitySystem/src/VariantWorkbench.cpp:53, SkyrimVanitySystem/src/
+     VariantWorkbench.cpp:301. That means the workbench is not just a row/override model; it also knows SVS default condition policy. This should move behind a passed-in
+     RowConditionPolicy or explicit condition argument everywhere. If a caller wants default Player, it should decide that before calling the workbench.
+  4. Menu.Conditions.cpp is doing four jobs at once: defaults/factories, validation/graph rules, function/parameter metadata shaping, and the full editor/catalog rendering. The top of
+     the file already contains domain-ish logic like default condition creation and naming/color selection: SkyrimVanitySystem/src/ui/Menu.Conditions.cpp:230, SkyrimVanitySystem/src/
+     ui/Menu.Conditions.cpp:240, SkyrimVanitySystem/src/ui/Menu.Conditions.cpp:303. Then the same file contains the entire editor window and clause table renderer: SkyrimVanitySystem/
+     src/ui/Menu.Conditions.cpp:1388, SkyrimVanitySystem/src/ui/Menu.Conditions.cpp:1494, SkyrimVanitySystem/src/ui/Menu.Conditions.cpp:1891. This file is large enough now that
+     refactoring by feature is warranted, not optional. I would split into:
+
+  - ConditionDefaults.cpp
+  - ConditionDraftValidation.cpp
+  - ConditionCatalogPane.cpp
+     EditableCombo.cpp:14, SkyrimVanitySystem/src/ConditionMaterializer.cpp:48. More importantly, EquipmentCatalog.cpp duplicates form/editor/plugin/display helpers that already exist
+     in ArmorUtils.cpp: SkyrimVanitySystem/src/ArmorUtils.cpp:93, SkyrimVanitySystem/src/ArmorUtils.cpp:117, SkyrimVanitySystem/src/ArmorUtils.cpp:178, SkyrimVanitySystem/src/
+     EquipmentCatalog.cpp:77, SkyrimVanitySystem/src/EquipmentCatalog.cpp:110, SkyrimVanitySystem/src/EquipmentCatalog.cpp:127. That should be consolidated before it drifts further.
+  6. InputManager still depends directly on Menu::GetSingleton() and menu state to decide how keyboard events are interpreted: SkyrimVanitySystem/src/InputManager.cpp:227,
+     SkyrimVanitySystem/src/InputManager.cpp:233. That makes the input backend know about one specific UI consumer instead of exposing a small input sink / wants text input
+     abstraction. It works, but it is another coupling point that will make future UI decomposition harder.
