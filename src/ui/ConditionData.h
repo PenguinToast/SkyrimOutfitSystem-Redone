@@ -8,8 +8,6 @@ using Comparator = sosr::conditions::Comparator;
 using Connective = sosr::conditions::Connective;
 using Clause = sosr::conditions::Clause;
 using Color = sosr::conditions::Color;
-using TransientMaterializationCache =
-    sosr::conditions::TransientMaterializationCache;
 using Definition = sosr::conditions::Definition;
 
 inline constexpr std::string_view kDefaultConditionId =

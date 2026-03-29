@@ -2,6 +2,8 @@
 
 #include "ArmorUtils.h"
 #include "RE/A/ActorValueList.h"
+#include "conditions/GraphMetadata.h"
+#include "conditions/MaterializationState.h"
 
 #include <algorithm>
 #include <array>
@@ -22,6 +24,8 @@ using Clause = sosr::conditions::Clause;
 using Comparator = sosr::conditions::Comparator;
 using Connective = sosr::conditions::Connective;
 using Definition = sosr::conditions::Definition;
+using GraphMetadata = sosr::conditions::GraphMetadata;
+using MaterializationState = sosr::conditions::MaterializationState;
 using ParamType = RE::SCRIPT_PARAM_TYPE;
 
 struct NativeLiteral {
@@ -37,6 +41,8 @@ struct NativeLiteral {
 using OrClause = std::vector<NativeLiteral>;
 using ConditionCnf = std::vector<OrClause>;
 using ConditionVisitSet = std::unordered_set<std::string>;
+using ConditionGraphMap = std::unordered_map<std::string, GraphMetadata>;
+using ConditionRuntimeMap = std::unordered_map<std::string, MaterializationState>;
 
 union ConditionParam {
   char c;
@@ -603,47 +609,76 @@ BuildConditionItemData(const NativeLiteral &a_literal,
   data.flags.global = false;
   return data;
 }
+
+ConditionGraphMap &GetConditionGraphMap() {
+  static ConditionGraphMap graph;
+  return graph;
+}
+
+ConditionRuntimeMap &GetConditionRuntimeMap() {
+  static ConditionRuntimeMap runtime;
+  return runtime;
+}
 } // namespace
 
 namespace sosr::conditions {
 void RebuildConditionDependencyMetadata(std::vector<Definition> &a_conditions) {
-  for (auto &condition : a_conditions) {
-    condition.referencedConditionIds.clear();
-    condition.reverseDependencyIds.clear();
+  ConditionGraphMap rebuiltGraph;
+  rebuiltGraph.reserve(a_conditions.size());
 
+  for (auto &condition : a_conditions) {
+    auto &metadata = rebuiltGraph[condition.id];
     std::unordered_set<std::string> seenReferencedConditionIds;
     for (const auto &clause : condition.clauses) {
       if (clause.customConditionId.empty()) {
         continue;
       }
       if (seenReferencedConditionIds.insert(clause.customConditionId).second) {
-        condition.referencedConditionIds.push_back(clause.customConditionId);
+        metadata.referencedConditionIds.push_back(clause.customConditionId);
       }
     }
   }
 
-  for (auto &condition : a_conditions) {
-    for (const auto &referencedConditionId : condition.referencedConditionIds) {
-      if (auto *referenced =
-              FindDefinitionById(a_conditions, referencedConditionId)) {
-        referenced->reverseDependencyIds.push_back(condition.id);
+  for (const auto &condition : a_conditions) {
+    const auto graphIt = rebuiltGraph.find(condition.id);
+    if (graphIt == rebuiltGraph.end()) {
+      continue;
+    }
+    for (const auto &referencedConditionId :
+         graphIt->second.referencedConditionIds) {
+      if (auto referencedIt = rebuiltGraph.find(referencedConditionId);
+          referencedIt != rebuiltGraph.end()) {
+        referencedIt->second.reverseDependencyIds.push_back(condition.id);
       }
     }
   }
+
+  auto &runtime = GetConditionRuntimeMap();
+  for (auto it = runtime.begin(); it != runtime.end();) {
+    if (!rebuiltGraph.contains(it->first)) {
+      it = runtime.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
+  GetConditionGraphMap() = std::move(rebuiltGraph);
 }
 
 void InvalidateConditionMaterializationCaches(
     std::vector<Definition> &a_conditions) {
-  for (auto &condition : a_conditions) {
-    condition.transientCache.Clear();
-  }
+  (void)a_conditions;
+  GetConditionRuntimeMap().clear();
 }
 
 void InvalidateConditionMaterializationCachesFrom(
     std::vector<Definition> &a_conditions, const std::string_view a_conditionId) {
+  (void)a_conditions;
   std::vector<std::string> stack;
   std::unordered_set<std::string> visited;
   stack.emplace_back(a_conditionId);
+  auto &graph = GetConditionGraphMap();
+  auto &runtime = GetConditionRuntimeMap();
 
   while (!stack.empty()) {
     auto conditionId = std::move(stack.back());
@@ -653,13 +688,15 @@ void InvalidateConditionMaterializationCachesFrom(
       continue;
     }
 
-    auto *condition = FindDefinitionById(a_conditions, conditionId);
-    if (!condition) {
+    runtime.erase(conditionId);
+
+    const auto graphIt = graph.find(conditionId);
+    if (graphIt == graph.end()) {
       continue;
     }
 
-    condition->transientCache.Clear();
-    for (const auto &reverseDependencyId : condition->reverseDependencyIds) {
+    for (const auto &reverseDependencyId :
+         graphIt->second.reverseDependencyIds) {
       stack.push_back(reverseDependencyId);
     }
   }
@@ -672,19 +709,22 @@ MaterializeConditionById(std::string_view a_conditionId,
   if (!definition) {
     return std::nullopt;
   }
-  if (definition->transientCache.valid && definition->transientCache.condition) {
+  auto &runtime = GetConditionRuntimeMap();
+  if (auto runtimeIt = runtime.find(definition->id);
+      runtimeIt != runtime.end() && runtimeIt->second.valid &&
+      runtimeIt->second.condition) {
     return MaterializedCondition{
-        .condition = definition->transientCache.condition,
-        .signature = definition->transientCache.signature,
+        .condition = runtimeIt->second.condition,
+        .signature = runtimeIt->second.signature,
         .refreshTargets =
-            RefreshTargets{definition->transientCache.refreshActorFormIDs,
-                           definition->transientCache.refreshUseNearbyFallback}};
+            RefreshTargets{runtimeIt->second.refreshActorFormIDs,
+                           runtimeIt->second.refreshUseNearbyFallback}};
   }
 
   ConditionVisitSet visiting;
   auto cnf = BuildConditionCnf(*definition, a_conditions, visiting);
   if (!cnf || cnf->empty()) {
-    definition->transientCache.Clear();
+    runtime.erase(definition->id);
     return std::nullopt;
   }
 
@@ -697,7 +737,7 @@ MaterializeConditionById(std::string_view a_conditionId,
       const auto data = BuildConditionItemData(group[literalIndex],
                                                literalIndex + 1 < group.size());
       if (!data) {
-        definition->transientCache.Clear();
+        runtime.erase(definition->id);
         return std::nullopt;
       }
 
@@ -714,17 +754,17 @@ MaterializeConditionById(std::string_view a_conditionId,
   }
 
   const auto refreshTargets = BuildRefreshTargets(condition);
-  definition->transientCache.valid = true;
-  definition->transientCache.condition = condition;
-  definition->transientCache.signature = BuildCnfSignature(*cnf);
-  definition->transientCache.refreshActorFormIDs.assign(
+  auto &runtimeState = runtime[definition->id];
+  runtimeState.valid = true;
+  runtimeState.condition = condition;
+  runtimeState.signature = BuildCnfSignature(*cnf);
+  runtimeState.refreshActorFormIDs.assign(
       refreshTargets.actorFormIDs.begin(), refreshTargets.actorFormIDs.end());
-  definition->transientCache.refreshUseNearbyFallback =
-      refreshTargets.useNearbyFallback;
+  runtimeState.refreshUseNearbyFallback = refreshTargets.useNearbyFallback;
 
   return MaterializedCondition{
-      .condition = definition->transientCache.condition,
-      .signature = definition->transientCache.signature,
+      .condition = runtimeState.condition,
+      .signature = runtimeState.signature,
       .refreshTargets = refreshTargets};
 }
 } // namespace sosr::conditions
