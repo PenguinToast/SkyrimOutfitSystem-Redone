@@ -31,5 +31,6 @@ struct ConflictState {
 };
 
 [[nodiscard]] ConflictState
-BuildConflictState(const std::vector<workbench::VariantWorkbenchRow> &a_rows);
+BuildConflictState(
+    const std::vector<::sosr::workbench::VariantWorkbenchRow> &a_rows);
 } // namespace sosr::ui::workbench_conflicts

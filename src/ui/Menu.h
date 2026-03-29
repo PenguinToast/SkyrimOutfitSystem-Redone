@@ -161,6 +161,11 @@ private:
   [[nodiscard]] bool
   DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows);
   void DrawVariantWorkbenchPane();
+  void DrawWorkbenchFilterBar();
+  void DrawWorkbenchToolbar();
+  void DrawWorkbenchEmptyState(const char *a_tableId, const char *a_targetId,
+                               const char *a_message);
+  void DrawWorkbenchTable(const std::vector<int> &a_visibleRowIndices);
   [[nodiscard]] bool DrawOutfitTab();
   [[nodiscard]] bool DrawKitTab();
   [[nodiscard]] bool DrawSlotTab();
