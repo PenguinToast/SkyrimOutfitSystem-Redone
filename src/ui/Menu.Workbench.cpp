@@ -282,8 +282,7 @@ void Menu::DrawVariantWorkbenchPane() {
   };
 
   std::string selectedFilterLabel = "Show All";
-  if (const auto it =
-          std::ranges::find_if(filterOptions, matchesCurrentFilter);
+  if (const auto it = std::ranges::find_if(filterOptions, matchesCurrentFilter);
       it != filterOptions.end()) {
     selectedFilterLabel = it->label;
   }
@@ -291,10 +290,11 @@ void Menu::DrawVariantWorkbenchPane() {
   if (ui::components::DrawSearchableDropdown(
           "##workbench-filter", "Filter workbench...", selectedFilterLabel,
           filterLabels, ImGui::GetContentRegionAvail().x)) {
-    if (const auto it = std::ranges::find_if(
-            filterOptions, [&](const WorkbenchFilterOption &a_option) {
-              return a_option.label == selectedFilterLabel;
-            });
+    if (const auto it =
+            std::ranges::find_if(filterOptions,
+                                 [&](const WorkbenchFilterOption &a_option) {
+                                   return a_option.label == selectedFilterLabel;
+                                 });
         it != filterOptions.end()) {
       workbenchFilter_.kind = it->kind;
       workbenchFilter_.actorFormID = it->actorFormID;
@@ -540,7 +540,8 @@ void Menu::DrawVariantWorkbenchPane() {
         ImGui::PopTextWrapPos();
 
         if (ImGui::BeginDragDropTargetCustom(
-                leftCellRect, ImGui::GetID("##filtered-workbench-row-target"))) {
+                leftCellRect,
+                ImGui::GetID("##filtered-workbench-row-target"))) {
           if (const auto *payload =
                   ImGui::AcceptDragDropPayload(kVariantItemPayloadType);
               payload && payload->Data != nullptr &&
@@ -1046,7 +1047,8 @@ void Menu::DrawVariantWorkbenchPane() {
           hoveredVisibleReorderIndex < static_cast<int>(rowBottomY.size())) {
         insertionLineY =
             hoveredRowInsertAfter
-                ? rowBottomY[static_cast<std::size_t>(hoveredVisibleReorderIndex)]
+                ? rowBottomY[static_cast<std::size_t>(
+                      hoveredVisibleReorderIndex)]
                 : rowTopY[static_cast<std::size_t>(hoveredVisibleReorderIndex)];
       }
 

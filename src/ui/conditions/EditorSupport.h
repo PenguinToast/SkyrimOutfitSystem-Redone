@@ -32,7 +32,8 @@ struct FunctionInfo {
 [[nodiscard]] std::string TrimText(std::string_view a_text);
 [[nodiscard]] int CompareTextInsensitive(std::string_view a_left,
                                          std::string_view a_right);
-[[nodiscard]] bool IsBooleanComparator(sosr::conditions::Comparator a_comparator);
+[[nodiscard]] bool
+IsBooleanComparator(sosr::conditions::Comparator a_comparator);
 [[nodiscard]] sosr::conditions::Color PickDistinctConditionColor(
     std::span<const sosr::conditions::Color> a_existingColors);
 [[nodiscard]] std::string BuildSuggestedConditionName(
@@ -43,8 +44,8 @@ BuildNewConditionTemplate(const std::string &a_name,
                           const sosr::conditions::Color &a_color);
 
 [[nodiscard]] const std::vector<FunctionInfo> &GetConditionFunctionInfos();
-[[nodiscard]] const FunctionInfo *FindConditionFunctionInfo(
-    std::string_view a_name);
+[[nodiscard]] const FunctionInfo *
+FindConditionFunctionInfo(std::string_view a_name);
 [[nodiscard]] const FunctionInfo *ResolveConditionFunctionInfo(
     const sosr::conditions::Clause &a_clause,
     const std::vector<sosr::conditions::Definition> &a_conditions,
@@ -60,9 +61,10 @@ BuildNewConditionTemplate(const std::string &a_name,
     const std::vector<sosr::conditions::Definition> &a_conditions);
 [[nodiscard]] ValueEditorKind
 GetEditorKindForParamType(RE::SCRIPT_PARAM_TYPE a_type);
-[[nodiscard]] RE::SCRIPT_PARAM_TYPE ResolveEditorParamType(
-    std::string_view a_functionName, std::uint16_t a_paramIndex,
-    RE::SCRIPT_PARAM_TYPE a_type);
+[[nodiscard]] RE::SCRIPT_PARAM_TYPE
+ResolveEditorParamType(std::string_view a_functionName,
+                       std::uint16_t a_paramIndex,
+                       RE::SCRIPT_PARAM_TYPE a_type);
 [[nodiscard]] std::string FormatNumberString(double a_value);
 [[nodiscard]] bool ParseBooleanComparand(std::string_view a_text,
                                          bool a_defaultValue);

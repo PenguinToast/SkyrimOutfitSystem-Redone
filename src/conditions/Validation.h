@@ -12,16 +12,18 @@ namespace sosr::conditions {
 FindDefinitionById(const std::vector<Definition> &a_conditions,
                    std::string_view a_id);
 
-[[nodiscard]] Definition *FindDefinitionById(std::vector<Definition> &a_conditions,
-                                             std::string_view a_id);
+[[nodiscard]] Definition *
+FindDefinitionById(std::vector<Definition> &a_conditions,
+                   std::string_view a_id);
 
 [[nodiscard]] const Definition *
 FindDefinitionByName(const std::vector<Definition> &a_conditions,
                      std::string_view a_name,
                      std::string_view a_excludedId = {});
 
-[[nodiscard]] bool HasDependencyCycle(const Definition &a_draft,
-                                      const std::vector<Definition> &a_conditions);
+[[nodiscard]] bool
+HasDependencyCycle(const Definition &a_draft,
+                   const std::vector<Definition> &a_conditions);
 
 [[nodiscard]] std::string ValidateDefinitionNameAndGraph(
     const Definition &a_definition, const std::vector<Definition> &a_conditions,

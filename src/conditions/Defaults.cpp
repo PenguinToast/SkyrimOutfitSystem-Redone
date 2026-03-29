@@ -3,8 +3,8 @@
 #include <algorithm>
 
 namespace {
-constexpr sosr::conditions::Color kDefaultConditionColor{
-    0.55f, 0.55f, 0.55f, 1.0f};
+constexpr sosr::conditions::Color kDefaultConditionColor{0.55f, 0.55f, 0.55f,
+                                                         1.0f};
 }
 
 namespace sosr::conditions {

@@ -1,9 +1,9 @@
 #include "ui/catalog/Widgets.h"
 
 #include "ArmorUtils.h"
-#include "integrations/DynamicArmorVariantsExtendedClient.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "integrations/DynamicArmorVariantsExtendedClient.h"
 #include "ui/ThemeConfig.h"
 #include "ui/components/CatalogCollectionTooltip.h"
 #include "ui/components/PinnableTooltip.h"
@@ -53,7 +53,8 @@ std::string TruncateTextToWidth(std::string_view a_text, const float a_width) {
   return truncated;
 }
 
-void DrawOutfitTooltip(const OutfitEntry &a_outfit, const bool a_hoveredSource) {
+void DrawOutfitTooltip(const OutfitEntry &a_outfit,
+                       const bool a_hoveredSource) {
   std::vector<components::CatalogTooltipMetaRow> metaRows;
   if (!a_outfit.editorID.empty()) {
     metaRows.push_back({kIconEditorId, "Editor ID", a_outfit.editorID});
@@ -77,17 +78,15 @@ void DrawOutfitTooltip(const OutfitEntry &a_outfit, const bool a_hoveredSource) 
 
 void DrawKitTooltip(const KitEntry &a_kit, const bool a_hoveredSource) {
   std::vector<components::CatalogTooltipMetaRow> metaRows;
-  metaRows.push_back(
-      {kIconCollection, "Collection",
-       a_kit.collection.empty() ? "Root" : a_kit.collection});
+  metaRows.push_back({kIconCollection, "Collection",
+                      a_kit.collection.empty() ? "Root" : a_kit.collection});
   if (!a_kit.filepath.empty()) {
     metaRows.push_back({kIconFile, "File", a_kit.filepath});
   }
   metaRows.push_back({kIconIdentifier, "Identifier", a_kit.id});
 
-  components::DrawCatalogCollectionTooltip("kit:" + a_kit.id, a_hoveredSource,
-                                           a_kit.name, metaRows,
-                                           a_kit.itemTree);
+  components::DrawCatalogCollectionTooltip(
+      "kit:" + a_kit.id, a_hoveredSource, a_kit.name, metaRows, a_kit.itemTree);
 }
 
 void DrawSimplePinnableTooltip(const std::string_view a_id,

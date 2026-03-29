@@ -1,5 +1,7 @@
 #include "EquipmentCatalog.h"
 
+#include "ArmorUtils.h"
+
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -8,7 +10,6 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <unordered_set>
-#include <windows.h>
 
 namespace {
 using BipedSlot = RE::BIPED_MODEL::BipedObjectSlot;
@@ -74,72 +75,8 @@ std::string CopyCString(const char *a_text) {
   return a_text;
 }
 
-std::string FormatFormID(RE::FormID a_formID) {
-  char buffer[16]{};
-  std::snprintf(buffer, sizeof(buffer), "%08X", a_formID);
-  return buffer;
-}
-
-using GetPo3EditorIDFn = const char *(*)(std::uint32_t);
-
-std::string GetPo3EditorID(RE::FormID a_formID) {
-  static auto *tweaks = GetModuleHandleA("po3_Tweaks");
-  static auto *function = reinterpret_cast<GetPo3EditorIDFn>(
-      tweaks ? GetProcAddress(tweaks, "GetFormEditorID") : nullptr);
-  return function ? CopyCString(function(a_formID)) : std::string{};
-}
-
-std::string GetPluginName(const RE::TESForm *a_form) {
-  if (!a_form) {
-    return "Unknown";
-  }
-
-  const auto *file = a_form->GetFile(0);
-  if (!file) {
-    return "Unknown";
-  }
-
-  const auto filename = file->GetFilename();
-  if (filename.empty()) {
-    return "Unknown";
-  }
-
-  return std::string(filename);
-}
-
-std::string GetEditorID(const RE::TESForm *a_form) {
-  if (!a_form) {
-    return {};
-  }
-
-  auto editorID = CopyCString(a_form->GetFormEditorID());
-  if (!editorID.empty()) {
-    return editorID;
-  }
-
-  return GetPo3EditorID(a_form->GetFormID());
-}
-
 std::string GetName(const RE::TESForm *a_form) {
   return a_form ? CopyCString(a_form->GetName()) : std::string{};
-}
-
-std::string GetDisplayName(const RE::TESForm *a_form) {
-  if (!a_form) {
-    return "Unknown";
-  }
-
-  auto name = GetName(a_form);
-  if (!name.empty()) {
-    return name;
-  }
-
-  auto editorID = GetEditorID(a_form);
-  if (!editorID.empty()) {
-    return editorID;
-  }
-
-  return "Form " + FormatFormID(a_form->GetFormID());
 }
 
 std::string BuildEntryID(const RE::TESForm *a_form) {
@@ -147,7 +84,9 @@ std::string BuildEntryID(const RE::TESForm *a_form) {
     return "unknown|00000000";
   }
 
-  return GetPluginName(a_form) + "|" + FormatFormID(a_form->GetLocalFormID());
+  const auto plugin = sosr::armor::GetPluginName(a_form);
+  return (plugin.empty() ? std::string{"Unknown"} : plugin) + "|" +
+         sosr::armor::FormatFormID(a_form->GetLocalFormID());
 }
 
 std::string GetArmorCategory(const RE::TESObjectARMO *a_armor) {
@@ -205,7 +144,7 @@ sosr::CatalogCollectionItemNode BuildCachedCollectionNode(
     return node;
   }
 
-  node.cachedName = GetDisplayName(a_form);
+  node.cachedName = sosr::armor::GetDisplayName(a_form);
   return node;
 }
 
@@ -224,7 +163,7 @@ template <class T> std::vector<std::string> GetKeywords(const T *a_form) {
       continue;
     }
 
-    auto text = GetEditorID(keyword.value());
+    auto text = sosr::armor::GetEditorID(keyword.value());
     if (text.empty()) {
       text = GetName(keyword.value());
     }
@@ -353,7 +292,7 @@ auto GetOrBuildLeveledListCache(
         built.itemTree.push_back(
             {.formID = armor->GetFormID(), .level = entry.level});
       }
-      built.pieces.push_back(GetDisplayName(armor));
+      built.pieces.push_back(sosr::armor::GetDisplayName(armor));
 
       if (seenArmorForms.insert(armor->GetFormID()).second) {
         built.armorFormIDs.push_back(armor->GetFormID());
@@ -394,7 +333,7 @@ auto GetOrBuildLeveledListCache(
     }
 
     built.itemTree.push_back(BuildCachedCollectionNode(form, entry.level));
-    built.pieces.push_back(GetDisplayName(form));
+    built.pieces.push_back(sosr::armor::GetDisplayName(form));
   }
 
   a_activeLeveledLists.erase(a_formID);
@@ -411,7 +350,7 @@ void AccumulateArmorDescription(const RE::TESObjectARMO *a_armor,
     return;
   }
 
-  a_description.pieces.push_back(GetDisplayName(a_armor));
+  a_description.pieces.push_back(sosr::armor::GetDisplayName(a_armor));
 
   if (!a_seenArmor.insert(a_armor->GetFormID()).second) {
     return;
@@ -457,7 +396,7 @@ auto BuildOutfitItemNode(
     return BuildCachedCollectionNode(a_item, -1, cache.itemTree);
   }
 
-  a_description.pieces.push_back(GetDisplayName(a_item));
+  a_description.pieces.push_back(sosr::armor::GetDisplayName(a_item));
   return BuildCachedCollectionNode(a_item, -1);
 }
 
@@ -554,7 +493,7 @@ KitDescription DescribeKitItems(const nlohmann::json &a_items) {
     }
 
     description.armorFormIDs.push_back(armor->GetFormID());
-    description.pieces.push_back(GetDisplayName(armor));
+    description.pieces.push_back(sosr::armor::GetDisplayName(armor));
     description.itemTree.push_back({.formID = armor->GetFormID()});
 
     auto slots = GetArmorSlots(armor);
@@ -604,7 +543,7 @@ std::optional<sosr::GearEntry> BuildGearEntry(RE::TESObjectARMO *a_armor) {
     return std::nullopt;
   }
 
-  const auto editorID = GetEditorID(a_armor);
+  const auto editorID = sosr::armor::GetEditorID(a_armor);
   auto displayName = GetName(a_armor);
   if (displayName.empty()) {
     displayName = editorID;
@@ -618,7 +557,7 @@ std::optional<sosr::GearEntry> BuildGearEntry(RE::TESObjectARMO *a_armor) {
   entry.id = BuildEntryID(a_armor);
   entry.name = std::move(displayName);
   entry.editorID = editorID;
-  entry.plugin = GetPluginName(a_armor);
+  entry.plugin = sosr::armor::GetPluginName(a_armor);
   entry.category = GetArmorCategory(a_armor);
   entry.slots = GetArmorSlots(a_armor);
   entry.slot = entry.slots.empty() ? std::string{} : entry.slots.front();
@@ -648,13 +587,13 @@ std::optional<sosr::OutfitEntry> BuildOutfitEntry(
     return std::nullopt;
   }
 
-  auto editorID = GetEditorID(a_outfit);
+  auto editorID = sosr::armor::GetEditorID(a_outfit);
   auto displayName = GetName(a_outfit);
   if (displayName.empty()) {
     displayName = editorID;
   }
   if (displayName.empty()) {
-    displayName = "Form " + FormatFormID(a_outfit->GetFormID());
+    displayName = "Form " + sosr::armor::FormatFormID(a_outfit->GetFormID());
   }
 
   sosr::OutfitEntry entry{};
@@ -662,7 +601,7 @@ std::optional<sosr::OutfitEntry> BuildOutfitEntry(
   entry.id = BuildEntryID(a_outfit);
   entry.name = std::move(displayName);
   entry.editorID = std::move(editorID);
-  entry.plugin = GetPluginName(a_outfit);
+  entry.plugin = sosr::armor::GetPluginName(a_outfit);
   entry.summary = BuildOutfitSummary(description);
   entry.armorFormIDs = std::move(description.armorFormIDs);
   entry.itemTree = std::move(description.itemTree);

@@ -10,9 +10,8 @@ namespace sosr {
 namespace {
 auto NormalizeScanCodeForWindows(const std::uint32_t a_scanCode)
     -> std::uint32_t {
-  return (a_scanCode & 0x100U) != 0U
-             ? (((a_scanCode & 0xFFU) << 8U) | 0xE000U)
-             : (a_scanCode & 0xFFU);
+  return (a_scanCode & 0x100U) != 0U ? (((a_scanCode & 0xFFU) << 8U) | 0xE000U)
+                                     : (a_scanCode & 0xFFU);
 }
 
 auto MapScanCodeToVirtualKey(const std::uint32_t a_scanCode) -> std::uint32_t {
@@ -301,8 +300,8 @@ void InputManager::ProcessInputEvents() {
         }
 
         if (!inputSinkState.wantsTextInput &&
-            scanCode == inputSinkState.toggleKey &&
-            IsBoundModifierDown() && buttonEvent->IsDown()) {
+            scanCode == inputSinkState.toggleKey && IsBoundModifierDown() &&
+            buttonEvent->IsDown()) {
           ui::ToggleInputSinkVisibility();
           io.ClearInputKeys();
           break;

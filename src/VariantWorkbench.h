@@ -77,20 +77,18 @@ public:
   bool AddCatalogSelectionToWorkbench(
       const std::vector<RE::FormID> &a_formIDs,
       const std::vector<int> *a_candidateRowIndices = nullptr);
-  bool
-  ReplaceCatalogSelectionInWorkbench(
+  bool ReplaceCatalogSelectionInWorkbench(
       const std::vector<RE::FormID> &a_formIDs,
       const std::vector<int> *a_candidateRowIndices = nullptr);
-  bool AddCatalogSelectionAsRows(
-      const std::vector<RE::FormID> &a_formIDs,
-      std::optional<std::string> a_conditionId);
+  bool AddCatalogSelectionAsRows(const std::vector<RE::FormID> &a_formIDs,
+                                 std::optional<std::string> a_conditionId);
   bool AddSlotRow(std::uint64_t a_slotMask,
                   std::optional<std::string> a_conditionId);
-  bool ApplyCatalogPreview(std::string_view a_selectionKey,
-                           const std::vector<RE::FormID> &a_formIDs,
-                           RE::Actor *a_actor = nullptr,
-                           const std::vector<int> *a_candidateRowIndices =
-                               nullptr);
+  bool
+  ApplyCatalogPreview(std::string_view a_selectionKey,
+                      const std::vector<RE::FormID> &a_formIDs,
+                      RE::Actor *a_actor = nullptr,
+                      const std::vector<int> *a_candidateRowIndices = nullptr);
   void ClearPreview();
   bool MoveOverride(int a_sourceRowIndex, int a_sourceItemIndex,
                     int a_targetRowIndex);
@@ -113,8 +111,8 @@ public:
   bool ApplyRowReorder(int a_sourceRowIndex, int a_targetRowIndex,
                        bool a_insertAfter);
   bool SetConditionId(int a_rowIndex, std::optional<std::string> a_conditionId);
-  void
-  SyncDynamicArmorVariantsExtended(std::vector<conditions::Definition> &a_conditions);
+  void SyncDynamicArmorVariantsExtended(
+      std::vector<conditions::Definition> &a_conditions);
   void Serialize(SKSE::SerializationInterface *a_skse) const;
   void Deserialize(SKSE::SerializationInterface *a_skse,
                    std::optional<std::string> a_missingConditionId);
@@ -141,10 +139,10 @@ private:
   [[nodiscard]] bool CanAcceptOverrideWithPendingAssignments(
       int a_targetRowIndex, const EquipmentWidgetItem &a_item,
       const std::vector<PlannedCatalogAssignment> &a_pendingAssignments) const;
-  [[nodiscard]] bool PlanCatalogAssignments(
-      const std::vector<RE::FormID> &a_formIDs,
-      std::vector<PlannedCatalogAssignment> &a_assignments,
-      const std::vector<int> *a_candidateRowIndices) const;
+  [[nodiscard]] bool
+  PlanCatalogAssignments(const std::vector<RE::FormID> &a_formIDs,
+                         std::vector<PlannedCatalogAssignment> &a_assignments,
+                         const std::vector<int> *a_candidateRowIndices) const;
   [[nodiscard]] std::vector<VariantWorkbenchRow>
   BuildCatalogRows(const std::vector<RE::FormID> &a_formIDs,
                    std::optional<std::string> a_conditionId) const;

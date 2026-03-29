@@ -9,9 +9,6 @@
 #include <unordered_set>
 
 namespace {
-constexpr std::uint32_t kSerializationType = 'ROWS';
-constexpr std::uint32_t kSerializationVersion = 4;
-
 auto GetDynamicArmorVariantsExtendedClient()
     -> DynamicArmorVariantsExtendedAPI::
         IDynamicArmorVariantsExtendedInterface001 * {
@@ -26,18 +23,6 @@ auto GetDynamicArmorVariantsExtendedClient()
 
 std::string BuildPreviewVariantName(const std::string &a_rowKey) {
   return "SOSR|PreviewSelected|" + a_rowKey;
-}
-
-std::string BuildRowKey(const std::string_view a_sourceKey,
-                        const std::optional<std::string> &a_conditionId) {
-  std::string key(a_sourceKey);
-  key.append("|condition:");
-  if (a_conditionId.has_value()) {
-    key.append(*a_conditionId);
-  } else {
-    key.append("null");
-  }
-  return key;
 }
 
 auto BuildDavVariantPriority(const std::size_t a_rowIndex,
@@ -65,11 +50,6 @@ struct DavVariantPayload {
   std::shared_ptr<RE::TESCondition> condition;
   sosr::conditions::RefreshTargets refreshTargets;
 };
-
-void UpdateRowIdentity(sosr::workbench::VariantWorkbenchRow &a_row) {
-  a_row.key = BuildRowKey(a_row.sourceKey, a_row.conditionId);
-  a_row.equipped.key = a_row.key;
-}
 
 auto CollectDavReplacementData(
     const std::vector<const RE::TESObjectARMO *> &a_overrideArmors)
@@ -215,62 +195,12 @@ auto BuildDavVariantDescriptor(
 
   return descriptor;
 }
-
-bool SerializeRowSource(const sosr::workbench::VariantWorkbenchRow &a_row,
-                        nlohmann::json &a_serializedRow) {
-  a_serializedRow["type"] = a_row.IsSlotRow() ? "slot" : "armor";
-  if (a_row.IsSlotRow()) {
-    const auto slotNumber =
-        sosr::armor::GetArmorSlotNumber(a_row.equipped.slotMask);
-    if (slotNumber == 0) {
-      return false;
-    }
-    a_serializedRow["slot"] = slotNumber;
-    return true;
-  }
-
-  a_serializedRow["equipped"] = sosr::armor::GetFormIdentifier(
-      RE::TESForm::LookupByID(a_row.equipped.formID));
-  return !a_serializedRow["equipped"].get_ref<const std::string &>().empty();
-}
-
-bool DeserializeRowSource(const nlohmann::json &a_serializedRow,
-                          sosr::workbench::VariantWorkbench &a_workbench,
-                          sosr::workbench::VariantWorkbenchRow &a_row) {
-  const auto rowType = a_serializedRow.value("type", std::string{"armor"});
-  if (rowType == "slot") {
-    const auto slotMask =
-        sosr::armor::GetArmorSlotMask(a_serializedRow.value("slot", 0));
-    sosr::workbench::EquipmentWidgetItem slotItem{};
-    if (slotMask == 0 || !a_workbench.BuildSlotItem(slotMask, slotItem)) {
-      return false;
-    }
-
-    a_row.sourceKey = slotItem.key;
-    a_row.equipped = std::move(slotItem);
-    return true;
-  }
-
-  const auto *equippedForm = sosr::armor::LookupByIdentifier<RE::TESObjectARMO>(
-      a_serializedRow.value("equipped", std::string{}));
-  sosr::workbench::EquipmentWidgetItem equipped{};
-  if (!equippedForm ||
-      !a_workbench.BuildCatalogItem(equippedForm->GetFormID(), equipped)) {
-    return false;
-  }
-
-  a_row.sourceKey =
-      "armor:" + sosr::armor::FormatFormID(equippedForm->GetFormID());
-  a_row.equipped = std::move(equipped);
-  return true;
-}
 } // namespace
 
 namespace sosr::workbench {
 bool VariantWorkbench::ApplyCatalogPreview(
     std::string_view a_selectionKey, const std::vector<RE::FormID> &a_formIDs,
-    RE::Actor *a_actor,
-    const std::vector<int> *a_candidateRowIndices) {
+    RE::Actor *a_actor, const std::vector<int> *a_candidateRowIndices) {
   std::vector<PlannedCatalogAssignment> assignments;
   if (!PlanCatalogAssignments(a_formIDs, assignments, a_candidateRowIndices)) {
     ClearPreview();
@@ -543,133 +473,6 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
 
   if (variantsChanged) {
     sosr::conditions::RefreshActors(*dav, refreshTargets);
-  }
-}
-
-void VariantWorkbench::Serialize(SKSE::SerializationInterface *a_skse) const {
-  nlohmann::json root;
-  root["rows"] = nlohmann::json::array();
-
-  for (const auto &row : rows_) {
-    if (row.overrides.empty() && !row.hideEquipped) {
-      continue;
-    }
-
-    nlohmann::json serializedRow;
-    if (!SerializeRowSource(row, serializedRow)) {
-      continue;
-    }
-    if (row.conditionId.has_value()) {
-      serializedRow["conditionId"] = *row.conditionId;
-    } else {
-      serializedRow["conditionId"] = nullptr;
-    }
-    serializedRow["hideEquipped"] = row.hideEquipped;
-    serializedRow["overrides"] = nlohmann::json::array();
-    for (const auto &overrideItem : row.overrides) {
-      if (const auto *overrideForm =
-              RE::TESForm::LookupByID(overrideItem.formID)) {
-        serializedRow["overrides"].push_back(
-            armor::GetFormIdentifier(overrideForm));
-      }
-    }
-
-    root["rows"].push_back(std::move(serializedRow));
-  }
-
-  const auto payload = root.dump();
-  a_skse->WriteRecord(kSerializationType, kSerializationVersion, payload.data(),
-                      static_cast<std::uint32_t>(payload.size()));
-}
-
-void VariantWorkbench::Deserialize(
-    SKSE::SerializationInterface *a_skse,
-    std::optional<std::string> a_missingConditionId) {
-  Revert();
-
-  std::uint32_t type = 0;
-  std::uint32_t version = 0;
-  std::uint32_t length = 0;
-  if (!a_skse->GetNextRecordInfo(type, version, length)) {
-    return;
-  }
-
-  if (type != kSerializationType) {
-    return;
-  }
-
-  if (version != 2 && version != 3 && version != kSerializationVersion) {
-    logger::warn("Skipping SOSR serialized rows from unsupported version {}",
-                 version);
-    return;
-  }
-
-  std::string payload(length, '\0');
-  if (!a_skse->ReadRecordData(payload.data(), length)) {
-    logger::error("Failed to read SOSR serialized workbench payload");
-    return;
-  }
-
-  const auto root = nlohmann::json::parse(payload, nullptr, false, true);
-  if (root.is_discarded() || !root.is_object() || !root["rows"].is_array()) {
-    logger::error("Failed to parse SOSR serialized workbench payload");
-    return;
-  }
-
-  for (const auto &serializedRow : root["rows"]) {
-    if (!serializedRow.is_object()) {
-      continue;
-    }
-
-    VariantWorkbenchRow row{};
-    if (!DeserializeRowSource(serializedRow, *this, row)) {
-      continue;
-    }
-    if (version >= 4) {
-      if (const auto conditionIt = serializedRow.find("conditionId");
-          conditionIt != serializedRow.end()) {
-        if (conditionIt->is_null()) {
-          row.conditionId = std::nullopt;
-        } else if (conditionIt->is_string()) {
-          const auto conditionId = conditionIt->get<std::string>();
-          row.conditionId = conditionId.empty()
-                                ? std::nullopt
-                                : std::optional<std::string>(conditionId);
-        } else {
-          row.conditionId = a_missingConditionId;
-        }
-      } else {
-        row.conditionId = a_missingConditionId;
-      }
-    } else {
-      row.conditionId = a_missingConditionId;
-    }
-    UpdateRowIdentity(row);
-    row.hideEquipped = serializedRow.value("hideEquipped", false);
-
-    std::unordered_set<RE::FormID> seenOverrideForms;
-    if (const auto &serializedOverrides = serializedRow["overrides"];
-        serializedOverrides.is_array()) {
-      for (const auto &overrideValue : serializedOverrides) {
-        if (!overrideValue.is_string()) {
-          continue;
-        }
-
-        const auto *overrideForm = armor::LookupByIdentifier<RE::TESObjectARMO>(
-            overrideValue.get<std::string>());
-        EquipmentWidgetItem overrideItem{};
-        if (!overrideForm ||
-            !BuildCatalogItem(overrideForm->GetFormID(), overrideItem) ||
-            !seenOverrideForms.insert(overrideForm->GetFormID()).second) {
-          continue;
-        }
-
-        row.overrides.push_back(std::move(overrideItem));
-      }
-    }
-
-    rows_.push_back(std::move(row));
-    rowOrder_.push_back(rows_.back().key);
   }
 }
 

@@ -41,11 +41,11 @@ bool Menu::DrawSlotTab() {
       row.occupantItems.push_back(workbenchRow.equipped);
     }
 
-    std::ranges::sort(row.occupantItems,
-                      [](const auto &a_left, const auto &a_right) {
-                        return sosr::strings::CompareTextInsensitive(
-                                   a_left.name, a_right.name) < 0;
-                      });
+    std::ranges::sort(row.occupantItems, [](const auto &a_left,
+                                            const auto &a_right) {
+      return sosr::strings::CompareTextInsensitive(a_left.name, a_right.name) <
+             0;
+    });
     for (const auto &item : row.occupantItems) {
       if (!row.occupantSortText.empty()) {
         row.occupantSortText.append(", ");
@@ -93,14 +93,14 @@ bool Menu::DrawSlotTab() {
           break;
         case SlotColumn::Slot:
         default:
-          compare = sosr::strings::CompareTextInsensitive(a_left.slotItem.name,
-                                                          a_right.slotItem.name);
+          compare = sosr::strings::CompareTextInsensitive(
+              a_left.slotItem.name, a_right.slotItem.name);
           break;
         }
 
         if (compare == 0) {
-          compare = sosr::strings::CompareTextInsensitive(a_left.slotItem.name,
-                                                          a_right.slotItem.name);
+          compare = sosr::strings::CompareTextInsensitive(
+              a_left.slotItem.name, a_right.slotItem.name);
         }
 
         return ascending ? compare < 0 : compare > 0;

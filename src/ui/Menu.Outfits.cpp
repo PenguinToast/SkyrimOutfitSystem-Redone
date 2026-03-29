@@ -123,9 +123,8 @@ bool Menu::DrawOutfitTab() {
         ImGui::TableSetColumnIndex(2);
         {
           const auto availableWidth = ImGui::GetContentRegionAvail().x;
-          const auto displayText =
-              ui::catalog::TruncateTextToWidth(outfit.piecesText,
-                                               availableWidth);
+          const auto displayText = ui::catalog::TruncateTextToWidth(
+              outfit.piecesText, availableWidth);
           ImGui::TextUnformatted(displayText.c_str());
         }
       }

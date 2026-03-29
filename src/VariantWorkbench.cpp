@@ -272,9 +272,8 @@ bool VariantWorkbench::PlanCatalogAssignments(
       continue;
     }
 
-    const auto rowIndex =
-        FindBestCatalogTargetRowIndex(item, true, &a_assignments,
-                                      a_candidateRowIndices);
+    const auto rowIndex = FindBestCatalogTargetRowIndex(
+        item, true, &a_assignments, a_candidateRowIndices);
     if (rowIndex < 0) {
       continue;
     }
@@ -779,18 +778,16 @@ VariantWorkbench::CollectOverrideArmorFormIDsFromEquippedRows() const {
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-bool VariantWorkbench::InsertCatalogRow(RE::FormID a_formID,
-                                        int a_targetRowIndex,
-                                        bool a_insertAfter,
-                                        std::optional<std::string> a_conditionId) {
+bool VariantWorkbench::InsertCatalogRow(
+    RE::FormID a_formID, int a_targetRowIndex, bool a_insertAfter,
+    std::optional<std::string> a_conditionId) {
   if (a_targetRowIndex < 0 ||
       a_targetRowIndex >= static_cast<int>(rows_.size())) {
     return false;
   }
 
-  auto newRows =
-      BuildCatalogRows(std::vector<RE::FormID>{a_formID},
-                       std::move(a_conditionId));
+  auto newRows = BuildCatalogRows(std::vector<RE::FormID>{a_formID},
+                                  std::move(a_conditionId));
   if (newRows.empty()) {
     return false;
   }

@@ -228,9 +228,8 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
     a_editor.isNew = false;
     a_editor.sourceConditionId = a_editor.draft.id;
   } else {
-    const auto it =
-        std::ranges::find(conditions_, a_editor.sourceConditionId,
-                          &ConditionDefinition::id);
+    const auto it = std::ranges::find(conditions_, a_editor.sourceConditionId,
+                                      &ConditionDefinition::id);
     if (it == conditions_.end()) {
       a_editor.error = "Condition no longer exists.";
       return false;

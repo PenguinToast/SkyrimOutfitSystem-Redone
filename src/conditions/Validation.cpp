@@ -11,9 +11,10 @@
 namespace {
 using Definition = sosr::conditions::Definition;
 
-const Definition *ResolveDefinitionForValidation(
-    const std::vector<Definition> &a_conditions, const Definition &a_draft,
-    std::string_view a_conditionId) {
+const Definition *
+ResolveDefinitionForValidation(const std::vector<Definition> &a_conditions,
+                               const Definition &a_draft,
+                               std::string_view a_conditionId) {
   if (!a_draft.id.empty() && a_conditionId == a_draft.id) {
     return std::addressof(a_draft);
   }
@@ -22,8 +23,9 @@ const Definition *ResolveDefinitionForValidation(
 } // namespace
 
 namespace sosr::conditions {
-const Definition *FindDefinitionById(const std::vector<Definition> &a_conditions,
-                                     const std::string_view a_id) {
+const Definition *
+FindDefinitionById(const std::vector<Definition> &a_conditions,
+                   const std::string_view a_id) {
   const auto it = std::ranges::find(a_conditions, a_id, &Definition::id);
   return it != a_conditions.end() ? std::addressof(*it) : nullptr;
 }
@@ -34,11 +36,12 @@ Definition *FindDefinitionById(std::vector<Definition> &a_conditions,
   return it != a_conditions.end() ? std::addressof(*it) : nullptr;
 }
 
-const Definition *FindDefinitionByName(const std::vector<Definition> &a_conditions,
-                                       const std::string_view a_name,
-                                       const std::string_view a_excludedId) {
-  const auto it = std::ranges::find_if(
-      a_conditions, [&](const Definition &condition) {
+const Definition *
+FindDefinitionByName(const std::vector<Definition> &a_conditions,
+                     const std::string_view a_name,
+                     const std::string_view a_excludedId) {
+  const auto it =
+      std::ranges::find_if(a_conditions, [&](const Definition &condition) {
         return condition.id != a_excludedId &&
                sosr::strings::CompareTextInsensitive(condition.name, a_name) ==
                    0;
@@ -123,7 +126,8 @@ std::string ValidateDefinitionNameAndGraph(
   }
 
   if (HasDependencyCycle(a_definition, a_conditions)) {
-    return "Custom condition references must not contain circular dependencies.";
+    return "Custom condition references must not contain circular "
+           "dependencies.";
   }
 
   return {};

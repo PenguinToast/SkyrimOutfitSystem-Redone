@@ -15,10 +15,11 @@ namespace {
 using ConditionClause = ui::conditions::Clause;
 using ConditionDefinition = ui::conditions::Definition;
 
-void MoveConditionDefinitionToSlot(std::vector<ConditionDefinition> &a_conditions,
-                                   const std::size_t a_sourceIndex,
-                                   std::size_t a_slotIndex) {
-  if (a_sourceIndex >= a_conditions.size() || a_slotIndex > a_conditions.size()) {
+void MoveConditionDefinitionToSlot(
+    std::vector<ConditionDefinition> &a_conditions,
+    const std::size_t a_sourceIndex, std::size_t a_slotIndex) {
+  if (a_sourceIndex >= a_conditions.size() ||
+      a_slotIndex > a_conditions.size()) {
     return;
   }
 
@@ -109,8 +110,8 @@ bool Menu::DrawConditionTab() {
 
     const auto rowWrapWidth =
         (std::max)(ImGui::GetContentRegionAvail().x - 52.0f, 120.0f);
-    const auto rowHeight =
-        ui::condition_widgets::MeasureConditionRowHeight(condition, rowWrapWidth);
+    const auto rowHeight = ui::condition_widgets::MeasureConditionRowHeight(
+        condition, rowWrapWidth);
 
     ImGui::TableNextRow(0, rowHeight);
     ImGui::TableSetColumnIndex(0);
@@ -142,15 +143,14 @@ bool Menu::DrawConditionTab() {
     drawList->AddRectFilled(min, max, bodyColor, rounding);
     drawList->AddRect(
         min, max,
-        ImGui::GetColorU32(
-            ImVec4(condition.color.x, condition.color.y, condition.color.z,
-                   0.75f)),
+        ImGui::GetColorU32(ImVec4(condition.color.x, condition.color.y,
+                                  condition.color.z, 0.75f)),
         rounding);
     drawList->AddRectFilled(
         min, ImVec2(min.x + stripeWidth, max.y),
         ImGui::GetColorU32(ui::conditions::ToImGuiColor(condition.color)),
-        rounding, ImDrawFlags_RoundCornersTopLeft |
-                      ImDrawFlags_RoundCornersBottomLeft);
+        rounding,
+        ImDrawFlags_RoundCornersTopLeft | ImDrawFlags_RoundCornersBottomLeft);
 
     auto *theme = ThemeConfig::GetSingleton();
     const ImU32 deleteFillColor =

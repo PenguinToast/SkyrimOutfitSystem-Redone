@@ -27,6 +27,7 @@ void InvalidateConditionMaterializationCaches(
 void InvalidateConditionMaterializationCachesFrom(
     std::vector<Definition> &a_conditions, std::string_view a_conditionId);
 
-[[nodiscard]] std::optional<MaterializedCondition> MaterializeConditionById(
-    std::string_view a_conditionId, std::vector<Definition> &a_conditions);
+[[nodiscard]] std::optional<MaterializedCondition>
+MaterializeConditionById(std::string_view a_conditionId,
+                         std::vector<Definition> &a_conditions);
 } // namespace sosr::conditions

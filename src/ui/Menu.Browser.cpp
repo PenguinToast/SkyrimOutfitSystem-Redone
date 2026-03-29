@@ -138,10 +138,9 @@ void Menu::AddOutfitEntryToWorkbench(const OutfitEntry &a_entry,
 
 void Menu::PreviewGearEntry(const GearEntry &a_entry) {
   const auto visibleRowIndices = BuildVisibleWorkbenchRowIndices();
-  workbench_.ApplyCatalogPreview(a_entry.id,
-                                 std::vector<RE::FormID>{a_entry.formID},
-                                 ResolveWorkbenchPreviewActor(),
-                                 &visibleRowIndices);
+  workbench_.ApplyCatalogPreview(
+      a_entry.id, std::vector<RE::FormID>{a_entry.formID},
+      ResolveWorkbenchPreviewActor(), &visibleRowIndices);
 }
 
 void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {

@@ -5,12 +5,11 @@
 namespace sosr::ui {
 InputSinkState GetInputSinkState() {
   const auto *menu = Menu::GetSingleton();
-  return InputSinkState{
-      .enabled = menu->IsEnabled(),
-      .wantsTextInput = menu->WantsTextInput(),
-      .capturingToggleKey = menu->IsCapturingToggleKey(),
-      .toggleKey = menu->GetToggleKey(),
-      .toggleModifier = menu->GetToggleModifier()};
+  return InputSinkState{.enabled = menu->IsEnabled(),
+                        .wantsTextInput = menu->WantsTextInput(),
+                        .capturingToggleKey = menu->IsCapturingToggleKey(),
+                        .toggleKey = menu->GetToggleKey(),
+                        .toggleModifier = menu->GetToggleModifier()};
 }
 
 void HandleToggleKeyCapture(const std::uint32_t a_scanCode,

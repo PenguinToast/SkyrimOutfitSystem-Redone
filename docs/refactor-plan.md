@@ -33,7 +33,7 @@ Notes:
 
 ### Phase 2: Split Condition Domain from Condition UI
 
-Status: in progress
+Status: completed
 
 Deliverables:
 
@@ -58,12 +58,11 @@ Progress:
   - `src/ui/Menu.Conditions.ClauseTable.cpp`
   - `src/ui/Menu.Conditions.Serialization.cpp`
 - Remaining:
-  - move more condition-only helpers out of `Menu.cpp`
-  - decide whether the next step is a `src/ui/conditions/` move/rename pass or to leave the current `Menu.Conditions.*.cpp` split as the stable intermediate state
+  - none for this phase; the current `Menu.Conditions.*.cpp` split is the stable module layout
 
 ### Phase 3: Refactor Workbench Boundaries
 
-Status: in progress
+Status: completed
 
 Deliverables:
 
@@ -78,11 +77,17 @@ Progress:
   - `VariantWorkbench` no longer silently defaults missing new-row conditions to `Player`
   - caller-side policy now lives in menu/workbench filter code
   - workbench filter/default-target logic moved out of `Menu.cpp` into `src/ui/Menu.Workbench.Filters.cpp`
-- Remaining:
-  - split DAV sync/persistence further from row storage/manipulation if the file continues to grow
-  - consider moving workbench core into `src/workbench/` once the boundary is stable
+  - DAV preview/sync and save-load logic split into:
+    - `src/VariantWorkbench.DavSync.cpp`
+    - `src/VariantWorkbench.Serialization.cpp`
+  - row storage/manipulation remains in `src/VariantWorkbench.cpp`
+Notes:
+
+- The workbench boundary is now stable enough that an additional `src/workbench/` directory move would be cosmetic rather than architectural.
 
 ### Phase 4: Reduce Menu Surface Area
+
+Status: completed
 
 Deliverables:
 
@@ -95,13 +100,41 @@ Deliverables:
   - kit dialogs
 - Introduce a smaller plain-data state layer where practical.
 
+Completed:
+
+- `Menu.cpp` is now a small shell/entry unit.
+- Lifecycle/settings/browser/workbench/conditions/catalog tab logic now live in dedicated modules:
+  - `src/ui/Menu.Visibility.cpp`
+  - `src/ui/Menu.Settings.cpp`
+  - `src/ui/Menu.Browser.cpp`
+  - `src/ui/Menu.Workbench.cpp`
+  - `src/ui/Menu.Workbench.Filters.cpp`
+  - `src/ui/Menu.Gear.cpp`
+  - `src/ui/Menu.Outfits.cpp`
+  - `src/ui/Menu.Kits.cpp`
+  - `src/ui/Menu.Slots.cpp`
+  - `src/ui/Menu.Options.cpp`
+  - `src/ui/Menu.Conditions.*.cpp`
+
+Notes:
+
+- `Menu.h` remains a broad coordinating facade, but the implementation surface is no longer concentrated in one translation unit.
+
 ### Phase 5: Shared Utility Cleanup
+
+Status: completed
 
 Deliverables:
 
 - Consolidate duplicate text helpers.
 - Consolidate duplicate form metadata/editor-id/plugin-name helpers.
 - Move cross-cutting helpers into dedicated modules with narrow headers.
+
+Completed:
+
+- Shared text helpers were consolidated into `src/StringUtils.h`.
+- `EquipmentCatalog.cpp` now uses `ArmorUtils` for shared form metadata helpers instead of carrying its own duplicate plugin/editor-id/display-name implementations.
+- Input/menu coupling was narrowed through `src/ui/InputSinkBridge.cpp`.
 
 ### Immediate Implementation Order
 
@@ -146,3 +179,25 @@ Deliverables:
   6. InputManager still depends directly on Menu::GetSingleton() and menu state to decide how keyboard events are interpreted: SkyrimVanitySystem/src/InputManager.cpp:227,
      SkyrimVanitySystem/src/InputManager.cpp:233. That makes the input backend know about one specific UI consumer instead of exposing a small input sink / wants text input
      abstraction. It works, but it is another coupling point that will make future UI decomposition harder.
+
+### Final Review Against Context
+
+1. `Menu` implementation is no longer a single god translation unit.
+   - Addressed by the `Menu.*.cpp` split.
+   - Residual: `Menu.h` still exposes a large facade, but that is now coordination surface rather than one monolithic implementation file.
+
+2. Condition definitions are now a true persisted model.
+   - Addressed by `src/conditions/Definition.h`, `src/conditions/GraphMetadata.h`, and `src/conditions/MaterializationState.h`.
+   - Runtime materialization/cache state no longer lives on the persisted definition.
+
+3. `VariantWorkbench` no longer owns default UI condition policy.
+   - Addressed by caller-side condition resolution in menu/workbench filter code.
+
+4. `Menu.Conditions.cpp` no longer mixes all condition responsibilities.
+   - Addressed by the `Menu.Conditions.*.cpp` split and `src/ui/conditions/*`.
+
+5. Duplicate helper logic has been reduced at the shared-module boundary.
+   - Addressed by `StringUtils.h` and the `EquipmentCatalog` -> `ArmorUtils` consolidation.
+
+6. `InputManager` no longer depends directly on `Menu::GetSingleton()`.
+   - Addressed by `src/ui/InputSinkBridge.*`.

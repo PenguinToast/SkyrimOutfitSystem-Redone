@@ -33,7 +33,7 @@ std::string BuildSectionEntry(std::string_view a_label) {
 }
 
 float ComputeColorDistanceSq(const ConditionColor &a_left,
-                            const ConditionColor &a_right) {
+                             const ConditionColor &a_right) {
   const auto dr = a_left.x - a_right.x;
   const auto dg = a_left.y - a_right.y;
   const auto db = a_left.z - a_right.z;
@@ -57,7 +57,8 @@ std::string FormatNumberStringImpl(const double a_value) {
   return text.empty() ? "0" : text;
 }
 
-ValueEditorKind GetEditorKindForParamTypeImpl(const RE::SCRIPT_PARAM_TYPE a_type) {
+ValueEditorKind
+GetEditorKindForParamTypeImpl(const RE::SCRIPT_PARAM_TYPE a_type) {
   switch (a_type) {
   case RE::SCRIPT_PARAM_TYPE::kChar:
   case RE::SCRIPT_PARAM_TYPE::kInt:
@@ -77,12 +78,12 @@ bool SupportsTypedParamInput(const RE::SCRIPT_PARAM_TYPE a_type) {
   return GetEditorKindForParamTypeImpl(a_type) != ValueEditorKind::Unsupported;
 }
 
-RE::SCRIPT_PARAM_TYPE ResolveEditorParamTypeImpl(
-    std::string_view a_functionName, const std::uint16_t a_paramIndex,
-    const RE::SCRIPT_PARAM_TYPE a_type) {
-  if (a_paramIndex == 0 &&
-      sosr::ui::condition_editor::CompareTextInsensitive(a_functionName,
-                                                         "GetIsID") == 0) {
+RE::SCRIPT_PARAM_TYPE
+ResolveEditorParamTypeImpl(std::string_view a_functionName,
+                           const std::uint16_t a_paramIndex,
+                           const RE::SCRIPT_PARAM_TYPE a_type) {
+  if (a_paramIndex == 0 && sosr::ui::condition_editor::CompareTextInsensitive(
+                               a_functionName, "GetIsID") == 0) {
     return RE::SCRIPT_PARAM_TYPE::kActorBase;
   }
 
@@ -179,9 +180,10 @@ ValueEditorKind GetEditorKindForParamType(const RE::SCRIPT_PARAM_TYPE a_type) {
   return GetEditorKindForParamTypeImpl(a_type);
 }
 
-RE::SCRIPT_PARAM_TYPE ResolveEditorParamType(std::string_view a_functionName,
-                                             const std::uint16_t a_paramIndex,
-                                             const RE::SCRIPT_PARAM_TYPE a_type) {
+RE::SCRIPT_PARAM_TYPE
+ResolveEditorParamType(std::string_view a_functionName,
+                       const std::uint16_t a_paramIndex,
+                       const RE::SCRIPT_PARAM_TYPE a_type) {
   return ResolveEditorParamTypeImpl(a_functionName, a_paramIndex, a_type);
 }
 
@@ -339,13 +341,13 @@ const FunctionInfo *FindConditionFunctionInfo(std::string_view a_name) {
   return it != infos.end() ? std::addressof(*it) : nullptr;
 }
 
-const FunctionInfo *ResolveConditionFunctionInfo(
-    const Clause &a_clause, const std::vector<Definition> &a_conditions,
-    std::optional<FunctionInfo> &a_customInfo) {
+const FunctionInfo *
+ResolveConditionFunctionInfo(const Clause &a_clause,
+                             const std::vector<Definition> &a_conditions,
+                             std::optional<FunctionInfo> &a_customInfo) {
   if (!a_clause.customConditionId.empty()) {
-    if (const auto *condition =
-            sosr::conditions::FindDefinitionById(a_conditions,
-                                                 a_clause.customConditionId);
+    if (const auto *condition = sosr::conditions::FindDefinitionById(
+            a_conditions, a_clause.customConditionId);
         condition != nullptr) {
       a_customInfo = FunctionInfo{};
       a_customInfo->name = condition->name;
@@ -358,12 +360,12 @@ const FunctionInfo *ResolveConditionFunctionInfo(
   return FindConditionFunctionInfo(a_clause.functionName);
 }
 
-std::string ResolveClauseDisplayName(
-    const Clause &a_clause, const std::vector<Definition> &a_conditions) {
+std::string
+ResolveClauseDisplayName(const Clause &a_clause,
+                         const std::vector<Definition> &a_conditions) {
   if (!a_clause.customConditionId.empty()) {
-    if (const auto *condition =
-            sosr::conditions::FindDefinitionById(a_conditions,
-                                                 a_clause.customConditionId);
+    if (const auto *condition = sosr::conditions::FindDefinitionById(
+            a_conditions, a_clause.customConditionId);
         condition != nullptr) {
       return condition->name;
     }
@@ -371,9 +373,9 @@ std::string ResolveClauseDisplayName(
   return a_clause.functionName;
 }
 
-std::vector<std::string> BuildConditionFunctionNames(
-    const std::vector<Definition> &a_conditions,
-    std::string_view a_excludedConditionId) {
+std::vector<std::string>
+BuildConditionFunctionNames(const std::vector<Definition> &a_conditions,
+                            std::string_view a_excludedConditionId) {
   std::vector<std::string> names;
   const auto &infos = GetConditionFunctionInfos();
 
@@ -401,13 +403,15 @@ std::vector<std::string> BuildConditionFunctionNames(
   return names;
 }
 
-std::string ValidateConditionDraft(const Definition &a_definition,
-                                   const std::vector<Definition> &a_conditions) {
+std::string
+ValidateConditionDraft(const Definition &a_definition,
+                       const std::vector<Definition> &a_conditions) {
   if (const auto baseValidation =
           sosr::conditions::ValidateDefinitionNameAndGraph(
-          a_definition, a_conditions, [](std::string_view a_name) {
-            return FindConditionFunctionInfo(a_name) != nullptr;
-          });
+              a_definition, a_conditions,
+              [](std::string_view a_name) {
+                return FindConditionFunctionInfo(a_name) != nullptr;
+              });
       !baseValidation.empty()) {
     return baseValidation;
   }
@@ -524,14 +528,15 @@ bool DrawConditionParamEditor(const char *a_id, std::string &a_value,
   if (editorKind == ValueEditorKind::CachedOption) {
     auto &optionCache = sosr::ui::conditions::ConditionParamOptionCache::Get();
     const auto state = optionCache.Ensure(a_type);
-    if (state == sosr::ui::conditions::ConditionParamOptionCache::State::Ready) {
+    if (state ==
+        sosr::ui::conditions::ConditionParamOptionCache::State::Ready) {
       const auto *options = optionCache.GetOptions(a_type);
       if (options) {
         return sosr::ui::components::DrawSearchableDropdown(
             a_id, "Select value", a_value, *options, a_width);
       }
-    } else if (state ==
-               sosr::ui::conditions::ConditionParamOptionCache::State::Loading) {
+    } else if (state == sosr::ui::conditions::ConditionParamOptionCache::State::
+                            Loading) {
       const auto progress =
           std::clamp(optionCache.GetProgress(a_type), 0.0f, 1.0f);
       const auto status = optionCache.GetStatus(a_type);

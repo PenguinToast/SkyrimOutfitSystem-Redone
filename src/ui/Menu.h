@@ -217,9 +217,9 @@ private:
   [[nodiscard]] std::vector<int> BuildVisibleWorkbenchRowIndices();
   [[nodiscard]] bool
   MatchesWorkbenchFilter(const workbench::VariantWorkbenchRow &a_row);
-  void BuildWorkbenchFilterOptions(
-      std::vector<WorkbenchFilterOption> &a_options,
-      std::vector<std::string> &a_labels);
+  void
+  BuildWorkbenchFilterOptions(std::vector<WorkbenchFilterOption> &a_options,
+                              std::vector<std::string> &a_labels);
   [[nodiscard]] std::optional<std::string>
   ResolveFirstConditionForActorFilter(RE::FormID a_actorFormID);
   [[nodiscard]] std::optional<std::string> ResolveNewWorkbenchRowConditionId();

@@ -3,9 +3,9 @@
 #include "ThemeConfig.h"
 #include "conditions/Validation.h"
 #include "imgui_internal.h"
+#include "ui/components/EditableCombo.h"
 #include "ui/conditions/EditorSupport.h"
 #include "ui/conditions/Widgets.h"
-#include "ui/components/EditableCombo.h"
 
 #include <algorithm>
 #include <array>
@@ -24,7 +24,6 @@ using ui::condition_editor::DrawConditionParamEditor;
 using ui::condition_editor::DrawNumericClauseValueEditor;
 using ui::condition_editor::IsBooleanComparator;
 using ui::condition_editor::ParseBooleanComparand;
-using ui::condition_editor::ResolveConditionFunctionInfo;
 using ui::condition_editor::ResolveConditionFunctionInfo;
 using ui::condition_editor::ResolveEditorParamType;
 using ui::condition_widgets::DrawConditionColorSwatch;
@@ -116,10 +115,9 @@ void Menu::DrawConditionEditorClauseTable(
   }
 
   const auto tableOuterRect = ImGui::GetCurrentTable()->OuterRect;
-  ImGui::TableSetupColumn("",
-                          ImGuiTableColumnFlags_WidthFixed |
-                              ImGuiTableColumnFlags_NoResize,
-                          18.0f);
+  ImGui::TableSetupColumn(
+      "", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize,
+      18.0f);
   ImGui::TableSetupColumn("Function", ImGuiTableColumnFlags_WidthFixed, 240.0f);
   ImGui::TableSetupColumn("Arg 1", ImGuiTableColumnFlags_WidthFixed, 170.0f);
   ImGui::TableSetupColumn("Arg 2", ImGuiTableColumnFlags_WidthFixed, 170.0f);
@@ -185,9 +183,9 @@ void Menu::DrawConditionEditorClauseTable(
     ImGui::TableNextRow();
 
     ImGui::TableSetColumnIndex(0);
-    DrawClauseDragHandle("##drag-handle",
-                         ImVec2(ImGui::GetContentRegionAvail().x,
-                                ImGui::GetFrameHeight()));
+    DrawClauseDragHandle(
+        "##drag-handle",
+        ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetFrameHeight()));
     DrawHoverDescription("conditions:editor:drag:" + std::to_string(index),
                          "Drag this handle to reorder the clause.");
     if (ImGui::BeginDragDropSource()) {
@@ -208,21 +206,21 @@ void Menu::DrawConditionEditorClauseTable(
     if (customCondition != nullptr) {
       const float swatchSize = ImGui::GetFrameHeight() - 2.0f;
       const float spacing = ImGui::GetStyle().ItemSpacing.x;
-      DrawConditionColorSwatch("##custom-condition-color",
-                               customCondition->color,
-                               "Referenced custom condition color: " +
-                                   customCondition->name);
+      DrawConditionColorSwatch(
+          "##custom-condition-color", customCondition->color,
+          "Referenced custom condition color: " + customCondition->name);
       ImGui::SameLine(0.0f, spacing);
-      functionWidth =
-          (std::max)(0.0f, functionWidth - swatchSize - spacing);
+      functionWidth = (std::max)(0.0f, functionWidth - swatchSize - spacing);
     }
     if (ui::components::DrawSearchableDropdown(
             "##function", "Condition function", selectedFunctionName,
             a_conditionFunctionNames, functionWidth)) {
       clause.arguments[0].clear();
       clause.arguments[1].clear();
-      if (const auto *selectedCustomCondition = conditions::FindDefinitionByName(
-              conditions_, selectedFunctionName, a_editor.sourceConditionId);
+      if (const auto *selectedCustomCondition =
+              conditions::FindDefinitionByName(conditions_,
+                                               selectedFunctionName,
+                                               a_editor.sourceConditionId);
           selectedCustomCondition != nullptr) {
         clause.customConditionId = selectedCustomCondition->id;
         clause.functionName.clear();
@@ -264,10 +262,9 @@ void Menu::DrawConditionEditorClauseTable(
       }
       ImGui::EndDisabled();
 
-      std::string tooltip =
-          functionInfo && paramIndex < argumentCount
-              ? functionInfo->parameterLabels[paramIndex]
-              : "Unused argument for the current function.";
+      std::string tooltip = functionInfo && paramIndex < argumentCount
+                                ? functionInfo->parameterLabels[paramIndex]
+                                : "Unused argument for the current function.";
       if (functionInfo && paramIndex < argumentCount &&
           functionInfo->parameterOptional[paramIndex]) {
         tooltip.append(" Optional.");
@@ -284,12 +281,12 @@ void Menu::DrawConditionEditorClauseTable(
     }
 
     ImGui::TableSetColumnIndex(4);
-    constexpr std::array kBooleanComparators = {
-        ConditionComparator::Equal, ConditionComparator::NotEqual};
+    constexpr std::array kBooleanComparators = {ConditionComparator::Equal,
+                                                ConditionComparator::NotEqual};
     constexpr std::array kAllComparators = {
-        ConditionComparator::Equal,          ConditionComparator::NotEqual,
-        ConditionComparator::Greater,        ConditionComparator::GreaterOrEqual,
-        ConditionComparator::Less,           ConditionComparator::LessOrEqual};
+        ConditionComparator::Equal,   ConditionComparator::NotEqual,
+        ConditionComparator::Greater, ConditionComparator::GreaterOrEqual,
+        ConditionComparator::Less,    ConditionComparator::LessOrEqual};
     const std::span<const ConditionComparator> availableComparators =
         functionInfo && functionInfo->returnsBooleanResult
             ? std::span<const ConditionComparator>(kBooleanComparators.begin(),
@@ -308,8 +305,9 @@ void Menu::DrawConditionEditorClauseTable(
                   std::distance(availableComparators.begin(), comparatorIt))
             : 0;
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    if (ImGui::BeginCombo("##comparator",
-                          ComparatorLabel(availableComparators[comparatorIndex]))) {
+    if (ImGui::BeginCombo(
+            "##comparator",
+            ComparatorLabel(availableComparators[comparatorIndex]))) {
       for (int optionIndex = 0;
            optionIndex < static_cast<int>(availableComparators.size());
            ++optionIndex) {
@@ -324,7 +322,8 @@ void Menu::DrawConditionEditorClauseTable(
       }
       ImGui::EndCombo();
     }
-    DrawHoverDescription("conditions:editor:comparator:" + std::to_string(index),
+    DrawHoverDescription("conditions:editor:comparator:" +
+                             std::to_string(index),
                          "Comparison operator applied to the function result.");
 
     ImGui::TableSetColumnIndex(5);
@@ -388,8 +387,7 @@ void Menu::DrawConditionEditorClauseTable(
     }
     if (a_editor.draft.clauses.size() > 1) {
       auto *theme = ThemeConfig::GetSingleton();
-      ImGui::PushStyleColor(ImGuiCol_Button,
-                            theme->GetColor("DECLINE", 0.78f));
+      ImGui::PushStyleColor(ImGuiCol_Button, theme->GetColor("DECLINE", 0.78f));
       ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
                             theme->GetColor("DECLINE", 0.95f));
       ImGui::PushStyleColor(ImGuiCol_ButtonActive,
@@ -412,8 +410,8 @@ void Menu::DrawConditionEditorClauseTable(
       const auto rowDropRect =
           ImRect(ImVec2(tableOuterRect.Min.x, firstCellRect.Min.y),
                  ImVec2(tableOuterRect.Max.x, lastCellRect.Max.y));
-      const bool insertAfter =
-          ImGui::GetIO().MousePos.y > ((rowDropRect.Min.y + rowDropRect.Max.y) * 0.5f);
+      const bool insertAfter = ImGui::GetIO().MousePos.y >
+                               ((rowDropRect.Min.y + rowDropRect.Max.y) * 0.5f);
       if (reorderPreviewActive &&
           ImGui::IsMouseHoveringRect(rowDropRect.Min, rowDropRect.Max, false)) {
         hoveredClauseReorderIndex = static_cast<int>(index);

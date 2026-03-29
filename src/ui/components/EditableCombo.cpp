@@ -186,7 +186,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   const auto arrowMax = fullControlMax;
   const bool wholeControlHovered =
       ImGui::IsMouseHoveringRect(inputMin, fullControlMax, false);
-  const bool arrowHovered = ImGui::IsMouseHoveringRect(arrowMin, arrowMax, false);
+  const bool arrowHovered =
+      ImGui::IsMouseHoveringRect(arrowMin, arrowMax, false);
   if (arrowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     InputManager::GetSingleton()->Flush();
     ImGui::SetKeyboardFocusHere(-1);
@@ -239,10 +240,10 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         visibleOptions.push_back(std::addressof(option));
       }
 
-      const std::string *topOption = visibleOptions.empty()
-                                         ? nullptr
-                                         : (exactMatch ? exactMatch
-                                                       : visibleOptions.front());
+      const std::string *topOption =
+          visibleOptions.empty()
+              ? nullptr
+              : (exactMatch ? exactMatch : visibleOptions.front());
       const auto findVisibleOptionIndex =
           [&](const std::string *a_option) -> int {
         if (!a_option) {
@@ -263,9 +264,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
                      : findVisibleOptionIndex(topOption);
       const int filterHash =
           static_cast<int>(ImHashStr(rawNeedle.c_str(), rawNeedle.size()));
-      const int previousFilterHash =
-          storage->GetInt(filterHashStorageId,
-                          (std::numeric_limits<int>::lowest)());
+      const int previousFilterHash = storage->GetInt(
+          filterHashStorageId, (std::numeric_limits<int>::lowest)());
       const bool filterChanged = filterHash != previousFilterHash;
       storage->SetInt(filterHashStorageId, filterHash);
       if (visibleOptions.empty()) {
@@ -290,8 +290,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
                                 inputItemId)) {
           highlightedIndex =
               (highlightedIndex + 1) % static_cast<int>(visibleOptions.size());
-        } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow,
-                                       ImGuiInputFlags_Repeat, inputItemId)) {
+        } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, ImGuiInputFlags_Repeat,
+                                       inputItemId)) {
           highlightedIndex =
               (highlightedIndex + static_cast<int>(visibleOptions.size()) - 1) %
               static_cast<int>(visibleOptions.size());
@@ -348,7 +348,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       if ((submitted || (acceptAutocompleteOnEnter && enterPressed)) &&
           acceptAutocompleteOnEnter && highlightedIndex >= 0 &&
           highlightedIndex < static_cast<int>(visibleOptions.size())) {
-        commitOption(*visibleOptions[static_cast<std::size_t>(highlightedIndex)]);
+        commitOption(
+            *visibleOptions[static_cast<std::size_t>(highlightedIndex)]);
         ImGui::SetKeyboardFocusHere(-1);
       }
 
@@ -384,8 +385,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       drawList,
       ImVec2(arrowMin.x + ((arrowAreaWidth - ImGui::GetFontSize()) * 0.5f),
              inputMin.y + ((inputFrameHeight - ImGui::GetFontSize()) * 0.5f)),
-      theme->GetColorU32(inputTextActive || wholeControlHovered ? "TEXT"
-                                                                : "TEXT_DISABLED"),
+      theme->GetColorU32(
+          inputTextActive || wholeControlHovered ? "TEXT" : "TEXT_DISABLED"),
       ImGuiDir_Down);
 
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
@@ -431,8 +432,7 @@ bool DrawSearchableDropdown(const char *a_label, const char *a_hint,
   std::string selectedOption;
   const bool changed =
       DrawEditableDropdown(a_label, a_hint, buffer, sizeof(buffer), a_options,
-                           a_width, &selectedOption, false,
-                           &fallbackSelection);
+                           a_width, &selectedOption, false, &fallbackSelection);
   a_value = selectedOption.empty() ? buffer : selectedOption;
   return changed;
 }

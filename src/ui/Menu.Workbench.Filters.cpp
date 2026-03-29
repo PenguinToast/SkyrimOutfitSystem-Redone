@@ -72,20 +72,19 @@ void Menu::BuildWorkbenchFilterOptions(
     a_options.push_back({.label = "\x1fsection:Actor Ref Filter"});
     a_labels.push_back(a_options.back().label);
 
-    std::stable_sort(actorOptions.begin(), actorOptions.end(),
-                     [&](const WorkbenchFilterOption &a_left,
-                         const WorkbenchFilterOption &a_right) {
-                       if (playerFormID != 0 &&
-                           a_left.actorFormID == playerFormID) {
-                         return true;
-                       }
-                       if (playerFormID != 0 &&
-                           a_right.actorFormID == playerFormID) {
-                         return false;
-                       }
-                       return ui::condition_editor::CompareTextInsensitive(
-                                  a_left.label, a_right.label) < 0;
-                     });
+    std::stable_sort(
+        actorOptions.begin(), actorOptions.end(),
+        [&](const WorkbenchFilterOption &a_left,
+            const WorkbenchFilterOption &a_right) {
+          if (playerFormID != 0 && a_left.actorFormID == playerFormID) {
+            return true;
+          }
+          if (playerFormID != 0 && a_right.actorFormID == playerFormID) {
+            return false;
+          }
+          return ui::condition_editor::CompareTextInsensitive(
+                     a_left.label, a_right.label) < 0;
+        });
 
     for (auto &option : actorOptions) {
       a_labels.push_back(option.label);
@@ -233,9 +232,8 @@ void Menu::SyncWorkbenchRowsForCurrentFilter() {
     if (auto *actor =
             RE::TESForm::LookupByID<RE::Actor>(workbenchFilter_.actorFormID);
         actor != nullptr) {
-      workbench_.SyncRowsFromActor(
-          actor,
-          ResolveFirstConditionForActorFilter(workbenchFilter_.actorFormID));
+      workbench_.SyncRowsFromActor(actor, ResolveFirstConditionForActorFilter(
+                                              workbenchFilter_.actorFormID));
       return;
     }
   }

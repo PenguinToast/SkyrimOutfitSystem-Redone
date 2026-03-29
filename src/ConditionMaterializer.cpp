@@ -43,7 +43,8 @@ using OrClause = std::vector<NativeLiteral>;
 using ConditionCnf = std::vector<OrClause>;
 using ConditionVisitSet = std::unordered_set<std::string>;
 using ConditionGraphMap = std::unordered_map<std::string, GraphMetadata>;
-using ConditionRuntimeMap = std::unordered_map<std::string, MaterializationState>;
+using ConditionRuntimeMap =
+    std::unordered_map<std::string, MaterializationState>;
 
 union ConditionParam {
   char c;
@@ -650,7 +651,8 @@ void InvalidateConditionMaterializationCaches(
 }
 
 void InvalidateConditionMaterializationCachesFrom(
-    std::vector<Definition> &a_conditions, const std::string_view a_conditionId) {
+    std::vector<Definition> &a_conditions,
+    const std::string_view a_conditionId) {
   (void)a_conditions;
   std::vector<std::string> stack;
   std::unordered_set<std::string> visited;
@@ -736,13 +738,12 @@ MaterializeConditionById(std::string_view a_conditionId,
   runtimeState.valid = true;
   runtimeState.condition = condition;
   runtimeState.signature = BuildCnfSignature(*cnf);
-  runtimeState.refreshActorFormIDs.assign(
-      refreshTargets.actorFormIDs.begin(), refreshTargets.actorFormIDs.end());
+  runtimeState.refreshActorFormIDs.assign(refreshTargets.actorFormIDs.begin(),
+                                          refreshTargets.actorFormIDs.end());
   runtimeState.refreshUseNearbyFallback = refreshTargets.useNearbyFallback;
 
-  return MaterializedCondition{
-      .condition = runtimeState.condition,
-      .signature = runtimeState.signature,
-      .refreshTargets = refreshTargets};
+  return MaterializedCondition{.condition = runtimeState.condition,
+                               .signature = runtimeState.signature,
+                               .refreshTargets = refreshTargets};
 }
 } // namespace sosr::conditions

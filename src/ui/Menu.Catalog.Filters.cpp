@@ -297,8 +297,8 @@ void Menu::DrawCatalogFilters() {
   SyncSelectedSlotFilters();
   const auto itemSpacingX = ImGui::GetStyle().ItemSpacing.x;
   const auto filterBarWidth = ImGui::GetContentRegionAvail().x;
-  const auto drawSearchField = [&](ImGuiTextFilter &a_filter, const float a_width,
-                                   const char *a_id,
+  const auto drawSearchField = [&](ImGuiTextFilter &a_filter,
+                                   const float a_width, const char *a_id,
                                    const char *a_placeholder) {
     ImGui::PushItemWidth(a_width);
     if (ImGui::InputText(a_id, a_filter.InputBuf,
