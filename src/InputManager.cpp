@@ -2,8 +2,9 @@
 
 #include <Windows.h>
 
+#include "Keycode.h"
 #include "imgui.h"
-#include "ui/Menu.h"
+#include "ui/InputSinkBridge.h"
 
 namespace sosr {
 namespace {
@@ -224,13 +225,14 @@ void InputManager::ProcessInputEvents() {
     queuedEvents.swap(inputQueue_);
   }
 
-  auto *menu = Menu::GetSingleton();
   if (ImGui::GetCurrentContext() == nullptr) {
     return;
   }
 
   auto &io = ImGui::GetIO();
-  const bool wantsTextInput = menu->IsEnabled() && menu->WantsTextInput();
+  const auto inputSinkState = ui::GetInputSinkState();
+  const bool wantsTextInput =
+      inputSinkState.enabled && inputSinkState.wantsTextInput;
 
   for (const auto *event : queuedEvents) {
     switch (event->GetEventType()) {
@@ -288,24 +290,25 @@ void InputManager::ProcessInputEvents() {
           break;
         }
 
-        if (menu->IsCapturingToggleKey() && buttonEvent->IsDown()) {
+        if (inputSinkState.capturingToggleKey && buttonEvent->IsDown()) {
           if (keycode::IsKeyModifier(scanCode)) {
             break;
           }
 
-          menu->HandleToggleKeyCapture(scanCode, GetActiveModifierScanCode());
+          ui::HandleToggleKeyCapture(scanCode, GetActiveModifierScanCode());
           io.ClearInputKeys();
           break;
         }
 
-        if (!menu->WantsTextInput() && scanCode == menu->GetToggleKey() &&
+        if (!inputSinkState.wantsTextInput &&
+            scanCode == inputSinkState.toggleKey &&
             IsBoundModifierDown() && buttonEvent->IsDown()) {
-          menu->Toggle();
+          ui::ToggleInputSinkVisibility();
           io.ClearInputKeys();
           break;
         }
 
-        if (!menu->IsEnabled()) {
+        if (!inputSinkState.enabled) {
           break;
         }
 
@@ -322,7 +325,7 @@ void InputManager::ProcessInputEvents() {
 }
 
 bool InputManager::IsBoundModifierDown() const {
-  switch (Menu::GetSingleton()->GetToggleModifier()) {
+  switch (ui::GetInputSinkState().toggleModifier) {
   case 0x00:
     return true;
   case 0x2A:
