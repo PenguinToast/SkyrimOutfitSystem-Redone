@@ -34,6 +34,7 @@ std::string NormalizeKitCollection(std::string_view a_collection) {
 
 namespace sosr {
 bool Menu::DrawKitTab() {
+  const auto &browser = catalogBrowser_;
   auto rows = BuildFilteredKits();
   ImGui::Text("Results: %zu", rows.size());
   bool rowClicked = false;
@@ -62,7 +63,8 @@ bool Menu::DrawKitTab() {
       for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
            ++rowIndex) {
         const auto &kit = *rows[static_cast<std::size_t>(rowIndex)];
-        const auto favorite = IsFavorite(BrowserTab::Kits, kit.id);
+        const auto favorite =
+            IsFavorite(ui::catalog::BrowserTab::Kits, kit.id);
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
@@ -72,8 +74,9 @@ bool Menu::DrawKitTab() {
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
         const bool selected =
-            selectedCatalogKey_ == kit.id &&
-            (!previewSelected_ || workbench_.IsPreviewingSelection(kit.id));
+            browser.selectedKey == kit.id &&
+            (!browser.previewSelected ||
+             workbench_.IsPreviewingSelection(kit.id));
         const bool clicked = ImGui::Selectable(
             ("##kit-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
             ImGuiSelectableFlags_SpanAllColumns |
@@ -86,7 +89,7 @@ bool Menu::DrawKitTab() {
           const auto favoriteLabel =
               favorite ? "Remove from Favorites" : "Add to Favorites";
           if (ImGui::MenuItem(favoriteLabel)) {
-            SetFavorite(BrowserTab::Kits, kit.id, !favorite);
+            SetFavorite(ui::catalog::BrowserTab::Kits, kit.id, !favorite);
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add to Workbench")) {
@@ -125,11 +128,11 @@ bool Menu::DrawKitTab() {
 
         if (clicked) {
           rowClicked = true;
-          if (selectedCatalogKey_ == kit.id) {
+          if (browser.selectedKey == kit.id) {
             ClearCatalogSelection();
           } else {
-            selectedCatalogKey_ = kit.id;
-            if (previewSelected_) {
+            catalogBrowser_.selectedKey = kit.id;
+            if (browser.previewSelected) {
               PreviewKitEntry(kit);
             } else {
               workbench_.ClearPreview();
@@ -295,10 +298,11 @@ bool Menu::SavePendingKit() {
   file << data.dump(4) << '\n';
   file.close();
 
-  pendingCatalogSelectionAfterRefresh_ = "kit:" + relativePath.generic_string();
-  QueueCatalogRefresh(CatalogRefreshMode::KitsOnly);
-  selectedCatalogKey_.clear();
-  activeTab_ = BrowserTab::Kits;
+  catalogBrowser_.pendingSelectionAfterRefresh =
+      "kit:" + relativePath.generic_string();
+  QueueCatalogRefresh(ui::catalog::RefreshMode::KitsOnly);
+  catalogBrowser_.selectedKey.clear();
+  catalogBrowser_.activeTab = ui::catalog::BrowserTab::Kits;
   openCreateKitDialog_ = false;
   pendingKitFormIDs_.clear();
   createKitError_.clear();
@@ -323,15 +327,16 @@ bool Menu::DeletePendingKit() {
     return false;
   }
 
-  favoriteKeys_.erase(BuildFavoriteKey(BrowserTab::Kits, pendingDeleteKitId_));
+  catalogBrowser_.favoriteKeys.erase(
+      BuildFavoriteKey(ui::catalog::BrowserTab::Kits, pendingDeleteKitId_));
   SaveFavorites();
 
-  if (selectedCatalogKey_ == pendingDeleteKitId_) {
+  if (catalogBrowser_.selectedKey == pendingDeleteKitId_) {
     ClearCatalogSelection();
   }
 
-  QueueCatalogRefresh(CatalogRefreshMode::KitsOnly);
-  activeTab_ = BrowserTab::Kits;
+  QueueCatalogRefresh(ui::catalog::RefreshMode::KitsOnly);
+  catalogBrowser_.activeTab = ui::catalog::BrowserTab::Kits;
   pendingDeleteKitId_.clear();
   pendingDeleteKitName_.clear();
   pendingDeleteKitPath_.clear();

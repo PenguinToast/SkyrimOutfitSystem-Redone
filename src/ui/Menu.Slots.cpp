@@ -12,6 +12,7 @@ enum class SlotColumn : ImGuiID { Slot = 1, Occupied };
 
 namespace sosr {
 bool Menu::DrawSlotTab() {
+  const auto &browser = catalogBrowser_;
   struct SlotCatalogRow {
     workbench::EquipmentWidgetItem slotItem;
     std::vector<workbench::EquipmentWidgetItem> occupantItems;
@@ -56,7 +57,7 @@ bool Menu::DrawSlotTab() {
       row.occupantSortText = "Empty";
     }
 
-    if (!showAllSlots_ && row.occupantItems.empty()) {
+    if (!browser.showAllSlots && row.occupantItems.empty()) {
       continue;
     }
 
@@ -132,7 +133,7 @@ bool Menu::DrawSlotTab() {
         ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
-        const bool selected = selectedCatalogKey_ == row.slotItem.key;
+        const bool selected = browser.selectedKey == row.slotItem.key;
         const bool clicked = ImGui::Selectable(
             ("##slot-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
             ImGuiSelectableFlags_SpanAllColumns |
@@ -165,10 +166,10 @@ bool Menu::DrawSlotTab() {
 
         if (clicked || widgetResult.clicked) {
           rowClicked = true;
-          if (selectedCatalogKey_ == row.slotItem.key) {
+          if (browser.selectedKey == row.slotItem.key) {
             ClearCatalogSelection();
           } else {
-            selectedCatalogKey_ = row.slotItem.key;
+            catalogBrowser_.selectedKey = row.slotItem.key;
             workbench_.ClearPreview();
           }
         }

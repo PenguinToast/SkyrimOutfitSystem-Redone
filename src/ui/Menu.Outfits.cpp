@@ -10,6 +10,7 @@ enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Pieces };
 
 namespace sosr {
 bool Menu::DrawOutfitTab() {
+  const auto &browser = catalogBrowser_;
   auto rows = BuildFilteredOutfits();
   ImGui::Text("Results: %zu", rows.size());
   bool rowClicked = false;
@@ -38,7 +39,8 @@ bool Menu::DrawOutfitTab() {
       for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
            ++rowIndex) {
         const auto &outfit = *rows[static_cast<std::size_t>(rowIndex)];
-        const auto favorite = IsFavorite(BrowserTab::Outfits, outfit.id);
+        const auto favorite =
+            IsFavorite(ui::catalog::BrowserTab::Outfits, outfit.id);
 
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0);
@@ -48,8 +50,9 @@ bool Menu::DrawOutfitTab() {
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
         const bool selected =
-            selectedCatalogKey_ == outfit.id &&
-            (!previewSelected_ || workbench_.IsPreviewingSelection(outfit.id));
+            browser.selectedKey == outfit.id &&
+            (!browser.previewSelected ||
+             workbench_.IsPreviewingSelection(outfit.id));
         const bool clicked = ImGui::Selectable(
             ("##outfit-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
             ImGuiSelectableFlags_SpanAllColumns |
@@ -62,7 +65,7 @@ bool Menu::DrawOutfitTab() {
           const auto favoriteLabel =
               favorite ? "Remove from Favorites" : "Add to Favorites";
           if (ImGui::MenuItem(favoriteLabel)) {
-            SetFavorite(BrowserTab::Outfits, outfit.id, !favorite);
+            SetFavorite(ui::catalog::BrowserTab::Outfits, outfit.id, !favorite);
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add to Workbench")) {
@@ -92,11 +95,11 @@ bool Menu::DrawOutfitTab() {
 
         if (clicked) {
           rowClicked = true;
-          if (selectedCatalogKey_ == outfit.id) {
+          if (browser.selectedKey == outfit.id) {
             ClearCatalogSelection();
           } else {
-            selectedCatalogKey_ = outfit.id;
-            if (previewSelected_) {
+            catalogBrowser_.selectedKey = outfit.id;
+            if (browser.previewSelected) {
               PreviewOutfitEntry(outfit);
             } else {
               workbench_.ClearPreview();

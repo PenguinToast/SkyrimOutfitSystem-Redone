@@ -9,30 +9,30 @@ constexpr std::string_view kFavoritePrefix = "\xEE\x83\xB5 ";
 
 namespace sosr {
 void Menu::ClearCatalogSelection() {
-  selectedCatalogKey_.clear();
+  catalogBrowser_.selectedKey.clear();
   workbench_.ClearPreview();
 }
 
-std::string Menu::BuildFavoriteKey(const BrowserTab a_tab,
+std::string Menu::BuildFavoriteKey(const ui::catalog::BrowserTab a_tab,
                                    const std::string_view a_id) const {
   std::string prefix;
   switch (a_tab) {
-  case BrowserTab::Gear:
+  case ui::catalog::BrowserTab::Gear:
     prefix = "gear:";
     break;
-  case BrowserTab::Outfits:
+  case ui::catalog::BrowserTab::Outfits:
     prefix = "outfit:";
     break;
-  case BrowserTab::Kits:
+  case ui::catalog::BrowserTab::Kits:
     prefix = "kit:";
     break;
-  case BrowserTab::Slots:
+  case ui::catalog::BrowserTab::Slots:
     prefix = "slot:";
     break;
-  case BrowserTab::Conditions:
+  case ui::catalog::BrowserTab::Conditions:
     prefix = "condition:";
     break;
-  case BrowserTab::Options:
+  case ui::catalog::BrowserTab::Options:
     prefix = "options:";
     break;
   }
@@ -40,19 +40,21 @@ std::string Menu::BuildFavoriteKey(const BrowserTab a_tab,
   return prefix + std::string(a_id);
 }
 
-bool Menu::IsFavorite(const BrowserTab a_tab,
+bool Menu::IsFavorite(const ui::catalog::BrowserTab a_tab,
                       const std::string_view a_id) const {
-  return favoriteKeys_.contains(BuildFavoriteKey(a_tab, a_id));
+  return catalogBrowser_.favoriteKeys.contains(BuildFavoriteKey(a_tab, a_id));
 }
 
-void Menu::SetFavorite(const BrowserTab a_tab, const std::string_view a_id,
-                       const bool a_favorite) {
+void Menu::SetFavorite(const ui::catalog::BrowserTab a_tab,
+                       const std::string_view a_id, const bool a_favorite) {
   const auto key = BuildFavoriteKey(a_tab, a_id);
   if (a_favorite) {
-    favoriteKeys_.insert(key);
+    catalogBrowser_.favoriteKeys.insert(key);
   } else {
-    favoriteKeys_.erase(key);
-    if (favoritesOnly_ && activeTab_ == a_tab && selectedCatalogKey_ == a_id) {
+    catalogBrowser_.favoriteKeys.erase(key);
+    if (catalogBrowser_.favoritesOnly &&
+        catalogBrowser_.activeTab == a_tab &&
+        catalogBrowser_.selectedKey == a_id) {
       ClearCatalogSelection();
     }
   }
@@ -68,24 +70,26 @@ std::string Menu::BuildFavoriteLabel(const std::string_view a_name,
   return std::string(kFavoritePrefix) + std::string(a_name);
 }
 
-void Menu::QueueCatalogRefresh(const CatalogRefreshMode a_mode) {
-  catalogRefreshQueued_ = true;
-  queuedCatalogRefreshMode_ = a_mode;
-  if (a_mode == CatalogRefreshMode::Full) {
-    catalogInitialized_ = false;
-    pendingCatalogSelectionAfterRefresh_.clear();
+void Menu::QueueCatalogRefresh(const ui::catalog::RefreshMode a_mode) {
+  auto &browser = catalogBrowser_;
+  browser.refreshQueued = true;
+  browser.queuedRefreshMode = a_mode;
+  if (a_mode == ui::catalog::RefreshMode::Full) {
+    browser.initialized = false;
+    browser.pendingSelectionAfterRefresh.clear();
     ClearCatalogSelection();
   }
 }
 
 void Menu::UpdateCatalogRefresh() {
+  auto &browser = catalogBrowser_;
   auto &catalog = EquipmentCatalog::Get();
-  if (catalogRefreshQueued_ && !catalog.IsRefreshing()) {
-    catalog.StartRefreshFromGame(queuedCatalogRefreshMode_ ==
-                                         CatalogRefreshMode::KitsOnly
+  if (browser.refreshQueued && !catalog.IsRefreshing()) {
+    catalog.StartRefreshFromGame(browser.queuedRefreshMode ==
+                                         ui::catalog::RefreshMode::KitsOnly
                                      ? EquipmentCatalog::RefreshMode::KitsOnly
                                      : EquipmentCatalog::RefreshMode::Full);
-    catalogRefreshQueued_ = false;
+    browser.refreshQueued = false;
   }
 
   if (!catalog.IsRefreshing()) {
@@ -93,10 +97,10 @@ void Menu::UpdateCatalogRefresh() {
   }
 
   if (!catalog.ContinueRefreshFromGame(16.0)) {
-    catalogInitialized_ = true;
-    if (!pendingCatalogSelectionAfterRefresh_.empty()) {
-      selectedCatalogKey_ = pendingCatalogSelectionAfterRefresh_;
-      pendingCatalogSelectionAfterRefresh_.clear();
+    browser.initialized = true;
+    if (!browser.pendingSelectionAfterRefresh.empty()) {
+      browser.selectedKey = browser.pendingSelectionAfterRefresh;
+      browser.pendingSelectionAfterRefresh.clear();
     }
   }
 }
@@ -151,6 +155,7 @@ void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {
 }
 
 void Menu::DrawWindow() {
+  auto &browser = catalogBrowser_;
   auto &io = ImGui::GetIO();
   ImGui::SetNextWindowSize(
       ImVec2(io.DisplaySize.x * 0.50f, io.DisplaySize.y * 0.50f),
@@ -186,15 +191,19 @@ void Menu::DrawWindow() {
   } else {
     ImGui::SameLine();
   }
-  if (ImGui::Selectable("Browser", activeTab_ != BrowserTab::Options, 0,
+  if (ImGui::Selectable("Browser",
+                        browser.activeTab != ui::catalog::BrowserTab::Options,
+                        0,
                         ImVec2(browserButtonWidth, 0.0f)) &&
-      activeTab_ == BrowserTab::Options) {
-    activeTab_ = BrowserTab::Gear;
+      browser.activeTab == ui::catalog::BrowserTab::Options) {
+    browser.activeTab = ui::catalog::BrowserTab::Gear;
   }
   ImGui::SameLine();
-  if (ImGui::Selectable("Options", activeTab_ == BrowserTab::Options, 0,
+  if (ImGui::Selectable("Options",
+                        browser.activeTab == ui::catalog::BrowserTab::Options,
+                        0,
                         ImVec2(optionsButtonWidth, 0.0f))) {
-    activeTab_ = BrowserTab::Options;
+    browser.activeTab = ui::catalog::BrowserTab::Options;
   }
   ImGui::Separator();
   const auto davAvailabilityMessage = ui::catalog::GetDavAvailabilityMessage();
@@ -203,7 +212,7 @@ void Menu::DrawWindow() {
     ImGui::Spacing();
   }
 
-  if (activeTab_ == BrowserTab::Options) {
+  if (browser.activeTab == ui::catalog::BrowserTab::Options) {
     DrawOptionsTab();
   } else {
     UpdateCatalogRefresh();
@@ -211,33 +220,33 @@ void Menu::DrawWindow() {
       if (EquipmentCatalog::Get().IsRefreshing()) {
         return;
       }
-      if (!previewSelected_ || selectedCatalogKey_.empty()) {
+      if (!browser.previewSelected || browser.selectedKey.empty()) {
         return;
       }
 
-      if (activeTab_ == BrowserTab::Gear) {
+      if (browser.activeTab == ui::catalog::BrowserTab::Gear) {
         const auto entry = std::ranges::find(
-            EquipmentCatalog::Get().GetGear(), selectedCatalogKey_,
+            EquipmentCatalog::Get().GetGear(), browser.selectedKey,
             [](const GearEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetGear().end()) {
           PreviewGearEntry(*entry);
         }
-      } else if (activeTab_ == BrowserTab::Outfits) {
+      } else if (browser.activeTab == ui::catalog::BrowserTab::Outfits) {
         const auto entry = std::ranges::find(
-            EquipmentCatalog::Get().GetOutfits(), selectedCatalogKey_,
+            EquipmentCatalog::Get().GetOutfits(), browser.selectedKey,
             [](const OutfitEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetOutfits().end()) {
           PreviewOutfitEntry(*entry);
         }
-      } else if (activeTab_ == BrowserTab::Kits) {
+      } else if (browser.activeTab == ui::catalog::BrowserTab::Kits) {
         const auto entry = std::ranges::find(
-            EquipmentCatalog::Get().GetKits(), selectedCatalogKey_,
+            EquipmentCatalog::Get().GetKits(), browser.selectedKey,
             [](const KitEntry &a_entry) { return a_entry.id; });
         if (entry != EquipmentCatalog::Get().GetKits().end()) {
           PreviewKitEntry(*entry);
         }
-      } else if (activeTab_ == BrowserTab::Slots ||
-                 activeTab_ == BrowserTab::Conditions) {
+      } else if (browser.activeTab == ui::catalog::BrowserTab::Slots ||
+                 browser.activeTab == ui::catalog::BrowserTab::Conditions) {
         workbench_.ClearPreview();
       }
     };
@@ -252,10 +261,10 @@ void Menu::DrawWindow() {
            "default target selection, or use the context menu to add a new "
            "workbench row instead."});
       if (gearTabOpen) {
-        if (activeTab_ != BrowserTab::Gear) {
+        if (browser.activeTab != ui::catalog::BrowserTab::Gear) {
           ClearCatalogSelection();
         }
-        activeTab_ = BrowserTab::Gear;
+        browser.activeTab = ui::catalog::BrowserTab::Gear;
         ImGui::EndTabItem();
       }
 
@@ -267,10 +276,10 @@ void Menu::DrawWindow() {
            "matches the preview. The context menu also offers the old append "
            "behavior, or you can add the outfit as workbench rows instead."});
       if (outfitsTabOpen) {
-        if (activeTab_ != BrowserTab::Outfits) {
+        if (browser.activeTab != ui::catalog::BrowserTab::Outfits) {
           ClearCatalogSelection();
         }
-        activeTab_ = BrowserTab::Outfits;
+        browser.activeTab = ui::catalog::BrowserTab::Outfits;
         ImGui::EndTabItem();
       }
 
@@ -285,10 +294,10 @@ void Menu::DrawWindow() {
            "and can delete kits.",
            "Kits that refer to non-existent items are not shown."});
       if (kitsTabOpen) {
-        if (activeTab_ != BrowserTab::Kits) {
+        if (browser.activeTab != ui::catalog::BrowserTab::Kits) {
           ClearCatalogSelection();
         }
-        activeTab_ = BrowserTab::Kits;
+        browser.activeTab = ui::catalog::BrowserTab::Kits;
         ImGui::EndTabItem();
       }
 
@@ -306,10 +315,10 @@ void Menu::DrawWindow() {
            "Double-click to add a slot row to the workbench, or use the "
            "context menu to add it manually."});
       if (slotsTabOpen) {
-        if (activeTab_ != BrowserTab::Slots) {
+        if (browser.activeTab != ui::catalog::BrowserTab::Slots) {
           ClearCatalogSelection();
         }
-        activeTab_ = BrowserTab::Slots;
+        browser.activeTab = ui::catalog::BrowserTab::Slots;
         ImGui::EndTabItem();
       }
 
@@ -324,10 +333,10 @@ void Menu::DrawWindow() {
            "Double-click a condition to edit it, or use Add New to create a "
            "fresh one."});
       if (conditionsTabOpen) {
-        if (activeTab_ != BrowserTab::Conditions) {
+        if (browser.activeTab != ui::catalog::BrowserTab::Conditions) {
           ClearCatalogSelection();
         }
-        activeTab_ = BrowserTab::Conditions;
+        browser.activeTab = ui::catalog::BrowserTab::Conditions;
         ImGui::EndTabItem();
       }
 
@@ -336,21 +345,21 @@ void Menu::DrawWindow() {
 
     ImGui::Separator();
     DrawCatalogFilters();
-    if (activeTab_ != BrowserTab::Slots &&
-        activeTab_ != BrowserTab::Conditions) {
-      if (ImGui::Checkbox("Favorites Only", &favoritesOnly_) &&
-          favoritesOnly_ && !selectedCatalogKey_.empty() &&
-          !IsFavorite(activeTab_, selectedCatalogKey_)) {
+    if (browser.activeTab != ui::catalog::BrowserTab::Slots &&
+        browser.activeTab != ui::catalog::BrowserTab::Conditions) {
+      if (ImGui::Checkbox("Favorites Only", &browser.favoritesOnly) &&
+          browser.favoritesOnly && !browser.selectedKey.empty() &&
+          !IsFavorite(browser.activeTab, browser.selectedKey)) {
         ClearCatalogSelection();
       }
     }
-    if (activeTab_ == BrowserTab::Gear) {
+    if (browser.activeTab == ui::catalog::BrowserTab::Gear) {
       ImGui::SameLine();
-      if (ImGui::Checkbox("Inventory Only", &inventoryOnly_) &&
-          inventoryOnly_ && !selectedCatalogKey_.empty()) {
+      if (ImGui::Checkbox("Inventory Only", &browser.inventoryOnly) &&
+          browser.inventoryOnly && !browser.selectedKey.empty()) {
         const auto &catalog = EquipmentCatalog::Get().GetGear();
         const auto selectedIt =
-            std::ranges::find(catalog, selectedCatalogKey_, &GearEntry::id);
+            std::ranges::find(catalog, browser.selectedKey, &GearEntry::id);
         const auto inventoryFormIDs =
             player_inventory::GetInventoryArmorFormIDs();
         if (selectedIt != catalog.end() &&
@@ -359,8 +368,8 @@ void Menu::DrawWindow() {
         }
       }
     }
-    if (activeTab_ == BrowserTab::Slots) {
-      ImGui::Checkbox("Show all", &showAllSlots_);
+    if (browser.activeTab == ui::catalog::BrowserTab::Slots) {
+      ImGui::Checkbox("Show all", &browser.showAllSlots);
       ui::catalog::DrawCatalogTabHelpTooltip(
           "catalog:slots-show-all", ui::catalog::IsDelayedHover(0.55f),
           {"When unchecked, only slots that currently have equipped items are "
@@ -368,11 +377,11 @@ void Menu::DrawWindow() {
            "Enable this to browse every supported equipment slot, including "
            "slots that are currently empty."});
     }
-    if (activeTab_ != BrowserTab::Slots &&
-        activeTab_ != BrowserTab::Conditions) {
+    if (browser.activeTab != ui::catalog::BrowserTab::Slots &&
+        browser.activeTab != ui::catalog::BrowserTab::Conditions) {
       ImGui::SameLine();
-      if (ImGui::Checkbox("Preview Selected", &previewSelected_)) {
-        if (!previewSelected_) {
+      if (ImGui::Checkbox("Preview Selected", &browser.previewSelected)) {
+        if (!browser.previewSelected) {
           workbench_.ClearPreview();
         } else {
           applySelectedPreview();
@@ -394,23 +403,23 @@ void Menu::DrawWindow() {
       if (ImGui::BeginChild("##catalog-pane", ImVec2(0.0f, 0.0f),
                             ImGuiChildFlags_Borders)) {
         bool catalogRowClicked = false;
-        if (activeTab_ != BrowserTab::Conditions &&
+        if (browser.activeTab != ui::catalog::BrowserTab::Conditions &&
             EquipmentCatalog::Get().IsRefreshing()) {
           DrawCatalogLoadingPane();
         } else {
-          if (activeTab_ == BrowserTab::Gear) {
+          if (browser.activeTab == ui::catalog::BrowserTab::Gear) {
             catalogRowClicked = DrawGearTab();
-          } else if (activeTab_ == BrowserTab::Outfits) {
+          } else if (browser.activeTab == ui::catalog::BrowserTab::Outfits) {
             catalogRowClicked = DrawOutfitTab();
-          } else if (activeTab_ == BrowserTab::Kits) {
+          } else if (browser.activeTab == ui::catalog::BrowserTab::Kits) {
             catalogRowClicked = DrawKitTab();
-          } else if (activeTab_ == BrowserTab::Conditions) {
+          } else if (browser.activeTab == ui::catalog::BrowserTab::Conditions) {
             catalogRowClicked = DrawConditionTab();
           } else {
             catalogRowClicked = DrawSlotTab();
           }
 
-          if (!selectedCatalogKey_.empty() &&
+          if (!browser.selectedKey.empty() &&
               ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
               !catalogRowClicked) {
             ClearCatalogSelection();

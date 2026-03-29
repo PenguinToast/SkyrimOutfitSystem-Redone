@@ -14,6 +14,7 @@ bool Menu::DrawGearTab() {
 }
 
 bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
+  const auto &browser = catalogBrowser_;
   bool rowClicked = false;
   if (ImGui::BeginTable("##gear-table", 2,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
@@ -36,7 +37,8 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
       for (int rowIndex = clipper.DisplayStart; rowIndex < clipper.DisplayEnd;
            ++rowIndex) {
         const auto &entry = *rows[static_cast<std::size_t>(rowIndex)];
-        const auto favorite = IsFavorite(BrowserTab::Gear, entry.id);
+        const auto favorite =
+            IsFavorite(ui::catalog::BrowserTab::Gear, entry.id);
         workbench::EquipmentWidgetItem item{};
         if (!workbench_.BuildCatalogItem(entry.formID, item)) {
           item.formID = entry.formID;
@@ -53,8 +55,9 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
         const bool selected =
-            selectedCatalogKey_ == entry.id &&
-            (!previewSelected_ || workbench_.IsPreviewingSelection(entry.id));
+            browser.selectedKey == entry.id &&
+            (!browser.previewSelected ||
+             workbench_.IsPreviewingSelection(entry.id));
         const bool clicked = ImGui::Selectable(
             ("##catalog-row-hit-" + std::to_string(rowIndex)).c_str(), selected,
             ImGuiSelectableFlags_SpanAllColumns |
@@ -67,7 +70,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           const auto favoriteLabel =
               favorite ? "Remove from Favorites" : "Add to Favorites";
           if (ImGui::MenuItem(favoriteLabel)) {
-            SetFavorite(BrowserTab::Gear, entry.id, !favorite);
+            SetFavorite(ui::catalog::BrowserTab::Gear, entry.id, !favorite);
           }
           ImGui::Separator();
           if (ImGui::MenuItem("Add to Workbench")) {
@@ -100,11 +103,11 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
 
         if (clicked || widgetResult.clicked) {
           rowClicked = true;
-          if (selectedCatalogKey_ == entry.id) {
+          if (browser.selectedKey == entry.id) {
             ClearCatalogSelection();
           } else {
-            selectedCatalogKey_ = entry.id;
-            if (previewSelected_) {
+            catalogBrowser_.selectedKey = entry.id;
+            if (browser.previewSelected) {
               PreviewGearEntry(entry);
             } else {
               workbench_.ClearPreview();

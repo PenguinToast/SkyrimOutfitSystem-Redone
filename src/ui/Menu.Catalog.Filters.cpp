@@ -25,60 +25,68 @@ int CompareCatalogText(const std::string_view a_left,
 } // namespace
 
 bool Menu::MatchesGearFilters(const GearEntry &a_entry) const {
-  if (favoritesOnly_ && !IsFavorite(BrowserTab::Gear, a_entry.id)) {
+  const auto &browser = catalogBrowser_;
+  if (browser.favoritesOnly &&
+      !IsFavorite(ui::catalog::BrowserTab::Gear, a_entry.id)) {
     return false;
   }
 
   const auto &catalog = EquipmentCatalog::Get();
-  if (gearPluginIndex_ > 0 &&
-      a_entry.plugin != catalog.GetGearPlugins()[gearPluginIndex_ - 1]) {
+  if (browser.gearPluginIndex > 0 &&
+      a_entry.plugin != catalog.GetGearPlugins()[browser.gearPluginIndex - 1]) {
     return false;
   }
 
   return MatchesSelectedSlotsOr(a_entry.slots) &&
-         gearSearch_.PassFilter(a_entry.searchText.c_str());
+         browser.gearSearch.PassFilter(a_entry.searchText.c_str());
 }
 
 bool Menu::MatchesOutfitFilters(const OutfitEntry &a_entry) const {
-  if (favoritesOnly_ && !IsFavorite(BrowserTab::Outfits, a_entry.id)) {
+  const auto &browser = catalogBrowser_;
+  if (browser.favoritesOnly &&
+      !IsFavorite(ui::catalog::BrowserTab::Outfits, a_entry.id)) {
     return false;
   }
 
   const auto &catalog = EquipmentCatalog::Get();
-  if (outfitPluginIndex_ > 0 &&
-      a_entry.plugin != catalog.GetOutfitPlugins()[outfitPluginIndex_ - 1]) {
+  if (browser.outfitPluginIndex > 0 &&
+      a_entry.plugin !=
+          catalog.GetOutfitPlugins()[browser.outfitPluginIndex - 1]) {
     return false;
   }
 
   return MatchesSelectedSlotsAnd(a_entry.slots) &&
-         outfitSearch_.PassFilter(a_entry.searchText.c_str());
+         browser.outfitSearch.PassFilter(a_entry.searchText.c_str());
 }
 
 bool Menu::MatchesKitFilters(const KitEntry &a_entry) const {
-  if (favoritesOnly_ && !IsFavorite(BrowserTab::Kits, a_entry.id)) {
+  const auto &browser = catalogBrowser_;
+  if (browser.favoritesOnly &&
+      !IsFavorite(ui::catalog::BrowserTab::Kits, a_entry.id)) {
     return false;
   }
 
   const auto &catalog = EquipmentCatalog::Get();
-  if (kitCollectionIndex_ > 0 &&
+  if (browser.kitCollectionIndex > 0 &&
       a_entry.collection !=
-          catalog.GetKitCollections()[kitCollectionIndex_ - 1]) {
+          catalog.GetKitCollections()[browser.kitCollectionIndex - 1]) {
     return false;
   }
 
   return MatchesSelectedSlotsAnd(a_entry.slots) &&
-         kitSearch_.PassFilter(a_entry.searchText.c_str());
+         browser.kitSearch.PassFilter(a_entry.searchText.c_str());
 }
 
 void Menu::SyncSelectedSlotFilters() {
   const auto size = EquipmentCatalog::Get().GetGearSlots().size();
-  if (selectedSlotFilters_.size() != size) {
-    selectedSlotFilters_.resize(size, false);
+  auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
+  if (selectedSlotFilters.size() != size) {
+    selectedSlotFilters.resize(size, false);
   }
 }
 
 bool Menu::HasAnySelectedSlotFilter() const {
-  return std::ranges::any_of(selectedSlotFilters_,
+  return std::ranges::any_of(catalogBrowser_.selectedSlotFilters,
                              [](bool a_selected) { return a_selected; });
 }
 
@@ -89,8 +97,9 @@ bool Menu::MatchesSelectedSlotsOr(
   }
 
   const auto &slotOptions = EquipmentCatalog::Get().GetGearSlots();
-  for (std::size_t index = 0; index < selectedSlotFilters_.size(); ++index) {
-    if (!selectedSlotFilters_[index]) {
+  const auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
+  for (std::size_t index = 0; index < selectedSlotFilters.size(); ++index) {
+    if (!selectedSlotFilters[index]) {
       continue;
     }
     if (std::ranges::find(a_slots, slotOptions[index]) != a_slots.end()) {
@@ -108,8 +117,9 @@ bool Menu::MatchesSelectedSlotsAnd(
   }
 
   const auto &slotOptions = EquipmentCatalog::Get().GetGearSlots();
-  for (std::size_t index = 0; index < selectedSlotFilters_.size(); ++index) {
-    if (!selectedSlotFilters_[index]) {
+  const auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
+  for (std::size_t index = 0; index < selectedSlotFilters.size(); ++index) {
+    if (!selectedSlotFilters[index]) {
       continue;
     }
     if (std::ranges::find(a_slots, slotOptions[index]) == a_slots.end()) {
@@ -122,11 +132,12 @@ bool Menu::MatchesSelectedSlotsAnd(
 
 std::string Menu::BuildSelectedSlotPreview() const {
   const auto &slotOptions = EquipmentCatalog::Get().GetGearSlots();
+  const auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
   std::size_t selectedCount = 0;
   std::string_view selectedLabel = "Any slot";
 
-  for (std::size_t index = 0; index < selectedSlotFilters_.size(); ++index) {
-    if (!selectedSlotFilters_[index]) {
+  for (std::size_t index = 0; index < selectedSlotFilters.size(); ++index) {
+    if (!selectedSlotFilters[index]) {
       continue;
     }
     ++selectedCount;
@@ -145,13 +156,14 @@ std::string Menu::BuildSelectedSlotPreview() const {
 std::vector<const GearEntry *> Menu::BuildFilteredGear() const {
   std::vector<const GearEntry *> rows;
   rows.reserve(EquipmentCatalog::Get().GetGear().size());
+  const auto &browser = catalogBrowser_;
   const auto inventoryFormIDs =
-      inventoryOnly_ ? player_inventory::GetInventoryArmorFormIDs()
-                     : std::unordered_set<RE::FormID>{};
+      browser.inventoryOnly ? player_inventory::GetInventoryArmorFormIDs()
+                            : std::unordered_set<RE::FormID>{};
 
   for (const auto &entry : EquipmentCatalog::Get().GetGear()) {
     if (MatchesGearFilters(entry) &&
-        (!inventoryOnly_ || inventoryFormIDs.contains(entry.formID))) {
+        (!browser.inventoryOnly || inventoryFormIDs.contains(entry.formID))) {
       rows.push_back(std::addressof(entry));
     }
   }
@@ -289,7 +301,9 @@ void Menu::SortKitRows(std::vector<const KitEntry *> &a_rows,
 }
 
 void Menu::DrawCatalogFilters() {
-  if (activeTab_ == BrowserTab::Slots || activeTab_ == BrowserTab::Conditions) {
+  auto &browser = catalogBrowser_;
+  if (browser.activeTab == ui::catalog::BrowserTab::Slots ||
+      browser.activeTab == ui::catalog::BrowserTab::Conditions) {
     return;
   }
 
@@ -328,8 +342,8 @@ void Menu::DrawCatalogFilters() {
       const auto anySelected = !HasAnySelectedSlotFilter();
       if (ImGui::Selectable("Any slot", anySelected,
                             ImGuiSelectableFlags_DontClosePopups)) {
-        std::fill(selectedSlotFilters_.begin(), selectedSlotFilters_.end(),
-                  false);
+        std::fill(browser.selectedSlotFilters.begin(),
+                  browser.selectedSlotFilters.end(), false);
       }
       if (anySelected) {
         ImGui::SetItemDefaultFocus();
@@ -339,10 +353,10 @@ void Menu::DrawCatalogFilters() {
 
       for (std::size_t index = 0; index < catalog.GetGearSlots().size();
            ++index) {
-        bool selected = selectedSlotFilters_[index];
+        bool selected = browser.selectedSlotFilters[index];
         if (ImGui::Selectable(catalog.GetGearSlots()[index].c_str(), selected,
                               ImGuiSelectableFlags_DontClosePopups)) {
-          selectedSlotFilters_[index] = !selected;
+          browser.selectedSlotFilters[index] = !selected;
         }
       }
       ImGui::EndCombo();
@@ -350,31 +364,31 @@ void Menu::DrawCatalogFilters() {
   };
 
   if (filterBarWidth < 560.0f) {
-    if (activeTab_ == BrowserTab::Gear) {
-      drawSearchField(gearSearch_, -FLT_MIN, "##gear-search",
+    if (browser.activeTab == ui::catalog::BrowserTab::Gear) {
+      drawSearchField(browser.gearSearch, -FLT_MIN, "##gear-search",
                       "Search installed armor");
-    } else if (activeTab_ == BrowserTab::Outfits) {
-      drawSearchField(outfitSearch_, -FLT_MIN, "##outfit-search",
+    } else if (browser.activeTab == ui::catalog::BrowserTab::Outfits) {
+      drawSearchField(browser.outfitSearch, -FLT_MIN, "##outfit-search",
                       "Search installed outfits");
     } else {
-      drawSearchField(kitSearch_, -FLT_MIN, "##kit-search",
+      drawSearchField(browser.kitSearch, -FLT_MIN, "##kit-search",
                       "Search Modex kits");
     }
 
     const auto halfWidth = (filterBarWidth - itemSpacingX) * 0.5f;
     ImGui::SetNextItemWidth(halfWidth);
-    if (activeTab_ == BrowserTab::Gear) {
+    if (browser.activeTab == ui::catalog::BrowserTab::Gear) {
       ui::components::DrawSearchableStringCombo(
           "##gear-plugin", "All plugins", catalog.GetGearPlugins(),
-          gearPluginIndex_, gearPluginFilter_);
-    } else if (activeTab_ == BrowserTab::Outfits) {
+          browser.gearPluginIndex, browser.gearPluginFilter);
+    } else if (browser.activeTab == ui::catalog::BrowserTab::Outfits) {
       ui::components::DrawSearchableStringCombo(
           "##outfit-plugin", "All plugins", catalog.GetOutfitPlugins(),
-          outfitPluginIndex_, outfitPluginFilter_);
+          browser.outfitPluginIndex, browser.outfitPluginFilter);
     } else {
       ui::components::DrawSearchableStringCombo(
           "##kit-collection", "All collections", catalog.GetKitCollections(),
-          kitCollectionIndex_, kitCollectionFilter_);
+          browser.kitCollectionIndex, browser.kitCollectionFilter);
     }
 
     ImGui::SameLine();
@@ -386,31 +400,31 @@ void Menu::DrawCatalogFilters() {
     const auto slotWidth =
         filterBarWidth - searchWidth - pluginWidth - (itemSpacingX * 2.0f);
 
-    if (activeTab_ == BrowserTab::Gear) {
-      drawSearchField(gearSearch_, searchWidth, "##gear-search",
+    if (browser.activeTab == ui::catalog::BrowserTab::Gear) {
+      drawSearchField(browser.gearSearch, searchWidth, "##gear-search",
                       "Search installed armor");
-    } else if (activeTab_ == BrowserTab::Outfits) {
-      drawSearchField(outfitSearch_, searchWidth, "##outfit-search",
+    } else if (browser.activeTab == ui::catalog::BrowserTab::Outfits) {
+      drawSearchField(browser.outfitSearch, searchWidth, "##outfit-search",
                       "Search installed outfits");
     } else {
-      drawSearchField(kitSearch_, searchWidth, "##kit-search",
+      drawSearchField(browser.kitSearch, searchWidth, "##kit-search",
                       "Search Modex kits");
     }
     ImGui::SameLine();
 
     ImGui::SetNextItemWidth(pluginWidth);
-    if (activeTab_ == BrowserTab::Gear) {
+    if (browser.activeTab == ui::catalog::BrowserTab::Gear) {
       ui::components::DrawSearchableStringCombo(
           "##gear-plugin", "All plugins", catalog.GetGearPlugins(),
-          gearPluginIndex_, gearPluginFilter_);
-    } else if (activeTab_ == BrowserTab::Outfits) {
+          browser.gearPluginIndex, browser.gearPluginFilter);
+    } else if (browser.activeTab == ui::catalog::BrowserTab::Outfits) {
       ui::components::DrawSearchableStringCombo(
           "##outfit-plugin", "All plugins", catalog.GetOutfitPlugins(),
-          outfitPluginIndex_, outfitPluginFilter_);
+          browser.outfitPluginIndex, browser.outfitPluginFilter);
     } else {
       ui::components::DrawSearchableStringCombo(
           "##kit-collection", "All collections", catalog.GetKitCollections(),
-          kitCollectionIndex_, kitCollectionFilter_);
+          browser.kitCollectionIndex, browser.kitCollectionFilter);
     }
 
     ImGui::SameLine();

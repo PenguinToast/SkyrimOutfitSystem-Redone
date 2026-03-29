@@ -7,6 +7,7 @@
 #include "components/EquipmentWidget.h"
 #include "imgui.h"
 #include "ui/ConditionData.h"
+#include "ui/catalog/BrowserState.h"
 
 #include <array>
 #include <optional>
@@ -102,8 +103,6 @@ private:
     std::array<char, 64> conditionId{};
   };
 
-  enum class BrowserTab { Gear, Outfits, Kits, Slots, Conditions, Options };
-  enum class CatalogRefreshMode : std::uint8_t { Full, KitsOnly };
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
   enum class WorkbenchFilterKind : std::uint8_t { All, ActorRef, Condition };
@@ -150,8 +149,8 @@ private:
   void OnMenuHide();
   void HandleCancel();
   void DrawWindow();
-  void
-  QueueCatalogRefresh(CatalogRefreshMode a_mode = CatalogRefreshMode::Full);
+  void QueueCatalogRefresh(
+      ui::catalog::RefreshMode a_mode = ui::catalog::RefreshMode::Full);
   void UpdateCatalogRefresh();
   void DrawCatalogLoadingPane() const;
   void DrawCatalogFilters();
@@ -183,10 +182,12 @@ private:
                        int a_targetRowIndex, bool a_insertAfter);
   void AcceptOverrideDeletePayload();
   void ClearCatalogSelection();
-  [[nodiscard]] std::string BuildFavoriteKey(BrowserTab a_tab,
+  [[nodiscard]] std::string BuildFavoriteKey(ui::catalog::BrowserTab a_tab,
                                              std::string_view a_id) const;
-  [[nodiscard]] bool IsFavorite(BrowserTab a_tab, std::string_view a_id) const;
-  void SetFavorite(BrowserTab a_tab, std::string_view a_id, bool a_favorite);
+  [[nodiscard]] bool IsFavorite(ui::catalog::BrowserTab a_tab,
+                                std::string_view a_id) const;
+  void SetFavorite(ui::catalog::BrowserTab a_tab, std::string_view a_id,
+                   bool a_favorite);
   [[nodiscard]] std::string BuildFavoriteLabel(std::string_view a_name,
                                                bool a_favorite) const;
   void SyncSelectedSlotFilters();
@@ -243,16 +244,9 @@ private:
   bool initialized_{false};
   bool enabled_{false};
   bool gameDataLoaded_{false};
-  bool catalogInitialized_{false};
-  bool catalogRefreshQueued_{false};
-  CatalogRefreshMode queuedCatalogRefreshMode_{CatalogRefreshMode::Full};
   ID3D11Device *device_{nullptr};
   ID3D11DeviceContext *context_{nullptr};
-  BrowserTab activeTab_{BrowserTab::Gear};
-  int gearPluginIndex_{0};
-  int outfitPluginIndex_{0};
-  int kitCollectionIndex_{0};
-  std::vector<bool> selectedSlotFilters_;
+  ui::catalog::BrowserState catalogBrowser_;
   WorkbenchFilterState workbenchFilter_;
   int focusedConditionEditorWindowSlot_{0};
   int fontSizePixels_{13};
@@ -261,11 +255,8 @@ private:
   bool pendingFontAtlasRebuild_{false};
   bool pauseGameWhenOpen_{false};
   bool smoothScroll_{true};
-  bool previewSelected_{true};
-  bool showAllSlots_{false};
   std::uint32_t toggleKey_{0x40};
   std::uint32_t toggleModifier_{0};
-  std::string selectedCatalogKey_;
   std::string themeName_{"default"};
   std::string toggleKeyCaptureError_;
   bool awaitingToggleKeyCapture_{false};
@@ -281,12 +272,6 @@ private:
   std::string imguiIniPath_;
   std::string userSettingsPath_;
   std::string favoritesPath_;
-  ImGuiTextFilter gearSearch_;
-  ImGuiTextFilter outfitSearch_;
-  ImGuiTextFilter kitSearch_;
-  ImGuiTextFilter gearPluginFilter_;
-  ImGuiTextFilter outfitPluginFilter_;
-  ImGuiTextFilter kitCollectionFilter_;
   bool openCreateKitDialog_{false};
   bool createKitDialogOpen_{false};
   bool createKitDialogCancelRequested_{false};
@@ -303,10 +288,6 @@ private:
   std::string pendingDeleteKitPath_;
   std::string deleteKitError_;
   int nextConditionId_{1};
-  bool favoritesOnly_{false};
-  bool inventoryOnly_{false};
-  std::string pendingCatalogSelectionAfterRefresh_;
-  std::unordered_set<std::string> favoriteKeys_;
   std::vector<FontOption> bundledFontOptions_;
   std::vector<FontOption> systemFontOptions_;
   std::vector<ui::conditions::Definition> conditions_;
