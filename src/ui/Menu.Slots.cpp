@@ -3,6 +3,7 @@
 #include "ArmorUtils.h"
 #include "StringUtils.h"
 #include "ui/components/EquipmentWidget.h"
+#include "workbench/ItemFactory.h"
 
 #include <algorithm>
 
@@ -24,7 +25,7 @@ bool Menu::DrawSlotTab() {
 
   for (const auto slotMask : armor::GetAllArmorSlotMasks()) {
     SlotCatalogRow row{};
-    if (!workbench_.BuildSlotItem(slotMask, row.slotItem)) {
+    if (!workbench::BuildSlotItem(slotMask, row.slotItem)) {
       continue;
     }
 

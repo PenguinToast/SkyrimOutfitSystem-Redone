@@ -4,6 +4,7 @@
 #include "imgui_internal.h"
 #include "ui/ThemeConfig.h"
 #include "ui/components/PinnableTooltip.h"
+#include "workbench/ItemFactory.h"
 
 #include <algorithm>
 
@@ -145,24 +146,11 @@ void DrawEquipmentInfoTooltipBody(
 namespace sosr::ui::components {
 bool BuildEquipmentTooltipItem(const RE::FormID a_formID, const char *a_key,
                                workbench::EquipmentWidgetItem &a_item) {
-  const auto *form = RE::TESForm::LookupByID(a_formID);
-  if (!form) {
+  if (!workbench::BuildCatalogItem(a_formID, a_item)) {
     return false;
   }
 
-  a_item.formID = a_formID;
-  a_item.kind = workbench::EquipmentWidgetItemKind::Armor;
   a_item.key = a_key ? a_key : "";
-  a_item.name = sosr::armor::GetDisplayName(form);
-  if (const auto *armor = form->As<RE::TESObjectARMO>()) {
-    a_item.slotMask = armor->GetSlotMask().underlying();
-    a_item.slotText = sosr::armor::JoinStrings(
-        sosr::armor::GetArmorSlotLabels(a_item.slotMask));
-  } else {
-    a_item.slotMask = 0;
-    a_item.slotText.clear();
-  }
-
   return true;
 }
 

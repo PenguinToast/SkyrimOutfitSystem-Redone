@@ -1,5 +1,7 @@
 #include "Menu.h"
 
+#include "workbench/ItemFactory.h"
+
 namespace {
 enum class GearColumn : ImGuiID { Name = 1, Plugin };
 }
@@ -40,7 +42,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
         const auto favorite =
             IsFavorite(ui::catalog::BrowserTab::Gear, entry.id);
         workbench::EquipmentWidgetItem item{};
-        if (!workbench_.BuildCatalogItem(entry.formID, item)) {
+        if (!workbench::BuildCatalogItem(entry.formID, item)) {
           item.formID = entry.formID;
           item.key = "catalog:" + entry.id;
           item.name = entry.name;

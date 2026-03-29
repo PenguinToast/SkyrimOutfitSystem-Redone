@@ -1,6 +1,6 @@
 #pragma once
 
-#include "VariantWorkbench.h"
+#include "workbench/Items.h"
 #include "imgui.h"
 
 #include <functional>

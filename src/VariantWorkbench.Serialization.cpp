@@ -1,6 +1,7 @@
 #include "VariantWorkbench.h"
 
 #include "ArmorUtils.h"
+#include "workbench/ItemFactory.h"
 
 #include <nlohmann/json.hpp>
 #include <unordered_set>
@@ -45,14 +46,13 @@ bool SerializeRowSource(const sosr::workbench::VariantWorkbenchRow &a_row,
 }
 
 bool DeserializeRowSource(const nlohmann::json &a_serializedRow,
-                          sosr::workbench::VariantWorkbench &a_workbench,
                           sosr::workbench::VariantWorkbenchRow &a_row) {
   const auto rowType = a_serializedRow.value("type", std::string{"armor"});
   if (rowType == "slot") {
     const auto slotMask =
         sosr::armor::GetArmorSlotMask(a_serializedRow.value("slot", 0));
     sosr::workbench::EquipmentWidgetItem slotItem{};
-    if (slotMask == 0 || !a_workbench.BuildSlotItem(slotMask, slotItem)) {
+    if (slotMask == 0 || !sosr::workbench::BuildSlotItem(slotMask, slotItem)) {
       return false;
     }
 
@@ -65,7 +65,7 @@ bool DeserializeRowSource(const nlohmann::json &a_serializedRow,
       a_serializedRow.value("equipped", std::string{}));
   sosr::workbench::EquipmentWidgetItem equipped{};
   if (!equippedForm ||
-      !a_workbench.BuildCatalogItem(equippedForm->GetFormID(), equipped)) {
+      !sosr::workbench::BuildCatalogItem(equippedForm->GetFormID(), equipped)) {
     return false;
   }
 
@@ -153,7 +153,7 @@ void VariantWorkbench::Deserialize(
     }
 
     VariantWorkbenchRow row{};
-    if (!DeserializeRowSource(serializedRow, *this, row)) {
+    if (!DeserializeRowSource(serializedRow, row)) {
       continue;
     }
     if (version >= 4) {
@@ -190,7 +190,8 @@ void VariantWorkbench::Deserialize(
             overrideValue.get<std::string>());
         EquipmentWidgetItem overrideItem{};
         if (!overrideForm ||
-            !BuildCatalogItem(overrideForm->GetFormID(), overrideItem) ||
+            !sosr::workbench::BuildCatalogItem(overrideForm->GetFormID(),
+                                               overrideItem) ||
             !seenOverrideForms.insert(overrideForm->GetFormID()).second) {
           continue;
         }

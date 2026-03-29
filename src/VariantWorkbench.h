@@ -5,6 +5,7 @@
 
 #include "ConditionRefreshTargets.h"
 #include "conditions/Definition.h"
+#include "workbench/Items.h"
 
 #include <optional>
 #include <string>
@@ -13,27 +14,6 @@
 #include <vector>
 
 namespace sosr::workbench {
-enum class EquipmentWidgetItemKind : std::uint8_t { Armor, Slot };
-
-struct EquipmentWidgetItem {
-  EquipmentWidgetItemKind kind{EquipmentWidgetItemKind::Armor};
-  RE::FormID formID{0};
-  std::string key;
-  std::string name;
-  std::string slotText;
-  std::uint64_t slotMask{0};
-
-  [[nodiscard]] bool IsSlot() const {
-    return kind == EquipmentWidgetItemKind::Slot;
-  }
-
-  [[nodiscard]] bool HasForm() const { return formID != 0; }
-
-  [[nodiscard]] bool SupportsInfoTooltip() const {
-    return !IsSlot() && HasForm();
-  }
-};
-
 struct VariantWorkbenchRow {
   std::string key;
   std::string sourceKey;
@@ -64,9 +44,6 @@ public:
   void SyncRowsFromActor(RE::Actor *a_actor,
                          std::optional<std::string> a_newRowConditionId);
   void SyncRowsFromPlayer(std::optional<std::string> a_newRowConditionId);
-  bool BuildCatalogItem(RE::FormID a_formID, EquipmentWidgetItem &a_item) const;
-  bool BuildSlotItem(std::uint64_t a_slotMask,
-                     EquipmentWidgetItem &a_item) const;
   [[nodiscard]] bool
   IsPreviewingSelection(std::string_view a_selectionKey) const;
   [[nodiscard]] bool CanAcceptOverride(int a_targetRowIndex,

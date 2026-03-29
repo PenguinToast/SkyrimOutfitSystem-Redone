@@ -2,6 +2,7 @@
 
 #include "ArmorUtils.h"
 #include "EquipmentCatalog.h"
+#include "workbench/ItemFactory.h"
 
 #include <algorithm>
 #include <array>
@@ -268,7 +269,7 @@ bool VariantWorkbench::PlanCatalogAssignments(
 
   for (const auto *armor : armors) {
     EquipmentWidgetItem item{};
-    if (!armor || !BuildCatalogItem(armor->GetFormID(), item)) {
+    if (!armor || !workbench::BuildCatalogItem(armor->GetFormID(), item)) {
       continue;
     }
 
@@ -348,7 +349,7 @@ void VariantWorkbench::SyncRowsFromActor(
     }
 
     EquipmentWidgetItem equipped{};
-    if (!BuildCatalogItem(formID, equipped)) {
+    if (!workbench::BuildCatalogItem(formID, equipped)) {
       continue;
     }
     const auto addonSlotMask = armor::GetArmorAddonSlotMask(armor);
@@ -402,46 +403,6 @@ void VariantWorkbench::SyncRowsFromPlayer(
                     std::move(a_newRowConditionId));
 }
 
-bool VariantWorkbench::BuildCatalogItem(RE::FormID a_formID,
-                                        EquipmentWidgetItem &a_item) const {
-  const auto *form = RE::TESForm::LookupByID(a_formID);
-  if (!form) {
-    return false;
-  }
-
-  a_item = {};
-  a_item.kind = EquipmentWidgetItemKind::Armor;
-  a_item.formID = form->GetFormID();
-  a_item.key = "form:" + armor::FormatFormID(form->GetFormID());
-  a_item.name = armor::GetDisplayName(form);
-
-  if (const auto *armorForm = form->As<RE::TESObjectARMO>()) {
-    a_item.slotMask = armorForm->GetSlotMask().underlying();
-    a_item.slotText =
-        armor::JoinStrings(armor::GetArmorSlotLabels(a_item.slotMask));
-    return true;
-  }
-
-  return false;
-}
-
-bool VariantWorkbench::BuildSlotItem(const std::uint64_t a_slotMask,
-                                     EquipmentWidgetItem &a_item) const {
-  const auto slotNumber = armor::GetArmorSlotNumber(a_slotMask);
-  if (slotNumber == 0) {
-    return false;
-  }
-
-  a_item = {};
-  a_item.kind = EquipmentWidgetItemKind::Slot;
-  a_item.formID = 0;
-  a_item.key = BuildSlotKey(a_slotMask);
-  a_item.name = armor::JoinStrings(armor::GetArmorSlotLabels(a_slotMask));
-  a_item.slotText = "Equipment slot";
-  a_item.slotMask = a_slotMask;
-  return true;
-}
-
 bool VariantWorkbench::IsPreviewingSelection(
     std::string_view a_selectionKey) const {
   return previewSelectionKey_ == a_selectionKey && !previewDavVariants_.empty();
@@ -483,7 +444,7 @@ bool VariantWorkbench::CanAcceptOverride(int a_targetRowIndex,
 bool VariantWorkbench::AddCatalogOverride(int a_targetRowIndex,
                                           RE::FormID a_formID) {
   EquipmentWidgetItem item{};
-  if (!BuildCatalogItem(a_formID, item) ||
+  if (!workbench::BuildCatalogItem(a_formID, item) ||
       !CanAcceptOverride(a_targetRowIndex, item)) {
     return false;
   }
@@ -590,7 +551,7 @@ std::vector<VariantWorkbenchRow> VariantWorkbench::BuildCatalogRows(
     }
 
     EquipmentWidgetItem equipped{};
-    if (!BuildCatalogItem(armor->GetFormID(), equipped)) {
+    if (!workbench::BuildCatalogItem(armor->GetFormID(), equipped)) {
       continue;
     }
 
@@ -621,7 +582,7 @@ VariantWorkbench::BuildSlotRow(const std::uint64_t a_slotMask,
   }
 
   EquipmentWidgetItem slotItem{};
-  if (!BuildSlotItem(a_slotMask, slotItem)) {
+  if (!workbench::BuildSlotItem(a_slotMask, slotItem)) {
     return std::nullopt;
   }
 
