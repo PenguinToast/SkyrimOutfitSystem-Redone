@@ -419,6 +419,10 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       const bool enterPressed =
           ImGui::IsKeyPressed(ImGuiKey_Enter, 0, inputItemId) ||
           ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, 0, inputItemId);
+      if (a_allowCustomInput && enterPressed) {
+        dropdownOpen = false;
+        ImGui::CloseCurrentPopup();
+      }
       if ((submitted || (acceptAutocompleteOnEnter && enterPressed)) &&
           acceptAutocompleteOnEnter && highlightedIndex >= 0 &&
           highlightedIndex < static_cast<int>(visibleOptions.size())) {
@@ -432,7 +436,7 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       ImGui::EndPopup();
     }
 
-    if (!popupVisible || (!inputTextActive && !wholeControlHovered && !popupHovered)) {
+    if (!popupVisible || (!inputTextActive && !popupHovered)) {
       dropdownOpen = false;
     }
   }
