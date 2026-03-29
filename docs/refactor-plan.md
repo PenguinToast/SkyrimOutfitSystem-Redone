@@ -50,7 +50,7 @@
 
 ### Phase 1: Extract Catalog Browser Ownership
 
-Status: in progress
+Status: completed
 
 Deliverables:
 
@@ -66,7 +66,16 @@ Deliverables:
   instead of individually owning those fields.
 - Preserve current behavior while making future catalog popout hosting simpler.
 
+Completed:
+
+- Added `src/ui/catalog/BrowserState.h`.
+- Moved catalog browser state out of `Menu`'s field list into
+  `catalogBrowser_`.
+- Updated catalog browser/filter/favorites code to flow through that state.
+
 ### Phase 2: Separate Workbench UI Responsibilities
+
+Status: completed
 
 Deliverables:
 
@@ -78,7 +87,19 @@ Deliverables:
 - Ensure the workbench pane depends on explicit catalog/workbench bridge inputs,
   not direct catalog-state ownership.
 
+Completed:
+
+- Split the monolithic workbench pane into:
+  - `src/ui/Menu.Workbench.cpp` orchestration and payload handling
+  - `src/ui/Menu.Workbench.Toolbar.cpp`
+  - `src/ui/Menu.Workbench.Table.cpp`
+  - `src/ui/workbench/Common.h`
+  - `src/ui/workbench/Tooltips.h`
+  - `src/ui/workbench/Tooltips.cpp`
+
 ### Phase 3: Split Condition Editor Support Modules
+
+Status: completed
 
 Deliverables:
 
@@ -88,7 +109,17 @@ Deliverables:
   - value editor widgets / numeric formatting helpers
 - Keep a thin compatibility façade only if needed.
 
+Completed:
+
+- Replaced `EditorSupport.cpp` with:
+  - `src/ui/conditions/FunctionRegistry.cpp`
+  - `src/ui/conditions/DraftValidation.cpp`
+  - `src/ui/conditions/ValueEditors.cpp`
+- Kept `src/ui/conditions/EditorSupport.h` as an umbrella compatibility header.
+
 ### Phase 4: Split Condition Materialization Responsibilities
+
+Status: completed
 
 Deliverables:
 
@@ -98,7 +129,16 @@ Deliverables:
   - TESCondition emission / signature / refresh target generation
 - Keep the existing public API stable where practical.
 
+Completed:
+
+- `src/ConditionMaterializer.cpp` now owns cache orchestration only.
+- Lowering and emission moved into:
+  - `src/conditions/Lowering.h`
+  - `src/conditions/Lowering.cpp`
+
 ### Phase 5: Reduce EquipmentCatalog Breadth
+
+Status: completed
 
 Deliverables:
 
@@ -108,6 +148,14 @@ Deliverables:
   - kit parsing
   - refresh orchestration
 - Keep `EquipmentCatalog` itself as the public façade.
+
+Completed:
+
+- Moved entry/search/description builder logic into:
+  - `src/catalog/EntryBuilders.h`
+  - `src/catalog/EntryBuilders.cpp`
+- `src/EquipmentCatalog.cpp` is now primarily the façade for refresh,
+  indexing, and derived option rebuilding.
 
 ### Validation Policy
 
@@ -124,3 +172,35 @@ Deliverables:
 4. Split condition materialization internals.
 5. Split EquipmentCatalog breadth where still needed.
 6. Review this plan against the final code shape and update statuses/notes.
+
+### Final Review
+
+1. Catalog UI ownership is materially cleaner.
+   - Catalog browser state is now isolated in `src/ui/catalog/BrowserState.h`.
+   - This is enough to support a future catalog popout without first undoing
+     workbench-specific ownership.
+
+2. Workbench UI responsibilities are now separated.
+   - The main workbench pane no longer owns toolbar, table, and tooltip logic in
+     one translation unit.
+
+3. Condition editor support is no longer a kitchen-sink helper layer.
+   - Metadata/lookup, draft validation, and value editors now live in distinct
+     modules.
+
+4. Condition materialization now has a real internal boundary.
+   - Cache/dependency orchestration and lowering/emission are split.
+
+5. Equipment catalog breadth is reduced.
+   - The public catalog façade is now narrower, with helper-heavy entry building
+     moved behind a dedicated module.
+
+### Residual Notes
+
+- `Menu.h` is still a broad coordinating façade. The major implementation-level
+  god-object pressure has been reduced, but the remaining state surface is still
+  centralized by design.
+- `VariantWorkbench` still exposes widget-adapter-oriented item types and build
+  helpers. That is the next natural seam if we later want a deeper domain/UI
+  split there, but it is no longer blocking the catalog/workbench ownership
+  boundary or the popout direction.
