@@ -1,39 +1,13 @@
 #include "Menu.h"
 
 #include "ArmorUtils.h"
+#include "StringUtils.h"
 #include "ui/components/EquipmentWidget.h"
 
 #include <algorithm>
 
 namespace {
 enum class SlotColumn : ImGuiID { Slot = 1, Occupied };
-
-int CompareText(std::string_view a_left, std::string_view a_right) {
-  const auto leftSize = a_left.size();
-  const auto rightSize = a_right.size();
-  const auto count = (std::min)(leftSize, rightSize);
-
-  for (std::size_t index = 0; index < count; ++index) {
-    const auto left = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_left[index])));
-    const auto right = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_right[index])));
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-  }
-
-  if (leftSize < rightSize) {
-    return -1;
-  }
-  if (leftSize > rightSize) {
-    return 1;
-  }
-  return 0;
-}
 } // namespace
 
 namespace sosr {
@@ -69,7 +43,8 @@ bool Menu::DrawSlotTab() {
 
     std::ranges::sort(row.occupantItems,
                       [](const auto &a_left, const auto &a_right) {
-                        return CompareText(a_left.name, a_right.name) < 0;
+                        return sosr::strings::CompareTextInsensitive(
+                                   a_left.name, a_right.name) < 0;
                       });
     for (const auto &item : row.occupantItems) {
       if (!row.occupantSortText.empty()) {
@@ -113,17 +88,19 @@ bool Menu::DrawSlotTab() {
         int compare = 0;
         switch (static_cast<SlotColumn>(spec.ColumnUserID)) {
         case SlotColumn::Occupied:
-          compare =
-              CompareText(a_left.occupantSortText, a_right.occupantSortText);
+          compare = sosr::strings::CompareTextInsensitive(
+              a_left.occupantSortText, a_right.occupantSortText);
           break;
         case SlotColumn::Slot:
         default:
-          compare = CompareText(a_left.slotItem.name, a_right.slotItem.name);
+          compare = sosr::strings::CompareTextInsensitive(a_left.slotItem.name,
+                                                          a_right.slotItem.name);
           break;
         }
 
         if (compare == 0) {
-          compare = CompareText(a_left.slotItem.name, a_right.slotItem.name);
+          compare = sosr::strings::CompareTextInsensitive(a_left.slotItem.name,
+                                                          a_right.slotItem.name);
         }
 
         return ascending ? compare < 0 : compare > 0;

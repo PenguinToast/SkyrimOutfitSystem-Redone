@@ -1,6 +1,7 @@
 #include "Menu.h"
 
 #include "ArmorUtils.h"
+#include "StringUtils.h"
 #include "imgui_internal.h"
 #include "ui/catalog/Widgets.h"
 #include "ui/components/EditableCombo.h"
@@ -17,24 +18,8 @@ namespace {
 constexpr auto kModexKitDirectory = "data/interface/modex/user/kits";
 enum class KitColumn : ImGuiID { Name = 1, Collection, Pieces };
 
-std::string TrimText(std::string_view a_text) {
-  std::size_t start = 0;
-  while (start < a_text.size() &&
-         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
-    ++start;
-  }
-
-  std::size_t end = a_text.size();
-  while (end > start &&
-         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
-    --end;
-  }
-
-  return std::string(a_text.substr(start, end - start));
-}
-
 std::string NormalizeKitCollection(std::string_view a_collection) {
-  auto normalized = TrimText(a_collection);
+  auto normalized = sosr::strings::TrimText(a_collection);
   std::replace(normalized.begin(), normalized.end(), '\\', '/');
   while (!normalized.empty() && normalized.front() == '/') {
     normalized.erase(normalized.begin());
@@ -45,32 +30,6 @@ std::string NormalizeKitCollection(std::string_view a_collection) {
   return normalized;
 }
 
-int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
-  const auto leftSize = a_left.size();
-  const auto rightSize = a_right.size();
-  const auto count = (std::min)(leftSize, rightSize);
-
-  for (std::size_t index = 0; index < count; ++index) {
-    const auto left = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_left[index])));
-    const auto right = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_right[index])));
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-  }
-
-  if (leftSize < rightSize) {
-    return -1;
-  }
-  if (leftSize > rightSize) {
-    return 1;
-  }
-  return 0;
-}
 } // namespace
 
 namespace sosr {
@@ -250,7 +209,7 @@ void Menu::OpenDeleteKitDialog(const KitEntry &a_entry) {
 }
 
 bool Menu::SavePendingKit() {
-  const auto name = TrimText(pendingKitName_.data());
+  const auto name = sosr::strings::TrimText(pendingKitName_.data());
   if (name.empty()) {
     createKitError_ = "Kit name is required.";
     return false;
@@ -299,7 +258,7 @@ bool Menu::SavePendingKit() {
   const auto &kits = EquipmentCatalog::Get().GetKits();
   const auto existingIt =
       std::ranges::find_if(kits, [&](const KitEntry &a_kit) {
-        return CompareTextInsensitive(a_kit.name, name) == 0;
+        return sosr::strings::CompareTextInsensitive(a_kit.name, name) == 0;
       });
 
   std::filesystem::path relativePath;

@@ -1,7 +1,8 @@
 #include "conditions/Validation.h"
 
+#include "StringUtils.h"
+
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <functional>
 #include <string_view>
@@ -9,49 +10,6 @@
 
 namespace {
 using Definition = sosr::conditions::Definition;
-
-std::string TrimText(std::string_view a_text) {
-  std::size_t start = 0;
-  while (start < a_text.size() &&
-         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
-    ++start;
-  }
-
-  std::size_t end = a_text.size();
-  while (end > start &&
-         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
-    --end;
-  }
-
-  return std::string(a_text.substr(start, end - start));
-}
-
-int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
-  const auto leftSize = a_left.size();
-  const auto rightSize = a_right.size();
-  const auto count = (std::min)(leftSize, rightSize);
-
-  for (std::size_t index = 0; index < count; ++index) {
-    const auto left = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_left[index])));
-    const auto right = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_right[index])));
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-  }
-
-  if (leftSize < rightSize) {
-    return -1;
-  }
-  if (leftSize > rightSize) {
-    return 1;
-  }
-  return 0;
-}
 
 const Definition *ResolveDefinitionForValidation(
     const std::vector<Definition> &a_conditions, const Definition &a_draft,
@@ -82,7 +40,8 @@ const Definition *FindDefinitionByName(const std::vector<Definition> &a_conditio
   const auto it = std::ranges::find_if(
       a_conditions, [&](const Definition &condition) {
         return condition.id != a_excludedId &&
-               CompareTextInsensitive(condition.name, a_name) == 0;
+               sosr::strings::CompareTextInsensitive(condition.name, a_name) ==
+                   0;
       });
   return it != a_conditions.end() ? std::addressof(*it) : nullptr;
 }
@@ -146,7 +105,7 @@ bool HasDependencyCycle(const Definition &a_draft,
 std::string ValidateDefinitionNameAndGraph(
     const Definition &a_definition, const std::vector<Definition> &a_conditions,
     const std::function<bool(std::string_view)> &a_reservedNameConflict) {
-  const auto name = TrimText(a_definition.name);
+  const auto name = sosr::strings::TrimText(a_definition.name);
   if (name.empty()) {
     return "Condition name is required.";
   }

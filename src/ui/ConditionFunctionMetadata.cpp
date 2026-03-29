@@ -1,69 +1,19 @@
 #include "ui/ConditionFunctionMetadata.h"
 
+#include "StringUtils.h"
+
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <string>
 
 namespace sosr::ui::conditions {
 namespace {
 
-int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
-  const auto leftSize = a_left.size();
-  const auto rightSize = a_right.size();
-  const auto count = (std::min)(leftSize, rightSize);
-
-  for (std::size_t index = 0; index < count; ++index) {
-    const auto left = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_left[index])));
-    const auto right = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_right[index])));
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-  }
-
-  if (leftSize < rightSize) {
-    return -1;
-  }
-  if (leftSize > rightSize) {
-    return 1;
-  }
-  return 0;
-}
-
-bool StartsWithInsensitive(std::string_view a_text, std::string_view a_prefix) {
-  return a_text.size() >= a_prefix.size() &&
-         CompareTextInsensitive(a_text.substr(0, a_prefix.size()), a_prefix) ==
-             0;
-}
-
-bool ContainsInsensitive(std::string_view a_text, std::string_view a_pattern) {
-  if (a_pattern.empty()) {
-    return true;
-  }
-
-  const auto lower = [](std::string_view a_value) {
-    std::string text;
-    text.reserve(a_value.size());
-    for (const auto ch : a_value) {
-      text.push_back(
-          static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-    }
-    return text;
-  };
-
-  return lower(a_text).find(lower(a_pattern)) != std::string::npos;
-}
-
 template <std::size_t N>
 bool ContainsName(const std::array<std::string_view, N> &a_names,
                   std::string_view a_name) {
   return std::ranges::any_of(a_names, [&](const auto candidate) {
-    return CompareTextInsensitive(candidate, a_name) == 0;
+    return sosr::strings::CompareTextInsensitive(candidate, a_name) == 0;
   });
 }
 
@@ -186,8 +136,8 @@ bool IsObsoleteConditionFunction(const RE::SCRIPT_FUNCTION &a_command) {
   }
 
   return a_command.helpString != nullptr &&
-         ContainsInsensitive(std::string_view{a_command.helpString},
-                             "obsolete");
+         sosr::strings::ContainsInsensitive(
+             std::string_view{a_command.helpString}, "obsolete");
 }
 
 bool ReturnsBooleanConditionResult(std::string_view a_name) {
@@ -195,13 +145,13 @@ bool ReturnsBooleanConditionResult(std::string_view a_name) {
     return true;
   }
 
-  return StartsWithInsensitive(a_name, "GetIs") ||
-         StartsWithInsensitive(a_name, "Is") ||
-         StartsWithInsensitive(a_name, "Has") ||
-         StartsWithInsensitive(a_name, "Can") ||
-         StartsWithInsensitive(a_name, "Should") ||
-         StartsWithInsensitive(a_name, "Would") ||
-         StartsWithInsensitive(a_name, "Same");
+  return sosr::strings::StartsWithInsensitive(a_name, "GetIs") ||
+         sosr::strings::StartsWithInsensitive(a_name, "Is") ||
+         sosr::strings::StartsWithInsensitive(a_name, "Has") ||
+         sosr::strings::StartsWithInsensitive(a_name, "Can") ||
+         sosr::strings::StartsWithInsensitive(a_name, "Should") ||
+         sosr::strings::StartsWithInsensitive(a_name, "Would") ||
+         sosr::strings::StartsWithInsensitive(a_name, "Same");
 }
 
 } // namespace sosr::ui::conditions

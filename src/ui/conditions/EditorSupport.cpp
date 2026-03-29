@@ -1,5 +1,6 @@
 #include "ui/conditions/EditorSupport.h"
 
+#include "StringUtils.h"
 #include "conditions/Defaults.h"
 #include "conditions/Validation.h"
 #include "ui/ConditionFunctionMetadata.h"
@@ -162,46 +163,11 @@ bool DrawNumericClauseValueEditorImpl(const char *a_id, std::string &a_value,
 
 namespace sosr::ui::condition_editor {
 std::string TrimText(std::string_view a_text) {
-  std::size_t start = 0;
-  while (start < a_text.size() &&
-         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
-    ++start;
-  }
-
-  std::size_t end = a_text.size();
-  while (end > start &&
-         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
-    --end;
-  }
-
-  return std::string(a_text.substr(start, end - start));
+  return sosr::strings::TrimText(a_text);
 }
 
 int CompareTextInsensitive(std::string_view a_left, std::string_view a_right) {
-  const auto leftSize = a_left.size();
-  const auto rightSize = a_right.size();
-  const auto count = (std::min)(leftSize, rightSize);
-
-  for (std::size_t index = 0; index < count; ++index) {
-    const auto left = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_left[index])));
-    const auto right = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_right[index])));
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-  }
-
-  if (leftSize < rightSize) {
-    return -1;
-  }
-  if (leftSize > rightSize) {
-    return 1;
-  }
-  return 0;
+  return sosr::strings::CompareTextInsensitive(a_left, a_right);
 }
 
 bool IsBooleanComparator(const Comparator a_comparator) {

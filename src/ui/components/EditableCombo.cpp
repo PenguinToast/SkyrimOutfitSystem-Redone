@@ -1,108 +1,22 @@
 #include "ui/components/EditableCombo.h"
 
 #include "InputManager.h"
+#include "StringUtils.h"
 #include "imgui_internal.h"
 #include "ui/ThemeConfig.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <limits>
 #include <string_view>
 
 namespace {
-std::string TrimText(std::string_view a_text) {
-  std::size_t start = 0;
-  while (start < a_text.size() &&
-         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
-    ++start;
-  }
-
-  std::size_t end = a_text.size();
-  while (end > start &&
-         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
-    --end;
-  }
-
-  return std::string(a_text.substr(start, end - start));
-}
-
-bool EqualsCaseInsensitive(std::string_view a_left, std::string_view a_right) {
-  if (a_left.size() != a_right.size()) {
-    return false;
-  }
-
-  for (std::size_t index = 0; index < a_left.size(); ++index) {
-    if (std::tolower(static_cast<unsigned char>(a_left[index])) !=
-        std::tolower(static_cast<unsigned char>(a_right[index]))) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-bool ContainsCaseInsensitive(std::string_view a_haystack,
-                             std::string_view a_needle) {
-  if (a_needle.empty()) {
-    return true;
-  }
-
-  const auto lower = [](const unsigned char a_value) {
-    return static_cast<char>(std::tolower(a_value));
-  };
-
-  for (std::size_t index = 0; index + a_needle.size() <= a_haystack.size();
-       ++index) {
-    bool matches = true;
-    for (std::size_t offset = 0; offset < a_needle.size(); ++offset) {
-      if (lower(static_cast<unsigned char>(a_haystack[index + offset])) !=
-          lower(static_cast<unsigned char>(a_needle[offset]))) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-int CompareText(std::string_view a_left, std::string_view a_right) {
-  const auto leftSize = a_left.size();
-  const auto rightSize = a_right.size();
-  const auto count = (std::min)(leftSize, rightSize);
-
-  for (std::size_t index = 0; index < count; ++index) {
-    const auto left = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_left[index])));
-    const auto right = static_cast<unsigned char>(
-        std::tolower(static_cast<unsigned char>(a_right[index])));
-    if (left < right) {
-      return -1;
-    }
-    if (left > right) {
-      return 1;
-    }
-  }
-
-  if (leftSize < rightSize) {
-    return -1;
-  }
-  if (leftSize > rightSize) {
-    return 1;
-  }
-  return 0;
-}
-
 constexpr std::string_view kSectionPrefix = "\x1fsection:";
 
 bool IsSectionEntry(std::string_view a_option) {
   return a_option.size() >= kSectionPrefix.size() &&
-         EqualsCaseInsensitive(a_option.substr(0, kSectionPrefix.size()),
-                               kSectionPrefix);
+         sosr::strings::EqualsInsensitive(
+             a_option.substr(0, kSectionPrefix.size()), kSectionPrefix);
 }
 
 std::string_view GetSectionLabel(std::string_view a_option) {
@@ -113,12 +27,13 @@ std::string_view GetSectionLabel(std::string_view a_option) {
 const std::string *
 FindTopAutocompleteOption(const std::vector<std::string> &a_options,
                           std::string_view a_buffer) {
-  const auto needle = TrimText(a_buffer);
+  const auto needle = sosr::strings::TrimText(a_buffer);
   for (const auto &option : a_options) {
     if (IsSectionEntry(option)) {
       continue;
     }
-    if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
+    if (!needle.empty() &&
+        !sosr::strings::ContainsInsensitive(option, needle)) {
       continue;
     }
     return std::addressof(option);
@@ -201,7 +116,8 @@ bool DrawSearchableStringCombo(const char *a_label, const char *a_allLabel,
   }
 
   for (std::size_t index = 0; index < options.size(); ++index) {
-    if (CompareText(options[index], a_filter.InputBuf) != 0) {
+    if (sosr::strings::CompareTextInsensitive(options[index],
+                                              a_filter.InputBuf) != 0) {
       continue;
     }
 
@@ -297,13 +213,13 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       popupHovered = ImGui::IsWindowHovered(
           ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
-      const auto rawNeedle = TrimText(a_buffer);
+      const auto rawNeedle = sosr::strings::TrimText(a_buffer);
       const auto exactMatchIt =
           std::ranges::find_if(a_options, [&](const std::string &option) {
             if (IsSectionEntry(option)) {
               return false;
             }
-            return EqualsCaseInsensitive(option, rawNeedle);
+            return sosr::strings::EqualsInsensitive(option, rawNeedle);
           });
       const std::string *exactMatch = exactMatchIt != a_options.end()
                                           ? std::addressof(*exactMatchIt)
@@ -316,7 +232,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
         if (IsSectionEntry(option)) {
           continue;
         }
-        if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
+        if (!needle.empty() &&
+            !sosr::strings::ContainsInsensitive(option, needle)) {
           continue;
         }
         visibleOptions.push_back(std::addressof(option));
@@ -402,7 +319,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
                               GetSectionLabel(option).data());
           continue;
         }
-        if (!needle.empty() && !ContainsCaseInsensitive(option, needle)) {
+        if (!needle.empty() &&
+            !sosr::strings::ContainsInsensitive(option, needle)) {
           continue;
         }
 
@@ -480,7 +398,7 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   if (!a_allowCustomInput) {
     const auto exactMatch =
         std::ranges::find_if(a_options, [&](const std::string &option) {
-          return EqualsCaseInsensitive(option, a_buffer);
+          return sosr::strings::EqualsInsensitive(option, a_buffer);
         });
     if (exactMatch == a_options.end() && !inputTextActive && !dropdownOpen) {
       if (a_fallbackSelection && !a_fallbackSelection->empty()) {

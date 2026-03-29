@@ -2,6 +2,7 @@
 
 #include "ArmorUtils.h"
 #include "RE/A/ActorValueList.h"
+#include "StringUtils.h"
 #include "conditions/GraphMetadata.h"
 #include "conditions/MaterializationState.h"
 
@@ -51,35 +52,11 @@ union ConditionParam {
   RE::TESForm *form;
 };
 
-std::string TrimText(std::string_view a_text) {
-  std::size_t start = 0;
-  while (start < a_text.size() &&
-         std::isspace(static_cast<unsigned char>(a_text[start])) != 0) {
-    ++start;
-  }
-
-  std::size_t end = a_text.size();
-  while (end > start &&
-         std::isspace(static_cast<unsigned char>(a_text[end - 1])) != 0) {
-    --end;
-  }
-
-  return std::string(a_text.substr(start, end - start));
-}
-
-bool EqualsInsensitive(std::string_view a_left, std::string_view a_right) {
-  return a_left.size() == a_right.size() &&
-         std::ranges::equal(
-             a_left, a_right, [](const char a_lhs, const char a_rhs) {
-               return std::tolower(static_cast<unsigned char>(a_lhs)) ==
-                      std::tolower(static_cast<unsigned char>(a_rhs));
-             });
-}
-
 ParamType ResolveEditorParamType(const std::string_view a_functionName,
                                  const std::uint16_t a_paramIndex,
                                  const ParamType a_type) {
-  if (a_paramIndex == 0 && EqualsInsensitive(a_functionName, "GetIsID")) {
+  if (a_paramIndex == 0 &&
+      sosr::strings::EqualsInsensitive(a_functionName, "GetIsID")) {
     return ParamType::kActorBase;
   }
 
@@ -154,7 +131,7 @@ RE::CONDITION_ITEM_DATA::OpCode ToOpCode(const Comparator a_comparator) {
 
 const RE::SCRIPT_FUNCTION *
 FindConditionFunction(const std::string_view a_name) {
-  const auto trimmed = TrimText(a_name);
+  const auto trimmed = sosr::strings::TrimText(a_name);
   if (trimmed.empty()) {
     return nullptr;
   }
@@ -190,7 +167,7 @@ template <class T> T *LookupTypedFormByToken(const std::string &a_token) {
 }
 
 RE::TESObjectREFR *LookupReferenceByToken(const std::string &a_token) {
-  if (EqualsInsensitive(a_token, "Player")) {
+  if (sosr::strings::EqualsInsensitive(a_token, "Player")) {
     return RE::PlayerCharacter::GetSingleton();
   }
 
@@ -226,7 +203,7 @@ RE::TESForm *LookupGenericFormByToken(const std::string &a_token) {
 
 ConditionParam ParseParam(const std::string &a_text, const ParamType a_type) {
   ConditionParam param{};
-  const auto trimmed = TrimText(a_text);
+  const auto trimmed = sosr::strings::TrimText(a_text);
 
   switch (a_type) {
   case ParamType::kChar:
@@ -249,23 +226,23 @@ ConditionParam ParseParam(const std::string &a_text, const ParamType a_type) {
     break;
   }
   case ParamType::kAxis:
-    param.i = EqualsInsensitive(trimmed, "X")
+    param.i = sosr::strings::EqualsInsensitive(trimmed, "X")
                   ? 0
-                  : (EqualsInsensitive(trimmed, "Y") ? 1 : 2);
+                  : (sosr::strings::EqualsInsensitive(trimmed, "Y") ? 1 : 2);
     break;
   case ParamType::kSex:
-    param.i = EqualsInsensitive(trimmed, "MALE")
+    param.i = sosr::strings::EqualsInsensitive(trimmed, "MALE")
                   ? static_cast<std::int32_t>(RE::SEX::kMale)
                   : static_cast<std::int32_t>(RE::SEX::kFemale);
     break;
   case ParamType::kCastingSource:
-    if (EqualsInsensitive(trimmed, "LEFT")) {
+    if (sosr::strings::EqualsInsensitive(trimmed, "LEFT")) {
       param.i =
           static_cast<std::int32_t>(RE::MagicSystem::CastingSource::kLeftHand);
-    } else if (EqualsInsensitive(trimmed, "RIGHT")) {
+    } else if (sosr::strings::EqualsInsensitive(trimmed, "RIGHT")) {
       param.i =
           static_cast<std::int32_t>(RE::MagicSystem::CastingSource::kRightHand);
-    } else if (EqualsInsensitive(trimmed, "VOICE")) {
+    } else if (sosr::strings::EqualsInsensitive(trimmed, "VOICE")) {
       param.i =
           static_cast<std::int32_t>(RE::MagicSystem::CastingSource::kOther);
     } else {
@@ -434,7 +411,7 @@ std::optional<bool> EvaluateNestedConditionPolarity(const Clause &a_clause) {
     return std::nullopt;
   }
 
-  const auto comparand = TrimText(a_clause.comparand);
+  const auto comparand = sosr::strings::TrimText(a_clause.comparand);
   if (comparand != "0" && comparand != "1") {
     return std::nullopt;
   }
@@ -452,14 +429,15 @@ std::optional<NativeLiteral> BuildNativeLiteral(const Clause &a_clause) {
 
   NativeLiteral literal;
   literal.command = command;
-  literal.functionName = TrimText(a_clause.functionName);
+  literal.functionName = sosr::strings::TrimText(a_clause.functionName);
   literal.parameterCount = command->numParams;
   literal.comparator = a_clause.comparator;
-  literal.comparand = TrimText(a_clause.comparand);
+  literal.comparand = sosr::strings::TrimText(a_clause.comparand);
 
   for (std::uint16_t paramIndex = 0;
        paramIndex < command->numParams && paramIndex < 2; ++paramIndex) {
-    literal.arguments[paramIndex] = TrimText(a_clause.arguments[paramIndex]);
+    literal.arguments[paramIndex] =
+        sosr::strings::TrimText(a_clause.arguments[paramIndex]);
     literal.parameterTypes[paramIndex] = ResolveEditorParamType(
         literal.functionName, paramIndex,
         command->params ? command->params[paramIndex].paramType.get()
