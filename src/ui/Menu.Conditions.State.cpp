@@ -23,22 +23,22 @@ using ui::condition_editor::TrimText;
 using ui::condition_editor::ValidateConditionDraft;
 
 void Menu::EnsureDefaultConditions() {
-  if (!conditions_.empty()) {
+  if (!ConditionDefinitions().empty()) {
     return;
   }
 
-  conditions_.push_back(conditions::BuildDefaultPlayerCondition());
-  nextConditionId_ = 2;
-  sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
-  sosr::conditions::InvalidateConditionMaterializationCaches(conditions_);
+  ConditionDefinitions().push_back(conditions::BuildDefaultPlayerCondition());
+  NextConditionId() = 2;
+  sosr::conditions::RebuildConditionDependencyMetadata(ConditionDefinitions());
+  sosr::conditions::InvalidateConditionMaterializationCaches(ConditionDefinitions());
 }
 
 int Menu::AllocateConditionEditorWindowSlot() const {
   int slot = 1;
   while (true) {
-    const auto it = std::ranges::find(conditionEditors_, slot,
+    const auto it = std::ranges::find(ConditionEditors(), slot,
                                       &ConditionEditorState::windowSlot);
-    if (it == conditionEditors_.end()) {
+    if (it == ConditionEditors().end()) {
       return slot;
     }
     ++slot;
@@ -47,20 +47,20 @@ int Menu::AllocateConditionEditorWindowSlot() const {
 
 void Menu::OpenNewConditionDialog() {
   std::vector<ui::conditions::Color> existingColors;
-  existingColors.reserve(conditions_.size() + conditionEditors_.size());
-  for (const auto &condition : conditions_) {
+  existingColors.reserve(ConditionDefinitions().size() + ConditionEditors().size());
+  for (const auto &condition : ConditionDefinitions()) {
     existingColors.push_back(condition.color);
   }
-  for (const auto &existingEditor : conditionEditors_) {
+  for (const auto &existingEditor : ConditionEditors()) {
     if (existingEditor.isNew) {
       existingColors.push_back(existingEditor.draft.color);
     }
   }
 
   const auto suggestedName = BuildSuggestedConditionName(
-      conditions_, nextConditionId_, [&](std::string_view a_candidate) {
+      ConditionDefinitions(), NextConditionId(), [&](std::string_view a_candidate) {
         return std::ranges::any_of(
-            conditionEditors_, [&](const ConditionEditorState &a_editor) {
+            ConditionEditors(), [&](const ConditionEditorState &a_editor) {
               return a_editor.isNew &&
                      CompareTextInsensitive(TrimText(a_editor.draft.name),
                                             a_candidate) == 0;
@@ -73,19 +73,19 @@ void Menu::OpenNewConditionDialog() {
       suggestedName, PickDistinctConditionColor(existingColors));
   editor.isNew = true;
   editor.focusOnNextDraw = true;
-  conditionEditors_.push_back(std::move(editor));
+  ConditionEditors().push_back(std::move(editor));
 }
 
 void Menu::OpenConditionEditorDialog(const std::size_t a_index) {
-  if (a_index >= conditions_.size()) {
+  if (a_index >= ConditionDefinitions().size()) {
     return;
   }
 
-  const auto &condition = conditions_[a_index];
+  const auto &condition = ConditionDefinitions()[a_index];
   const auto existingIt =
-      std::ranges::find(conditionEditors_, condition.id,
+      std::ranges::find(ConditionEditors(), condition.id,
                         &ConditionEditorState::sourceConditionId);
-  if (existingIt != conditionEditors_.end()) {
+  if (existingIt != ConditionEditors().end()) {
     existingIt->focusOnNextDraw = true;
     existingIt->open = true;
     return;
@@ -96,22 +96,22 @@ void Menu::OpenConditionEditorDialog(const std::size_t a_index) {
   editor.sourceConditionId = condition.id;
   editor.draft = condition;
   editor.focusOnNextDraw = true;
-  conditionEditors_.push_back(std::move(editor));
+  ConditionEditors().push_back(std::move(editor));
 }
 
 void Menu::OpenConditionEditorDialogById(const std::string_view a_conditionId) {
   const auto it =
-      std::ranges::find(conditions_, a_conditionId, &ConditionDefinition::id);
-  if (it == conditions_.end()) {
+      std::ranges::find(ConditionDefinitions(), a_conditionId, &ConditionDefinition::id);
+  if (it == ConditionDefinitions().end()) {
     return;
   }
   OpenConditionEditorDialog(
-      static_cast<std::size_t>(std::distance(conditions_.begin(), it)));
+      static_cast<std::size_t>(std::distance(ConditionDefinitions().begin(), it)));
 }
 
 bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
   if (const auto validationError =
-          ValidateConditionDraft(a_editor.draft, conditions_);
+          ValidateConditionDraft(a_editor.draft, ConditionDefinitions());
       !validationError.empty()) {
     a_editor.error = validationError;
     return false;
@@ -126,7 +126,7 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
 
     std::optional<ConditionFunctionInfo> customFunctionInfo;
     const auto *functionInfo =
-        ResolveConditionFunctionInfo(clause, conditions_, customFunctionInfo);
+        ResolveConditionFunctionInfo(clause, ConditionDefinitions(), customFunctionInfo);
     if (!functionInfo) {
       a_editor.error = "Unknown or unsupported condition function in clause " +
                        std::to_string(index + 1) + ".";
@@ -223,23 +223,23 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
   a_editor.draft.color.w = 1.0f;
 
   if (a_editor.isNew) {
-    a_editor.draft.id = conditions::BuildConditionId(nextConditionId_++);
-    conditions_.push_back(a_editor.draft);
+    a_editor.draft.id = conditions::BuildConditionId(NextConditionId()++);
+    ConditionDefinitions().push_back(a_editor.draft);
     a_editor.isNew = false;
     a_editor.sourceConditionId = a_editor.draft.id;
   } else {
-    const auto it = std::ranges::find(conditions_, a_editor.sourceConditionId,
+    const auto it = std::ranges::find(ConditionDefinitions(), a_editor.sourceConditionId,
                                       &ConditionDefinition::id);
-    if (it == conditions_.end()) {
+    if (it == ConditionDefinitions().end()) {
       a_editor.error = "Condition no longer exists.";
       return false;
     }
     *it = a_editor.draft;
   }
 
-  sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
+  sosr::conditions::RebuildConditionDependencyMetadata(ConditionDefinitions());
   sosr::conditions::InvalidateConditionMaterializationCachesFrom(
-      conditions_, a_editor.draft.id);
+      ConditionDefinitions(), a_editor.draft.id);
 
   a_editor.error.clear();
   return true;

@@ -68,8 +68,8 @@ bool Menu::DrawConditionTab() {
     OpenNewConditionDialog();
   }
   ImGui::SameLine();
-  ImGui::TextDisabled("%zu condition%s", conditions_.size(),
-                      conditions_.size() == 1 ? "" : "s");
+  ImGui::TextDisabled("%zu condition%s", ConditionDefinitions().size(),
+                      ConditionDefinitions().size() == 1 ? "" : "s");
   ImGui::Spacing();
 
   if (!ImGui::BeginTable("##conditions-table", 1,
@@ -84,12 +84,12 @@ bool Menu::DrawConditionTab() {
   bool rowClicked = false;
   std::optional<std::size_t> pendingDeleteIndex;
   std::vector<ImRect> conditionRowRects;
-  conditionRowRects.reserve(conditions_.size());
+  conditionRowRects.reserve(ConditionDefinitions().size());
 
-  for (std::size_t index = 0; index < conditions_.size(); ++index) {
-    const auto &condition = conditions_[index];
+  for (std::size_t index = 0; index < ConditionDefinitions().size(); ++index) {
+    const auto &condition = ConditionDefinitions()[index];
     ConditionDeleteUsage deleteUsage;
-    for (const auto &otherCondition : conditions_) {
+    for (const auto &otherCondition : ConditionDefinitions()) {
       if (otherCondition.id == condition.id) {
         continue;
       }
@@ -288,25 +288,25 @@ bool Menu::DrawConditionTab() {
       DraggedConditionPayload dragPayload{};
       std::memcpy(&dragPayload, payload->Data, sizeof(dragPayload));
       if (const auto it = std::ranges::find(
-              conditions_, std::string_view(dragPayload.conditionId.data()),
+              ConditionDefinitions(), std::string_view(dragPayload.conditionId.data()),
               &ConditionDefinition::id);
-          it != conditions_.end()) {
+          it != ConditionDefinitions().end()) {
         const auto sourceIndex =
-            static_cast<std::size_t>(std::distance(conditions_.begin(), it));
-        MoveConditionDefinitionToSlot(conditions_, sourceIndex,
+            static_cast<std::size_t>(std::distance(ConditionDefinitions().begin(), it));
+        MoveConditionDefinitionToSlot(ConditionDefinitions(), sourceIndex,
                                       *hoveredInsertionSlot);
       }
     }
     ImGui::EndDragDropTarget();
   }
 
-  if (pendingDeleteIndex && *pendingDeleteIndex < conditions_.size()) {
-    const auto deletedConditionId = conditions_[*pendingDeleteIndex].id;
-    conditions_.erase(conditions_.begin() +
+  if (pendingDeleteIndex && *pendingDeleteIndex < ConditionDefinitions().size()) {
+    const auto deletedConditionId = ConditionDefinitions()[*pendingDeleteIndex].id;
+    ConditionDefinitions().erase(ConditionDefinitions().begin() +
                       static_cast<std::ptrdiff_t>(*pendingDeleteIndex));
-    sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
-    sosr::conditions::InvalidateConditionMaterializationCaches(conditions_);
-    for (auto &editor : conditionEditors_) {
+    sosr::conditions::RebuildConditionDependencyMetadata(ConditionDefinitions());
+    sosr::conditions::InvalidateConditionMaterializationCaches(ConditionDefinitions());
+    for (auto &editor : ConditionEditors()) {
       if (editor.sourceConditionId == deletedConditionId) {
         editor.error.clear();
         editor.open = false;

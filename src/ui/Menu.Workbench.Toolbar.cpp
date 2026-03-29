@@ -79,7 +79,7 @@ void Menu::DrawWorkbenchToolbar() {
               [&]() {
                 workbench_.ClearPreview();
                 if (workbench_.ResetEquippedRows()) {
-                  workbench_.SyncDynamicArmorVariantsExtended(conditions_);
+                  workbench_.SyncDynamicArmorVariantsExtended(ConditionDefinitions());
                 }
               },
       },
@@ -90,7 +90,7 @@ void Menu::DrawWorkbenchToolbar() {
                 workbench_.ClearPreview();
                 workbench_.ResetAllRows();
                 SyncWorkbenchRowsForCurrentFilter();
-                workbench_.SyncDynamicArmorVariantsExtended(conditions_);
+                workbench_.SyncDynamicArmorVariantsExtended(ConditionDefinitions());
               },
       },
       WorkbenchToolbarAction{

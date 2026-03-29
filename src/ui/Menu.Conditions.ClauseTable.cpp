@@ -176,7 +176,7 @@ void Menu::DrawConditionEditorClauseTable(
     auto &clause = a_editor.draft.clauses[index];
     std::optional<ConditionFunctionInfo> customFunctionInfo;
     const auto *functionInfo =
-        ResolveConditionFunctionInfo(clause, conditions_, customFunctionInfo);
+        ResolveConditionFunctionInfo(clause, ConditionDefinitions(), customFunctionInfo);
     auto selectedFunctionName =
         functionInfo ? functionInfo->name : clause.functionName;
 
@@ -200,7 +200,7 @@ void Menu::DrawConditionEditorClauseTable(
     const auto *customCondition =
         clause.customConditionId.empty()
             ? nullptr
-            : conditions::FindDefinitionById(conditions_,
+            : conditions::FindDefinitionById(ConditionDefinitions(),
                                              clause.customConditionId);
     float functionWidth = ImGui::GetContentRegionAvail().x;
     if (customCondition != nullptr) {
@@ -218,7 +218,7 @@ void Menu::DrawConditionEditorClauseTable(
       clause.arguments[0].clear();
       clause.arguments[1].clear();
       if (const auto *selectedCustomCondition =
-              conditions::FindDefinitionByName(conditions_,
+              conditions::FindDefinitionByName(ConditionDefinitions(),
                                                selectedFunctionName,
                                                a_editor.sourceConditionId);
           selectedCustomCondition != nullptr) {
@@ -230,7 +230,7 @@ void Menu::DrawConditionEditorClauseTable(
       }
       customFunctionInfo.reset();
       functionInfo =
-          ResolveConditionFunctionInfo(clause, conditions_, customFunctionInfo);
+          ResolveConditionFunctionInfo(clause, ConditionDefinitions(), customFunctionInfo);
       if (functionInfo && functionInfo->returnsBooleanResult &&
           !IsBooleanComparator(clause.comparator)) {
         clause.comparator = ConditionComparator::Equal;

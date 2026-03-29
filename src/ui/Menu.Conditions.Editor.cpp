@@ -30,7 +30,7 @@ void CopyTextToBuffer(const std::string &a_text, char *a_buffer,
 void Menu::DrawConditionEditorDialog() {
   ui::conditions::ConditionParamOptionCache::Get().Continue(16.0);
 
-  for (auto &editor : conditionEditors_) {
+  for (auto &editor : ConditionEditors()) {
     if (!editor.open) {
       continue;
     }
@@ -60,7 +60,7 @@ void Menu::DrawConditionEditorDialog() {
     }
 
     if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
-      focusedConditionEditorWindowSlot_ = editor.windowSlot;
+      FocusedConditionEditorWindowSlot() = editor.windowSlot;
     }
 
     const auto footerHeight =
@@ -116,7 +116,7 @@ void Menu::DrawConditionEditorDialog() {
       ImGui::Separator();
 
       const auto conditionFunctionNames =
-          BuildConditionFunctionNames(conditions_, editor.sourceConditionId);
+          BuildConditionFunctionNames(ConditionDefinitions(), editor.sourceConditionId);
       const auto clausePaneHeight =
           (std::max)(220.0f, ImGui::GetContentRegionAvail().y);
       const auto &style = ImGui::GetStyle();
@@ -145,7 +145,7 @@ void Menu::DrawConditionEditorDialog() {
                          "Append another clause to this condition.");
 
     const auto draftValidationError =
-        ValidateConditionDraft(editor.draft, conditions_);
+        ValidateConditionDraft(editor.draft, ConditionDefinitions());
     if (draftValidationError.empty()) {
       editor.error.clear();
     }
@@ -182,19 +182,19 @@ void Menu::DrawConditionEditorDialog() {
     ImGui::End();
   }
 
-  conditionEditors_.erase(
+  ConditionEditors().erase(
       std::remove_if(
-          conditionEditors_.begin(), conditionEditors_.end(),
+          ConditionEditors().begin(), ConditionEditors().end(),
           [](const ConditionEditorState &a_editor) { return !a_editor.open; }),
-      conditionEditors_.end());
-  if (conditionEditors_.empty()) {
-    focusedConditionEditorWindowSlot_ = 0;
-  } else if (focusedConditionEditorWindowSlot_ > 0 &&
-             std::ranges::find(conditionEditors_,
-                               focusedConditionEditorWindowSlot_,
+      ConditionEditors().end());
+  if (ConditionEditors().empty()) {
+    FocusedConditionEditorWindowSlot() = 0;
+  } else if (FocusedConditionEditorWindowSlot() > 0 &&
+             std::ranges::find(ConditionEditors(),
+                               FocusedConditionEditorWindowSlot(),
                                &ConditionEditorState::windowSlot) ==
-                 conditionEditors_.end()) {
-    focusedConditionEditorWindowSlot_ = 0;
+                 ConditionEditors().end()) {
+    FocusedConditionEditorWindowSlot() = 0;
   }
 }
 } // namespace sosr

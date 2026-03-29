@@ -82,10 +82,10 @@ nlohmann::json SerializeConditionColor(const ConditionColor &a_color) {
 
 namespace sosr {
 void Menu::SerializeConditions(SKSE::SerializationInterface *a_skse) const {
-  nlohmann::json root{{"nextConditionId", nextConditionId_},
+  nlohmann::json root{{"nextConditionId", NextConditionId()},
                       {"conditions", nlohmann::json::array()}};
 
-  for (const auto &condition : conditions_) {
+  for (const auto &condition : ConditionDefinitions()) {
     nlohmann::json conditionJson{
         {"id", condition.id},
         {"name", condition.name},
@@ -150,12 +150,12 @@ void Menu::DeserializeConditions(SKSE::SerializationInterface *a_skse) {
     return;
   }
 
-  nextConditionId_ = (std::max)(1, root.value("nextConditionId", 1));
+  NextConditionId() = (std::max)(1, root.value("nextConditionId", 1));
 
   int maxConditionId = 0;
   if (const auto conditionsIt = root.find("conditions");
       conditionsIt != root.end() && conditionsIt->is_array()) {
-    conditions_.reserve(conditionsIt->size());
+    ConditionDefinitions().reserve(conditionsIt->size());
     for (const auto &conditionJson : *conditionsIt) {
       if (!conditionJson.is_object()) {
         continue;
@@ -201,20 +201,20 @@ void Menu::DeserializeConditions(SKSE::SerializationInterface *a_skse) {
           } catch (const std::exception &) {
           }
         }
-        conditions_.push_back(std::move(condition));
+        ConditionDefinitions().push_back(std::move(condition));
       }
     }
   }
 
-  nextConditionId_ = (std::max)(nextConditionId_, maxConditionId + 1);
+  NextConditionId() = (std::max)(NextConditionId(), maxConditionId + 1);
   EnsureDefaultConditions();
-  sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
-  sosr::conditions::InvalidateConditionMaterializationCaches(conditions_);
+  sosr::conditions::RebuildConditionDependencyMetadata(ConditionDefinitions());
+  sosr::conditions::InvalidateConditionMaterializationCaches(ConditionDefinitions());
 }
 
 void Menu::RevertConditions() {
-  conditions_.clear();
-  conditionEditors_.clear();
-  nextConditionId_ = 1;
+  ConditionDefinitions().clear();
+  ConditionEditors().clear();
+  NextConditionId() = 1;
 }
 } // namespace sosr

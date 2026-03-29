@@ -184,56 +184,59 @@ void Menu::AddKitEntryToWorkbench(const KitEntry &a_entry,
 }
 
 void Menu::OpenCreateKitDialog(const KitCreationSource a_source) {
-  pendingKitFormIDs_.clear();
+  auto &createDialog = CreateKitDialogState();
+  createDialog.pendingFormIDs.clear();
   if (a_source == KitCreationSource::Equipped) {
-    pendingKitFormIDs_ = workbench_.CollectEquippedArmorFormIDs();
+    createDialog.pendingFormIDs = workbench_.CollectEquippedArmorFormIDs();
   } else {
-    pendingKitFormIDs_ =
+    createDialog.pendingFormIDs =
         workbench_.CollectOverrideArmorFormIDsFromEquippedRows();
   }
 
-  if (pendingKitFormIDs_.empty()) {
+  if (createDialog.pendingFormIDs.empty()) {
     return;
   }
 
-  createKitSource_ = a_source;
-  pendingKitName_.fill('\0');
-  pendingKitCollection_.fill('\0');
-  createKitError_.clear();
-  openCreateKitDialog_ = true;
+  createDialog.source = a_source;
+  createDialog.pendingName.fill('\0');
+  createDialog.pendingCollection.fill('\0');
+  createDialog.error.clear();
+  createDialog.openRequested = true;
 }
 
 void Menu::OpenDeleteKitDialog(const KitEntry &a_entry) {
-  pendingDeleteKitId_ = a_entry.id;
-  pendingDeleteKitName_ = a_entry.name;
-  pendingDeleteKitPath_ = a_entry.filepath;
-  deleteKitError_.clear();
-  openDeleteKitDialog_ = true;
+  auto &deleteDialog = DeleteKitDialogState();
+  deleteDialog.pendingKitId = a_entry.id;
+  deleteDialog.pendingKitName = a_entry.name;
+  deleteDialog.pendingKitPath = a_entry.filepath;
+  deleteDialog.error.clear();
+  deleteDialog.openRequested = true;
 }
 
 bool Menu::SavePendingKit() {
-  const auto name = sosr::strings::TrimText(pendingKitName_.data());
+  auto &createDialog = CreateKitDialogState();
+  const auto name = sosr::strings::TrimText(createDialog.pendingName.data());
   if (name.empty()) {
-    createKitError_ = "Kit name is required.";
+    createDialog.error = "Kit name is required.";
     return false;
   }
   if (name.find_first_of("\"'") != std::string::npos) {
-    createKitError_ = "Kit name cannot contain quotes.";
+    createDialog.error = "Kit name cannot contain quotes.";
     return false;
   }
   if (name.find_first_of("/\\") != std::string::npos) {
-    createKitError_ = "Kit name cannot contain path separators.";
+    createDialog.error = "Kit name cannot contain path separators.";
     return false;
   }
 
-  auto collection = NormalizeKitCollection(pendingKitCollection_.data());
+  auto collection = NormalizeKitCollection(createDialog.pendingCollection.data());
   if (collection.find_first_of("\"'") != std::string::npos) {
-    createKitError_ = "Collection cannot contain quotes.";
+    createDialog.error = "Collection cannot contain quotes.";
     return false;
   }
 
   nlohmann::json items = nlohmann::json::object();
-  for (const auto formID : pendingKitFormIDs_) {
+  for (const auto formID : createDialog.pendingFormIDs) {
     const auto *armorForm = RE::TESForm::LookupByID<RE::TESObjectARMO>(formID);
     if (!armorForm) {
       continue;
@@ -241,9 +244,9 @@ bool Menu::SavePendingKit() {
 
     const auto editorID = armor::GetEditorID(armorForm);
     if (editorID.empty()) {
-      createKitError_ = "Cannot save kit because '" +
-                        armor::GetDisplayName(armorForm) +
-                        "' has no editor ID.";
+      createDialog.error = "Cannot save kit because '" +
+                           armor::GetDisplayName(armorForm) +
+                           "' has no editor ID.";
       return false;
     }
 
@@ -254,7 +257,7 @@ bool Menu::SavePendingKit() {
   }
 
   if (items.empty()) {
-    createKitError_ = "No valid armor items were available to save.";
+    createDialog.error = "No valid armor items were available to save.";
     return false;
   }
 
@@ -278,7 +281,7 @@ bool Menu::SavePendingKit() {
   try {
     std::filesystem::create_directories(fullPath.parent_path());
   } catch (const std::exception &exception) {
-    createKitError_ =
+    createDialog.error =
         "Failed to create kit directory: " + std::string(exception.what());
     return false;
   }
@@ -291,7 +294,7 @@ bool Menu::SavePendingKit() {
 
   std::ofstream file(fullPath, std::ios::trunc);
   if (!file.is_open()) {
-    createKitError_ = "Failed to open kit file for writing.";
+    createDialog.error = "Failed to open kit file for writing.";
     return false;
   }
 
@@ -303,44 +306,46 @@ bool Menu::SavePendingKit() {
   QueueCatalogRefresh(ui::catalog::RefreshMode::KitsOnly);
   CatalogBrowserState().selectedKey.clear();
   CatalogBrowserState().activeTab = ui::catalog::BrowserTab::Kits;
-  openCreateKitDialog_ = false;
-  pendingKitFormIDs_.clear();
-  createKitError_.clear();
+  createDialog.openRequested = false;
+  createDialog.pendingFormIDs.clear();
+  createDialog.error.clear();
   return true;
 }
 
 bool Menu::DeletePendingKit() {
-  if (pendingDeleteKitPath_.empty()) {
-    deleteKitError_ = "Kit file path is unavailable.";
+  auto &deleteDialog = DeleteKitDialogState();
+  if (deleteDialog.pendingKitPath.empty()) {
+    deleteDialog.error = "Kit file path is unavailable.";
     return false;
   }
 
   std::error_code error;
   const auto removed = std::filesystem::remove(
-      std::filesystem::path(pendingDeleteKitPath_), error);
+      std::filesystem::path(deleteDialog.pendingKitPath), error);
   if (error) {
-    deleteKitError_ = "Failed to delete kit file: " + error.message();
+    deleteDialog.error = "Failed to delete kit file: " + error.message();
     return false;
   }
   if (!removed) {
-    deleteKitError_ = "Kit file no longer exists.";
+    deleteDialog.error = "Kit file no longer exists.";
     return false;
   }
 
   CatalogBrowserState().favoriteKeys.erase(
-      BuildFavoriteKey(ui::catalog::BrowserTab::Kits, pendingDeleteKitId_));
+      BuildFavoriteKey(ui::catalog::BrowserTab::Kits,
+                       deleteDialog.pendingKitId));
   SaveFavorites();
 
-  if (CatalogBrowserState().selectedKey == pendingDeleteKitId_) {
+  if (CatalogBrowserState().selectedKey == deleteDialog.pendingKitId) {
     ClearCatalogSelection();
   }
 
   QueueCatalogRefresh(ui::catalog::RefreshMode::KitsOnly);
   CatalogBrowserState().activeTab = ui::catalog::BrowserTab::Kits;
-  pendingDeleteKitId_.clear();
-  pendingDeleteKitName_.clear();
-  pendingDeleteKitPath_.clear();
-  deleteKitError_.clear();
+  deleteDialog.pendingKitId.clear();
+  deleteDialog.pendingKitName.clear();
+  deleteDialog.pendingKitPath.clear();
+  deleteDialog.error.clear();
   return true;
 }
 
@@ -352,9 +357,10 @@ void Menu::PreviewKitEntry(const KitEntry &a_entry) {
 }
 
 void Menu::DrawCreateKitDialog() {
-  if (openCreateKitDialog_) {
+  auto &createDialog = CreateKitDialogState();
+  if (createDialog.openRequested) {
     ImGui::OpenPopup("Create Modex Kit");
-    openCreateKitDialog_ = false;
+    createDialog.openRequested = false;
   }
 
   const auto &catalog = EquipmentCatalog::Get();
@@ -367,19 +373,19 @@ void Menu::DrawCreateKitDialog() {
   }
   std::ranges::sort(existingNames);
 
-  createKitDialogOpen_ = false;
+  createDialog.open = false;
   if (ImGui::BeginPopupModal("Create Modex Kit", nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
-    createKitDialogOpen_ = true;
+    createDialog.open = true;
     const bool popupAppearing = ImGui::IsWindowAppearing();
     ImGui::TextWrapped(
         "%s",
-        createKitSource_ == KitCreationSource::Equipped
+        createDialog.source == KitCreationSource::Equipped
             ? "Create a Modex kit from the player's currently equipped armor."
             : "Create a Modex kit from overrides on currently equipped armor "
               "only.");
     ImGui::Separator();
-    ImGui::Text("Items: %zu", pendingKitFormIDs_.size());
+    ImGui::Text("Items: %zu", createDialog.pendingFormIDs.size());
 
     constexpr float fieldWidth = 360.0f;
     std::string selectedName;
@@ -388,9 +394,9 @@ void Menu::DrawCreateKitDialog() {
       ImGui::SetKeyboardFocusHere();
     }
     if (ui::components::DrawEditableDropdown(
-            "kit-name", "New or existing kit name", pendingKitName_.data(),
-            pendingKitName_.size(), existingNames, fieldWidth, &selectedName,
-            true) &&
+            "kit-name", "New or existing kit name",
+            createDialog.pendingName.data(), createDialog.pendingName.size(),
+            existingNames, fieldWidth, &selectedName, true) &&
         !selectedName.empty()) {
       if (const auto it = std::ranges::find_if(catalog.GetKits(),
                                                [&](const KitEntry &a_entry) {
@@ -398,8 +404,8 @@ void Menu::DrawCreateKitDialog() {
                                                         selectedName;
                                                });
           it != catalog.GetKits().end()) {
-        std::snprintf(pendingKitCollection_.data(),
-                      pendingKitCollection_.size(), "%s",
+        std::snprintf(createDialog.pendingCollection.data(),
+                      createDialog.pendingCollection.size(), "%s",
                       it->collection.c_str());
       }
     }
@@ -407,20 +413,21 @@ void Menu::DrawCreateKitDialog() {
     ImGui::Spacing();
     ImGui::TextUnformatted("Collection");
     ui::components::DrawEditableDropdown(
-        "kit-collection", "Collection (optional)", pendingKitCollection_.data(),
-        pendingKitCollection_.size(), catalog.GetKitCollections(), fieldWidth,
-        nullptr, true);
+        "kit-collection", "Collection (optional)",
+        createDialog.pendingCollection.data(),
+        createDialog.pendingCollection.size(), catalog.GetKitCollections(),
+        fieldWidth, nullptr, true);
 
-    if (!createKitError_.empty()) {
+    if (!createDialog.error.empty()) {
       ImGui::Spacing();
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(
                              ThemeConfig::GetSingleton()->GetColorU32("WARN")),
-                         "%s", createKitError_.c_str());
+                         "%s", createDialog.error.c_str());
     }
 
     ImGui::Spacing();
     const bool requestClose =
-        createKitDialogCancelRequested_ ||
+        createDialog.cancelRequested ||
         ImGui::Shortcut(ImGuiKey_Escape, ImGuiInputFlags_RouteFocused);
     if (ImGui::Button("Save", ImVec2(120.0f, 0.0f))) {
       if (SavePendingKit()) {
@@ -429,41 +436,42 @@ void Menu::DrawCreateKitDialog() {
     }
     ImGui::SameLine();
     if (ImGui::Button("Cancel", ImVec2(120.0f, 0.0f)) || requestClose) {
-      createKitError_.clear();
-      pendingKitFormIDs_.clear();
-      pendingKitName_.fill('\0');
-      pendingKitCollection_.fill('\0');
-      createKitDialogOpen_ = false;
-      createKitDialogCancelRequested_ = false;
+      createDialog.error.clear();
+      createDialog.pendingFormIDs.clear();
+      createDialog.pendingName.fill('\0');
+      createDialog.pendingCollection.fill('\0');
+      createDialog.open = false;
+      createDialog.cancelRequested = false;
       ImGui::CloseCurrentPopup();
     }
 
     ImGui::EndPopup();
   } else {
-    createKitDialogOpen_ = false;
-    createKitDialogCancelRequested_ = false;
+    createDialog.open = false;
+    createDialog.cancelRequested = false;
   }
 }
 
 void Menu::DrawDeleteKitDialog() {
   constexpr float kDeleteDialogWidth = 460.0f;
+  auto &deleteDialog = DeleteKitDialogState();
 
-  if (openDeleteKitDialog_) {
+  if (deleteDialog.openRequested) {
     ImGui::OpenPopup("Delete Modex Kit");
-    openDeleteKitDialog_ = false;
+    deleteDialog.openRequested = false;
   }
 
   const auto closeDialog = [&]() {
-    pendingDeleteKitId_.clear();
-    pendingDeleteKitName_.clear();
-    pendingDeleteKitPath_.clear();
-    deleteKitError_.clear();
-    deleteKitDialogOpen_ = false;
-    deleteKitDialogCancelRequested_ = false;
+    deleteDialog.pendingKitId.clear();
+    deleteDialog.pendingKitName.clear();
+    deleteDialog.pendingKitPath.clear();
+    deleteDialog.error.clear();
+    deleteDialog.open = false;
+    deleteDialog.cancelRequested = false;
     ImGui::CloseCurrentPopup();
   };
 
-  deleteKitDialogOpen_ = false;
+  deleteDialog.open = false;
   if (const auto *viewport = ImGui::GetMainViewport()) {
     ImGui::SetNextWindowSize(ImVec2(kDeleteDialogWidth, 0.0f),
                              ImGuiCond_Appearing);
@@ -472,7 +480,7 @@ void Menu::DrawDeleteKitDialog() {
   }
   if (ImGui::BeginPopupModal("Delete Modex Kit", nullptr,
                              ImGuiWindowFlags_AlwaysAutoResize)) {
-    deleteKitDialogOpen_ = true;
+    deleteDialog.open = true;
 
     ImGui::TextWrapped("%s",
                        "Are you sure you want to delete this kit? This will "
@@ -481,23 +489,23 @@ void Menu::DrawDeleteKitDialog() {
     ImGui::Separator();
 
     ImGui::TextUnformatted("Name");
-    ImGui::TextWrapped("%s", pendingDeleteKitName_.c_str());
-    if (!pendingDeleteKitPath_.empty()) {
+    ImGui::TextWrapped("%s", deleteDialog.pendingKitName.c_str());
+    if (!deleteDialog.pendingKitPath.empty()) {
       ImGui::Spacing();
       ImGui::TextUnformatted("File");
-      ImGui::TextWrapped("%s", pendingDeleteKitPath_.c_str());
+      ImGui::TextWrapped("%s", deleteDialog.pendingKitPath.c_str());
     }
 
-    if (!deleteKitError_.empty()) {
+    if (!deleteDialog.error.empty()) {
       ImGui::Spacing();
       ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(
                              ThemeConfig::GetSingleton()->GetColorU32("WARN")),
-                         "%s", deleteKitError_.c_str());
+                         "%s", deleteDialog.error.c_str());
     }
 
     ImGui::Spacing();
     const bool requestClose =
-        deleteKitDialogCancelRequested_ ||
+        deleteDialog.cancelRequested ||
         ImGui::Shortcut(ImGuiKey_Escape, ImGuiInputFlags_RouteFocused);
 
     ImGui::PushStyleColor(
@@ -523,8 +531,8 @@ void Menu::DrawDeleteKitDialog() {
 
     ImGui::EndPopup();
   } else {
-    deleteKitDialogOpen_ = false;
-    deleteKitDialogCancelRequested_ = false;
+    deleteDialog.open = false;
+    deleteDialog.cancelRequested = false;
   }
 }
 } // namespace sosr

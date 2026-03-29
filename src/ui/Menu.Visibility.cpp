@@ -122,7 +122,7 @@ void Menu::OnMenuHide() {
   pendingSmoothWheelDelta_ = 0.0f;
   smoothScrollWindowId_ = 0;
   smoothScrollTargetY_ = 0.0f;
-  focusedConditionEditorWindowSlot_ = 0;
+  FocusedConditionEditorWindowSlot() = 0;
   hideMessageQueued_ = false;
   visibilityState_ = VisibilityState::Closed;
   windowAlpha_ = 0.0f;
@@ -134,8 +134,9 @@ void Menu::OnMenuHide() {
 }
 
 void Menu::HandleCancel() {
-  if (createKitDialogOpen_) {
-    createKitDialogCancelRequested_ = true;
+  auto &createDialog = CreateKitDialogState();
+  if (createDialog.open) {
+    createDialog.cancelRequested = true;
     return;
   }
 
@@ -144,25 +145,25 @@ void Menu::HandleCancel() {
     return;
   }
 
-  if (!conditionEditors_.empty()) {
+  if (!ConditionEditors().empty()) {
     auto closeEditor = [&](ConditionEditorState &a_editor) {
       a_editor.error.clear();
       a_editor.open = false;
     };
 
-    if (focusedConditionEditorWindowSlot_ > 0) {
+    if (FocusedConditionEditorWindowSlot() > 0) {
       const auto focusedIt = std::ranges::find(
-          conditionEditors_, focusedConditionEditorWindowSlot_,
+          ConditionEditors(), FocusedConditionEditorWindowSlot(),
           &ConditionEditorState::windowSlot);
-      if (focusedIt != conditionEditors_.end()) {
+      if (focusedIt != ConditionEditors().end()) {
         closeEditor(*focusedIt);
-        focusedConditionEditorWindowSlot_ = 0;
+        FocusedConditionEditorWindowSlot() = 0;
         return;
       }
     }
 
-    closeEditor(conditionEditors_.back());
-    focusedConditionEditorWindowSlot_ = 0;
+    closeEditor(ConditionEditors().back());
+    FocusedConditionEditorWindowSlot() = 0;
     return;
   }
 

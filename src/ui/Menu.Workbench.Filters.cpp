@@ -49,9 +49,9 @@ void Menu::BuildWorkbenchFilterOptions(
                             .conditionId = {}});
   }
 
-  for (auto &condition : conditions_) {
+  for (auto &condition : ConditionDefinitions()) {
     const auto materialized =
-        conditions::MaterializeConditionById(condition.id, conditions_);
+        conditions::MaterializeConditionById(condition.id, ConditionDefinitions());
     if (!materialized.has_value()) {
       continue;
     }
@@ -92,10 +92,10 @@ void Menu::BuildWorkbenchFilterOptions(
     }
   }
 
-  if (!conditions_.empty()) {
+  if (!ConditionDefinitions().empty()) {
     a_options.push_back({.label = "\x1fsection:Condition Filter"});
     a_labels.push_back(a_options.back().label);
-    for (const auto &condition : conditions_) {
+    for (const auto &condition : ConditionDefinitions()) {
       a_options.push_back({.label = "Condition: " + condition.name,
                            .kind = WorkbenchFilterKind::Condition,
                            .actorFormID = 0,
@@ -144,7 +144,7 @@ bool Menu::MatchesWorkbenchFilter(const workbench::VariantWorkbenchRow &a_row) {
       return false;
     }
     if (const auto materialized = conditions::MaterializeConditionById(
-            *a_row.conditionId, conditions_);
+            *a_row.conditionId, ConditionDefinitions());
         materialized.has_value()) {
       return std::ranges::find(materialized->refreshTargets.actorFormIDs,
                                workbenchFilter_.actorFormID) !=
@@ -173,9 +173,9 @@ std::vector<int> Menu::BuildVisibleWorkbenchRowIndices() {
 
 std::optional<std::string>
 Menu::ResolveFirstConditionForActorFilter(const RE::FormID a_actorFormID) {
-  for (auto &condition : conditions_) {
+  for (auto &condition : ConditionDefinitions()) {
     const auto materialized =
-        conditions::MaterializeConditionById(condition.id, conditions_);
+        conditions::MaterializeConditionById(condition.id, ConditionDefinitions());
     if (!materialized.has_value()) {
       continue;
     }

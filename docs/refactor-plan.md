@@ -37,6 +37,8 @@
 
 ### Phase 1: Extract Pane State Types From Menu
 
+Status: complete
+
 Deliverables:
 
 - Move `ConditionEditorState` into a dedicated condition UI header.
@@ -46,6 +48,8 @@ Deliverables:
 - Keep behavior unchanged while shrinking `Menu.h`'s local vocabulary.
 
 ### Phase 2: Introduce a Popout-Ready Catalog Host State
+
+Status: complete
 
 Deliverables:
 
@@ -57,6 +61,8 @@ Deliverables:
   owning the browser state as a top-level field.
 
 ### Phase 3: Extract Workbench Item Types And Item Factory
+
+Status: complete
 
 Deliverables:
 
@@ -85,3 +91,47 @@ Deliverables:
   definitions or item-construction helpers.
 - Residual broad coordination in `Menu` should be documented explicitly if it
   remains.
+
+## Additional Completion Slice
+
+After the original three phases, there was still one worthwhile ownership
+cleanup left:
+
+- move condition store/editor state behind dedicated `conditions::Store` and
+  `ui::conditions::PaneState` types
+- move kit dialog state into `ui::catalog::PaneState`
+
+That landed as part of the same refactor pass so `Menu` now hosts:
+
+- `ui::catalog::PaneState`
+- `ui::conditions::PaneState`
+- `conditions::Store`
+- `ui::workbench::FilterState`
+
+instead of directly owning the raw condition-editor vectors, next-condition-id,
+and kit dialog fields.
+
+## Final Review
+
+Completed goals:
+
+- `Menu.h` no longer defines pane-specific state structs inline.
+- catalog hosting is explicit and popout-ready at the state boundary.
+- `VariantWorkbench.h` no longer defines widget item types or item-construction
+  helpers.
+- condition store/editor state and kit dialog state moved behind dedicated
+  modules instead of remaining raw `Menu` fields.
+
+Residuals:
+
+- `Menu` is still a broad coordinator in terms of command surface. That is now
+  mostly a façade issue rather than a hidden ownership issue.
+- `VariantWorkbenchRow` still stores `EquipmentWidgetItem` values, so there is
+  still some presentation-shape leakage in the row model. That is the next
+  natural seam if we want to continue pushing further.
+
+Conclusion:
+
+- this refactor plan is complete
+- the main remaining boundaries are optional follow-on work, not unfinished
+  items from this plan

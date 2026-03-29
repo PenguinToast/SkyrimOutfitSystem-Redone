@@ -20,7 +20,7 @@ void Menu::DrawWorkbenchTable(const std::vector<int> &a_visibleRowIndices) {
   rowConditionStates.reserve(rows.size());
   for (const auto &row : rows) {
     rowConditionStates.push_back(
-        ui::workbench::ResolveRowConditionVisualState(row, conditions_));
+        ui::workbench::ResolveRowConditionVisualState(row, ConditionDefinitions()));
   }
 
   auto rowsForConflicts = rows;
@@ -253,7 +253,7 @@ void Menu::DrawWorkbenchTable(const std::vector<int> &a_visibleRowIndices) {
                     .c_str())) {
           if (ImGui::BeginMenu(conditionState.disabled ? "Enable Condition"
                                                        : "Set Condition")) {
-            for (const auto &condition : conditions_) {
+            for (const auto &condition : ConditionDefinitions()) {
               const bool isCurrent =
                   row.conditionId.has_value() && *row.conditionId == condition.id;
               if (ImGui::MenuItem(condition.name.c_str(), nullptr, isCurrent)) {

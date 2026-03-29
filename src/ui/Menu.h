@@ -4,11 +4,13 @@
 #include "Keycode.h"
 #include "ThemeConfig.h"
 #include "VariantWorkbench.h"
+#include "conditions/Store.h"
 #include "components/EquipmentWidget.h"
 #include "imgui.h"
 #include "ui/ConditionData.h"
 #include "ui/catalog/PaneState.h"
 #include "ui/conditions/EditorState.h"
+#include "ui/conditions/PaneState.h"
 #include "ui/workbench/FilterState.h"
 
 #include <array>
@@ -65,11 +67,11 @@ public:
     return workbench_;
   }
   [[nodiscard]] std::vector<ui::conditions::Definition> &GetConditions() {
-    return conditions_;
+    return ConditionDefinitions();
   }
   [[nodiscard]] const std::vector<ui::conditions::Definition> &
   GetConditions() const {
-    return conditions_;
+    return ConditionDefinitions();
   }
   void SerializeConditions(SKSE::SerializationInterface *a_skse) const;
   void DeserializeConditions(SKSE::SerializationInterface *a_skse);
@@ -106,7 +108,7 @@ private:
   };
 
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
-  enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
+  using KitCreationSource = ui::catalog::KitCreationSource;
   using ConditionEditorState = ui::conditions::editor::State;
   using WorkbenchFilterState = ui::workbench::FilterState;
   using WorkbenchFilterOption = ui::workbench::FilterOption;
@@ -233,6 +235,42 @@ private:
   [[nodiscard]] const ui::catalog::BrowserState &CatalogBrowserState() const {
     return catalogPane_.browser;
   }
+  [[nodiscard]] ui::catalog::CreateKitDialogState &CreateKitDialogState() {
+    return catalogPane_.createKitDialog;
+  }
+  [[nodiscard]] ui::catalog::DeleteKitDialogState &DeleteKitDialogState() {
+    return catalogPane_.deleteKitDialog;
+  }
+  [[nodiscard]] ui::conditions::PaneState &ConditionsPaneState() {
+    return conditionsPane_;
+  }
+  [[nodiscard]] const ui::conditions::PaneState &ConditionsPaneState() const {
+    return conditionsPane_;
+  }
+  [[nodiscard]] std::vector<ui::conditions::Definition> &
+  ConditionDefinitions() {
+    return conditionStore_.definitions;
+  }
+  [[nodiscard]] const std::vector<ui::conditions::Definition> &
+  ConditionDefinitions() const {
+    return conditionStore_.definitions;
+  }
+  [[nodiscard]] int &NextConditionId() { return conditionStore_.nextConditionId; }
+  [[nodiscard]] const int &NextConditionId() const {
+    return conditionStore_.nextConditionId;
+  }
+  [[nodiscard]] std::vector<ConditionEditorState> &ConditionEditors() {
+    return conditionsPane_.editors;
+  }
+  [[nodiscard]] const std::vector<ConditionEditorState> &ConditionEditors() const {
+    return conditionsPane_.editors;
+  }
+  [[nodiscard]] int &FocusedConditionEditorWindowSlot() {
+    return conditionsPane_.focusedEditorWindowSlot;
+  }
+  [[nodiscard]] const int &FocusedConditionEditorWindowSlot() const {
+    return conditionsPane_.focusedEditorWindowSlot;
+  }
 
   bool initialized_{false};
   bool enabled_{false};
@@ -240,8 +278,9 @@ private:
   ID3D11Device *device_{nullptr};
   ID3D11DeviceContext *context_{nullptr};
   ui::catalog::PaneState catalogPane_;
+  ui::conditions::PaneState conditionsPane_;
+  conditions::Store conditionStore_;
   WorkbenchFilterState workbenchFilter_;
-  int focusedConditionEditorWindowSlot_{0};
   int fontSizePixels_{13};
   int pendingFontSizePixels_{13};
   std::string fontPath_{kDefaultFontPath};
@@ -265,26 +304,8 @@ private:
   std::string imguiIniPath_;
   std::string userSettingsPath_;
   std::string favoritesPath_;
-  bool openCreateKitDialog_{false};
-  bool createKitDialogOpen_{false};
-  bool createKitDialogCancelRequested_{false};
-  KitCreationSource createKitSource_{KitCreationSource::Equipped};
-  std::vector<RE::FormID> pendingKitFormIDs_;
-  std::array<char, 256> pendingKitName_{};
-  std::array<char, 256> pendingKitCollection_{};
-  std::string createKitError_;
-  bool openDeleteKitDialog_{false};
-  bool deleteKitDialogOpen_{false};
-  bool deleteKitDialogCancelRequested_{false};
-  std::string pendingDeleteKitId_;
-  std::string pendingDeleteKitName_;
-  std::string pendingDeleteKitPath_;
-  std::string deleteKitError_;
-  int nextConditionId_{1};
   std::vector<FontOption> bundledFontOptions_;
   std::vector<FontOption> systemFontOptions_;
-  std::vector<ui::conditions::Definition> conditions_;
-  std::vector<ConditionEditorState> conditionEditors_;
   workbench::VariantWorkbench workbench_;
 };
 } // namespace sosr
