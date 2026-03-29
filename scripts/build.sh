@@ -61,15 +61,43 @@ build_variant() {
     local win_variant_build_dir
     win_variant_build_dir="$(wslpath -w "${variant_build_dir}")"
 
-    local powershell_cmd="
+    local configure_cmd="
 \$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath '$WIN_REPO_ROOT'
 \$env:SVS_BUILD_VERSION = '$SVS_BUILD_VERSION'
 \$env:SVS_BUILD_VERSION_STRING = '$SVS_BUILD_VERSION_STRING'
 xmake f -y --builddir='$win_variant_build_dir' --skyrim_se=${skyrim_se} --skyrim_ae=${skyrim_ae} --skyrim_vr=${skyrim_vr} -m '$MODE'
+"
+    local parallel_build_cmd="
+\$ErrorActionPreference = 'Stop'
+Set-Location -LiteralPath '$WIN_REPO_ROOT'
 xmake build -y
 "
-    powershell.exe -NoProfile -Command "${powershell_cmd}"
+    local single_job_build_cmd="
+\$ErrorActionPreference = 'Stop'
+Set-Location -LiteralPath '$WIN_REPO_ROOT'
+xmake build -y -j 1
+"
+    local build_log
+    build_log="$(mktemp)"
+
+    powershell.exe -NoProfile -Command "${configure_cmd}"
+
+    set +e
+    powershell.exe -NoProfile -Command "${parallel_build_cmd}" 2>&1 | tee "${build_log}"
+    local build_status=${PIPESTATUS[0]}
+    set -e
+
+    if ((build_status != 0)) &&
+        grep -Eq 'D8000|UNKNOWN COMMAND-LINE ERROR' "${build_log}"; then
+        echo "Parallel build hit transient MSVC D8000; retrying single-job build." >&2
+        powershell.exe -NoProfile -Command "${single_job_build_cmd}"
+    elif ((build_status != 0)); then
+        rm -f "${build_log}"
+        exit "${build_status}"
+    fi
+
+    rm -f "${build_log}"
 
     local plugin_src="${variant_build_dir}/windows/x64/${MODE}/${PLUGIN_NAME}.dll"
     if [[ ! -f "${plugin_src}" ]]; then
