@@ -221,8 +221,8 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   const bool acceptAutocompleteOnEnter = !a_allowCustomInput;
   const auto popupId = std::string(a_label) + "##popup";
   const auto openId = std::string(a_label) + "##open";
-  const auto buttonWidth = ImGui::GetFrameHeight();
-  const auto inputWidth = (std::max)(1.0f, a_width - buttonWidth);
+  const auto arrowAreaWidth = ImGui::GetFrameHeight();
+  const auto inputWidth = (std::max)(1.0f, a_width - arrowAreaWidth);
   EditableDropdownAutocompleteData autocompleteData{std::addressof(a_options)};
   ImGuiInputTextFlags inputFlags = ImGuiInputTextFlags_AutoSelectAll |
                                    ImGuiInputTextFlags_CallbackCompletion;
@@ -235,11 +235,12 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   const auto openStorageId = ImGui::GetID(openId.c_str());
   const auto popupImGuiId = ImGui::GetID(popupId.c_str());
 
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
   ImGui::SetNextItemWidth(inputWidth);
+  ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
   const bool submitted = ImGui::InputTextWithHint(
       "##input", a_hint, a_buffer, a_bufferSize, inputFlags,
       EditableDropdownInputCallback, std::addressof(autocompleteData));
+  ImGui::PopStyleVar();
   if (submitted && a_allowCustomInput) {
     changed = true;
   }
@@ -256,21 +257,19 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
   const auto inputMin = ImGui::GetItemRectMin();
   const auto inputMax = ImGui::GetItemRectMax();
   const auto inputFrameHeight = inputMax.y - inputMin.y;
-  const bool inputHovered = ImGui::IsItemHovered();
-  ImGui::SameLine(0.0f, 0.0f);
-  ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-  if (ImGui::ArrowButton("##open", ImGuiDir_Down)) {
+  const auto fullControlMax = ImVec2(inputMin.x + a_width, inputMax.y);
+  const auto arrowMin = ImVec2(fullControlMax.x - arrowAreaWidth, inputMin.y);
+  const auto arrowMax = fullControlMax;
+  const bool wholeControlHovered =
+      ImGui::IsMouseHoveringRect(inputMin, fullControlMax, false);
+  const bool arrowHovered = ImGui::IsMouseHoveringRect(arrowMin, arrowMax, false);
+  if (arrowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    InputManager::GetSingleton()->Flush();
+    ImGui::SetKeyboardFocusHere(-1);
     storage->SetBool(openStorageId, true);
     ImGui::OpenPopup(popupId.c_str());
   }
-  ImGui::PopStyleVar();
-  const bool arrowHovered = ImGui::IsItemHovered();
-  const bool arrowPressed = ImGui::IsItemActivated();
-  ImGui::PopStyleVar();
   bool dropdownOpen = storage->GetBool(openStorageId, false);
-  if (arrowPressed) {
-    dropdownOpen = true;
-  }
 
   if (dropdownOpen) {
     ImGui::SetNextWindowPos(
@@ -356,19 +355,40 @@ bool DrawEditableDropdown(const char *a_label, const char *a_hint,
       ImGui::EndPopup();
     }
 
-    if (!popupVisible || (!inputTextActive && !arrowHovered && !popupHovered)) {
+    if (!popupVisible || (!inputTextActive && !wholeControlHovered && !popupHovered)) {
       dropdownOpen = false;
     }
   }
 
   auto *drawList = ImGui::GetWindowDrawList();
-  const auto arrowMin = ImGui::GetItemRectMin();
-  const auto arrowMax = ImGui::GetItemRectMax();
-  DrawTextInputOutline(inputMin, arrowMax, inputHovered || arrowHovered,
+  const auto *theme = ThemeConfig::GetSingleton();
+  const auto arrowFillColor =
+      inputTextActive
+          ? ImGui::GetColorU32(ImGuiCol_ButtonActive)
+          : (wholeControlHovered ? ImGui::GetColorU32(ImGuiCol_ButtonHovered)
+                                 : ImGui::GetColorU32(ImGuiCol_Button));
+  drawList->AddRectFilled(
+      arrowMin, arrowMax, arrowFillColor, ImGui::GetStyle().FrameRounding,
+      ImDrawFlags_RoundCornersTopRight | ImDrawFlags_RoundCornersBottomRight);
+  drawList->AddRect(inputMin, fullControlMax, theme->GetColorU32("BORDER"),
+                    ImGui::GetStyle().FrameRounding);
+  DrawTextInputOutline(inputMin, fullControlMax, wholeControlHovered,
                        inputTextActive, ImGui::GetStyle().FrameRounding);
   drawList->AddLine(ImVec2(arrowMin.x, inputMin.y + 1.0f),
                     ImVec2(arrowMin.x, inputMin.y + inputFrameHeight - 1.0f),
-                    ThemeConfig::GetSingleton()->GetColorU32("BORDER"));
+                    theme->GetColorU32("BORDER"));
+  ImGui::RenderArrow(
+      drawList,
+      ImVec2(arrowMin.x + ((arrowAreaWidth - ImGui::GetFontSize()) * 0.5f),
+             inputMin.y + ((inputFrameHeight - ImGui::GetFontSize()) * 0.5f)),
+      theme->GetColorU32(inputTextActive || wholeControlHovered ? "TEXT"
+                                                                : "TEXT_DISABLED"),
+      ImGuiDir_Down);
+
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 0.0f));
+  ImGui::SameLine(0.0f, 0.0f);
+  ImGui::Dummy(ImVec2(arrowAreaWidth, inputFrameHeight));
+  ImGui::PopStyleVar();
 
   storage->SetBool(openStorageId, dropdownOpen);
   ImGui::PopID();
