@@ -1,6 +1,7 @@
 #include "Menu.h"
 
 #include "ArmorUtils.h"
+#include "ConditionMaterializer.h"
 #include "InputManager.h"
 #include "MenuHost.h"
 #include "PlayerInventory.h"
@@ -617,6 +618,8 @@ void Menu::DeserializeConditions(SKSE::SerializationInterface *a_skse) {
 
   nextConditionId_ = (std::max)(nextConditionId_, maxConditionId + 1);
   EnsureDefaultConditions();
+  sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
+  sosr::conditions::InvalidateConditionMaterializationCaches(conditions_);
 }
 
 void Menu::RevertConditions() {

@@ -421,7 +421,7 @@ void VariantWorkbench::ClearPreview() {
 }
 
 void VariantWorkbench::SyncDynamicArmorVariantsExtended(
-    const std::vector<ui::conditions::Definition> &a_conditions) {
+    std::vector<ui::conditions::Definition> &a_conditions) {
   auto *dav =
       sosr::integrations::DynamicArmorVariantsExtendedClient::GetReady();
   if (!dav) {
@@ -470,8 +470,7 @@ void VariantWorkbench::SyncDynamicArmorVariantsExtended(
             .variantJson = std::move(descriptor->json),
             .conditionSignature = materializedCondition->signature,
             .condition = materializedCondition->condition,
-            .refreshTargets = sosr::conditions::BuildRefreshTargets(
-                materializedCondition->condition)});
+            .refreshTargets = materializedCondition->refreshTargets});
   }
 
   std::unordered_map<std::string, ActiveDavVariantState> syncedVariants;

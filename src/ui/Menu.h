@@ -61,6 +61,9 @@ public:
   [[nodiscard]] workbench::VariantWorkbench &GetWorkbench() {
     return workbench_;
   }
+  [[nodiscard]] std::vector<ui::conditions::Definition> &GetConditions() {
+    return conditions_;
+  }
   [[nodiscard]] const std::vector<ui::conditions::Definition> &
   GetConditions() const {
     return conditions_;

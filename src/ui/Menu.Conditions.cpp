@@ -1,5 +1,6 @@
 #include "Menu.h"
 
+#include "ConditionMaterializer.h"
 #include "RE/C/CommandTable.h"
 #include "imgui_internal.h"
 #include "ui/ConditionFunctionMetadata.h"
@@ -917,6 +918,8 @@ void Menu::EnsureDefaultConditions() {
 
   conditions_.push_back(BuildDefaultPlayerCondition());
   nextConditionId_ = 2;
+  sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
+  sosr::conditions::InvalidateConditionMaterializationCaches(conditions_);
 }
 
 int Menu::AllocateConditionEditorWindowSlot() const {
@@ -1119,6 +1122,10 @@ bool Menu::SaveConditionEditor(ConditionEditorState &a_editor) {
     }
     *it = a_editor.draft;
   }
+
+  sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
+  sosr::conditions::InvalidateConditionMaterializationCachesFrom(
+      conditions_, a_editor.sourceConditionId);
 
   a_editor.error.clear();
   return true;
@@ -1365,6 +1372,8 @@ bool Menu::DrawConditionTab() {
     const auto deletedConditionId = conditions_[*pendingDeleteIndex].id;
     conditions_.erase(conditions_.begin() +
                       static_cast<std::ptrdiff_t>(*pendingDeleteIndex));
+    sosr::conditions::RebuildConditionDependencyMetadata(conditions_);
+    sosr::conditions::InvalidateConditionMaterializationCaches(conditions_);
     for (auto &editor : conditionEditors_) {
       if (editor.sourceConditionId == deletedConditionId) {
         editor.error.clear();

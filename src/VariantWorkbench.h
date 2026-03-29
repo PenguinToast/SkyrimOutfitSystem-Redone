@@ -100,7 +100,7 @@ public:
                        bool a_insertAfter);
   bool SetConditionId(int a_rowIndex, std::optional<std::string> a_conditionId);
   void SyncDynamicArmorVariantsExtended(
-      const std::vector<ui::conditions::Definition> &a_conditions);
+      std::vector<ui::conditions::Definition> &a_conditions);
   void Serialize(SKSE::SerializationInterface *a_skse) const;
   void Deserialize(SKSE::SerializationInterface *a_skse);
   void Revert();

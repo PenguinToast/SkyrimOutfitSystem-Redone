@@ -613,17 +613,91 @@ FindDefinitionById(const std::vector<Definition> &a_conditions,
   return it != a_conditions.end() ? std::addressof(*it) : nullptr;
 }
 
+Definition *FindDefinitionById(std::vector<Definition> &a_conditions,
+                               const std::string_view a_id) {
+  const auto it = std::ranges::find(a_conditions, a_id, &Definition::id);
+  return it != a_conditions.end() ? std::addressof(*it) : nullptr;
+}
+
+void RebuildConditionDependencyMetadata(std::vector<Definition> &a_conditions) {
+  for (auto &condition : a_conditions) {
+    condition.referencedConditionIds.clear();
+    condition.reverseDependencyIds.clear();
+
+    std::unordered_set<std::string> seenReferencedConditionIds;
+    for (const auto &clause : condition.clauses) {
+      if (clause.customConditionId.empty()) {
+        continue;
+      }
+      if (seenReferencedConditionIds.insert(clause.customConditionId).second) {
+        condition.referencedConditionIds.push_back(clause.customConditionId);
+      }
+    }
+  }
+
+  for (auto &condition : a_conditions) {
+    for (const auto &referencedConditionId : condition.referencedConditionIds) {
+      if (auto *referenced =
+              FindDefinitionById(a_conditions, referencedConditionId)) {
+        referenced->reverseDependencyIds.push_back(condition.id);
+      }
+    }
+  }
+}
+
+void InvalidateConditionMaterializationCaches(
+    std::vector<Definition> &a_conditions) {
+  for (auto &condition : a_conditions) {
+    condition.transientCache.Clear();
+  }
+}
+
+void InvalidateConditionMaterializationCachesFrom(
+    std::vector<Definition> &a_conditions, const std::string_view a_conditionId) {
+  std::vector<std::string> stack;
+  std::unordered_set<std::string> visited;
+  stack.emplace_back(a_conditionId);
+
+  while (!stack.empty()) {
+    auto conditionId = std::move(stack.back());
+    stack.pop_back();
+
+    if (!visited.insert(conditionId).second) {
+      continue;
+    }
+
+    auto *condition = FindDefinitionById(a_conditions, conditionId);
+    if (!condition) {
+      continue;
+    }
+
+    condition->transientCache.Clear();
+    for (const auto &reverseDependencyId : condition->reverseDependencyIds) {
+      stack.push_back(reverseDependencyId);
+    }
+  }
+}
+
 std::optional<MaterializedCondition>
-MaterializeConditionById(const std::string_view a_conditionId,
-                         const std::vector<Definition> &a_conditions) {
-  const auto *definition = FindDefinitionById(a_conditions, a_conditionId);
+MaterializeConditionById(std::string_view a_conditionId,
+                         std::vector<Definition> &a_conditions) {
+  auto *definition = FindDefinitionById(a_conditions, a_conditionId);
   if (!definition) {
     return std::nullopt;
+  }
+  if (definition->transientCache.valid && definition->transientCache.condition) {
+    return MaterializedCondition{
+        .condition = definition->transientCache.condition,
+        .signature = definition->transientCache.signature,
+        .refreshTargets =
+            RefreshTargets{definition->transientCache.refreshActorFormIDs,
+                           definition->transientCache.refreshUseNearbyFallback}};
   }
 
   ConditionVisitSet visiting;
   auto cnf = BuildConditionCnf(*definition, a_conditions, visiting);
   if (!cnf || cnf->empty()) {
+    definition->transientCache.Clear();
     return std::nullopt;
   }
 
@@ -636,6 +710,7 @@ MaterializeConditionById(const std::string_view a_conditionId,
       const auto data = BuildConditionItemData(group[literalIndex],
                                                literalIndex + 1 < group.size());
       if (!data) {
+        definition->transientCache.Clear();
         return std::nullopt;
       }
 
@@ -651,9 +726,18 @@ MaterializeConditionById(const std::string_view a_conditionId,
     }
   }
 
-  MaterializedCondition materialized;
-  materialized.condition = std::move(condition);
-  materialized.signature = BuildCnfSignature(*cnf);
-  return materialized;
+  const auto refreshTargets = BuildRefreshTargets(condition);
+  definition->transientCache.valid = true;
+  definition->transientCache.condition = condition;
+  definition->transientCache.signature = BuildCnfSignature(*cnf);
+  definition->transientCache.refreshActorFormIDs.assign(
+      refreshTargets.actorFormIDs.begin(), refreshTargets.actorFormIDs.end());
+  definition->transientCache.refreshUseNearbyFallback =
+      refreshTargets.useNearbyFallback;
+
+  return MaterializedCondition{
+      .condition = definition->transientCache.condition,
+      .signature = definition->transientCache.signature,
+      .refreshTargets = refreshTargets};
 }
 } // namespace sosr::conditions
