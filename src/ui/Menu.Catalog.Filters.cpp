@@ -25,7 +25,7 @@ int CompareCatalogText(const std::string_view a_left,
 } // namespace
 
 bool Menu::MatchesGearFilters(const GearEntry &a_entry) const {
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   if (browser.favoritesOnly &&
       !IsFavorite(ui::catalog::BrowserTab::Gear, a_entry.id)) {
     return false;
@@ -42,7 +42,7 @@ bool Menu::MatchesGearFilters(const GearEntry &a_entry) const {
 }
 
 bool Menu::MatchesOutfitFilters(const OutfitEntry &a_entry) const {
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   if (browser.favoritesOnly &&
       !IsFavorite(ui::catalog::BrowserTab::Outfits, a_entry.id)) {
     return false;
@@ -60,7 +60,7 @@ bool Menu::MatchesOutfitFilters(const OutfitEntry &a_entry) const {
 }
 
 bool Menu::MatchesKitFilters(const KitEntry &a_entry) const {
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   if (browser.favoritesOnly &&
       !IsFavorite(ui::catalog::BrowserTab::Kits, a_entry.id)) {
     return false;
@@ -79,14 +79,14 @@ bool Menu::MatchesKitFilters(const KitEntry &a_entry) const {
 
 void Menu::SyncSelectedSlotFilters() {
   const auto size = EquipmentCatalog::Get().GetGearSlots().size();
-  auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
+  auto &selectedSlotFilters = CatalogBrowserState().selectedSlotFilters;
   if (selectedSlotFilters.size() != size) {
     selectedSlotFilters.resize(size, false);
   }
 }
 
 bool Menu::HasAnySelectedSlotFilter() const {
-  return std::ranges::any_of(catalogBrowser_.selectedSlotFilters,
+  return std::ranges::any_of(CatalogBrowserState().selectedSlotFilters,
                              [](bool a_selected) { return a_selected; });
 }
 
@@ -97,7 +97,7 @@ bool Menu::MatchesSelectedSlotsOr(
   }
 
   const auto &slotOptions = EquipmentCatalog::Get().GetGearSlots();
-  const auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
+  const auto &selectedSlotFilters = CatalogBrowserState().selectedSlotFilters;
   for (std::size_t index = 0; index < selectedSlotFilters.size(); ++index) {
     if (!selectedSlotFilters[index]) {
       continue;
@@ -117,7 +117,7 @@ bool Menu::MatchesSelectedSlotsAnd(
   }
 
   const auto &slotOptions = EquipmentCatalog::Get().GetGearSlots();
-  const auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
+  const auto &selectedSlotFilters = CatalogBrowserState().selectedSlotFilters;
   for (std::size_t index = 0; index < selectedSlotFilters.size(); ++index) {
     if (!selectedSlotFilters[index]) {
       continue;
@@ -132,7 +132,7 @@ bool Menu::MatchesSelectedSlotsAnd(
 
 std::string Menu::BuildSelectedSlotPreview() const {
   const auto &slotOptions = EquipmentCatalog::Get().GetGearSlots();
-  const auto &selectedSlotFilters = catalogBrowser_.selectedSlotFilters;
+  const auto &selectedSlotFilters = CatalogBrowserState().selectedSlotFilters;
   std::size_t selectedCount = 0;
   std::string_view selectedLabel = "Any slot";
 
@@ -156,7 +156,7 @@ std::string Menu::BuildSelectedSlotPreview() const {
 std::vector<const GearEntry *> Menu::BuildFilteredGear() const {
   std::vector<const GearEntry *> rows;
   rows.reserve(EquipmentCatalog::Get().GetGear().size());
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   const auto inventoryFormIDs =
       browser.inventoryOnly ? player_inventory::GetInventoryArmorFormIDs()
                             : std::unordered_set<RE::FormID>{};
@@ -301,7 +301,7 @@ void Menu::SortKitRows(std::vector<const KitEntry *> &a_rows,
 }
 
 void Menu::DrawCatalogFilters() {
-  auto &browser = catalogBrowser_;
+  auto &browser = CatalogBrowserState();
   if (browser.activeTab == ui::catalog::BrowserTab::Slots ||
       browser.activeTab == ui::catalog::BrowserTab::Conditions) {
     return;

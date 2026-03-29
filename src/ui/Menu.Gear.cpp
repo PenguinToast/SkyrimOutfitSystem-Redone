@@ -14,7 +14,7 @@ bool Menu::DrawGearTab() {
 }
 
 bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   bool rowClicked = false;
   if (ImGui::BeginTable("##gear-table", 2,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
@@ -106,7 +106,7 @@ bool Menu::DrawGearCatalogTable(const std::vector<const GearEntry *> &a_rows) {
           if (browser.selectedKey == entry.id) {
             ClearCatalogSelection();
           } else {
-            catalogBrowser_.selectedKey = entry.id;
+            CatalogBrowserState().selectedKey = entry.id;
             if (browser.previewSelected) {
               PreviewGearEntry(entry);
             } else {

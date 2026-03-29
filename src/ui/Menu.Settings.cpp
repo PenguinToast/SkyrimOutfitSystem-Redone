@@ -123,7 +123,7 @@ void Menu::LoadFavorites() {
     return;
   }
 
-  catalogBrowser_.favoriteKeys.clear();
+  CatalogBrowserState().favoriteKeys.clear();
 
   std::ifstream input(favoritesPath_);
   if (!input.is_open()) {
@@ -137,7 +137,7 @@ void Menu::LoadFavorites() {
         it != json.end() && it->is_array()) {
       for (const auto &entry : *it) {
         if (entry.is_string()) {
-          catalogBrowser_.favoriteKeys.insert(entry.get<std::string>());
+          CatalogBrowserState().favoriteKeys.insert(entry.get<std::string>());
         }
       }
     }
@@ -162,8 +162,8 @@ void Menu::SaveFavorites() const {
     return;
   }
 
-  std::vector<std::string> favorites(catalogBrowser_.favoriteKeys.begin(),
-                                     catalogBrowser_.favoriteKeys.end());
+  std::vector<std::string> favorites(CatalogBrowserState().favoriteKeys.begin(),
+                                     CatalogBrowserState().favoriteKeys.end());
   std::ranges::sort(favorites);
   const nlohmann::json json = {{"favorites", favorites}};
   output << json.dump(2) << '\n';

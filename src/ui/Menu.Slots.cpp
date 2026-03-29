@@ -12,7 +12,7 @@ enum class SlotColumn : ImGuiID { Slot = 1, Occupied };
 
 namespace sosr {
 bool Menu::DrawSlotTab() {
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   struct SlotCatalogRow {
     workbench::EquipmentWidgetItem slotItem;
     std::vector<workbench::EquipmentWidgetItem> occupantItems;
@@ -169,7 +169,7 @@ bool Menu::DrawSlotTab() {
           if (browser.selectedKey == row.slotItem.key) {
             ClearCatalogSelection();
           } else {
-            catalogBrowser_.selectedKey = row.slotItem.key;
+            CatalogBrowserState().selectedKey = row.slotItem.key;
             workbench_.ClearPreview();
           }
         }

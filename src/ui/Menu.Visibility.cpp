@@ -55,7 +55,7 @@ void Menu::Open() {
     return;
   }
 
-  if (!catalogBrowser_.initialized) {
+  if (!CatalogBrowserState().initialized) {
     QueueCatalogRefresh();
   }
 

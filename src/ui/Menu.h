@@ -7,7 +7,9 @@
 #include "components/EquipmentWidget.h"
 #include "imgui.h"
 #include "ui/ConditionData.h"
-#include "ui/catalog/BrowserState.h"
+#include "ui/catalog/PaneState.h"
+#include "ui/conditions/EditorState.h"
+#include "ui/workbench/FilterState.h"
 
 #include <array>
 #include <optional>
@@ -105,30 +107,10 @@ private:
 
   enum class VisibilityState : std::uint8_t { Closed, Opening, Open, Closing };
   enum class KitCreationSource : std::uint8_t { Equipped, Overrides };
-  enum class WorkbenchFilterKind : std::uint8_t { All, ActorRef, Condition };
-
-  struct ConditionEditorState {
-    int windowSlot{0};
-    std::string sourceConditionId;
-    ui::conditions::Definition draft;
-    std::string error;
-    bool isNew{false};
-    bool open{true};
-    bool focusOnNextDraw{false};
-  };
-
-  struct WorkbenchFilterState {
-    WorkbenchFilterKind kind{WorkbenchFilterKind::All};
-    RE::FormID actorFormID{0};
-    std::string conditionId;
-  };
-
-  struct WorkbenchFilterOption {
-    std::string label;
-    WorkbenchFilterKind kind{WorkbenchFilterKind::All};
-    RE::FormID actorFormID{0};
-    std::string conditionId;
-  };
+  using ConditionEditorState = ui::conditions::editor::State;
+  using WorkbenchFilterState = ui::workbench::FilterState;
+  using WorkbenchFilterOption = ui::workbench::FilterOption;
+  using WorkbenchFilterKind = ui::workbench::FilterKind;
 
   Menu() = default;
   friend class MenuHost;
@@ -245,13 +227,19 @@ private:
                       ImGuiTableSortSpecs *a_sortSpecs) const;
   void SortKitRows(std::vector<const KitEntry *> &a_rows,
                    ImGuiTableSortSpecs *a_sortSpecs) const;
+  [[nodiscard]] ui::catalog::BrowserState &CatalogBrowserState() {
+    return catalogPane_.browser;
+  }
+  [[nodiscard]] const ui::catalog::BrowserState &CatalogBrowserState() const {
+    return catalogPane_.browser;
+  }
 
   bool initialized_{false};
   bool enabled_{false};
   bool gameDataLoaded_{false};
   ID3D11Device *device_{nullptr};
   ID3D11DeviceContext *context_{nullptr};
-  ui::catalog::BrowserState catalogBrowser_;
+  ui::catalog::PaneState catalogPane_;
   WorkbenchFilterState workbenchFilter_;
   int focusedConditionEditorWindowSlot_{0};
   int fontSizePixels_{13};

@@ -1,206 +1,87 @@
-## SVS Refactor Plan 2
+## SVS Refactor Plan 3
 
 ### Goals
 
-- Make catalog UI ownership distinct from workbench UI ownership.
-- Keep future catalog popout support straightforward by isolating catalog state
-  and behavior behind dedicated modules.
-- Tighten the remaining abstraction boundaries between condition domain logic,
-  condition editor UI, workbench core logic, and DAV/runtime integration.
-- Continue using buildable, low-risk slices with validation after each phase.
-
-### Guiding Rules
-
-- `src/ui/catalog/` owns catalog/browser state and catalog-pane behavior.
-- `src/ui/workbench/` or `src/ui/Menu.Workbench.*` owns workbench-pane
-  rendering, tooltips, drag/drop, and toolbar behavior, but not catalog state.
-- `src/conditions/` owns condition definitions, dependency graph metadata,
-  graph validation, and condition-materialization orchestration.
-- Condition editor UI modules should depend on condition-domain services, not
-  re-own them.
-- `VariantWorkbench` owns row/core state and DAV integration entry points, but
-  should not expose more UI adapter vocabulary than necessary.
+- Keep shrinking `Menu` from a broad coordinator into a thinner shell over
+  pane-specific state and commands.
+- Make catalog UI hosting explicitly separate from workbench hosting so a future
+  popout window is a hosting concern instead of a deep refactor.
+- Reduce the remaining UI-adapter leakage from `VariantWorkbench` by moving
+  widget-item construction and adapter types behind dedicated workbench modules.
+- Continue using buildable, commit-sized slices with validation after each
+  phase.
 
 ### Remaining Context
 
-1. `Menu` is still a broad controller facade even though the implementation has
-   been split. `src/ui/Menu.h` still owns browser tab state, workbench filter
-   state, condition editor draft state, kit dialog state, drag payload types,
-   and tab/controller methods in one class.
-2. `VariantWorkbench` still mixes row-domain behavior with UI adapter concerns
-   and DAV preview/sync behavior. It exposes row storage, widget-facing item
-   structures, catalog/slot item construction, preview, sync, and serialization
-   from one class boundary.
-3. `ConditionMaterializer` still combines editor-facing parameter coercion,
-   boolean-algebra lowering, dependency graph/cache invalidation, and TESCondition
-   emission in one module.
-4. `Menu.Workbench.cpp` is still a large mixed-responsibility UI module
-   containing toolbar policy, tooltip helpers, drag/drop command handling, row
-   rendering, reorder-preview geometry, and conflict highlighting.
-5. `ui/conditions/EditorSupport.cpp` still combines new-condition defaults,
-   condition function discovery/metadata, draft validation, formatting helpers,
-   and ImGui editor widgets.
-6. `EquipmentCatalog.cpp` still owns too much of the catalog pipeline in one
-   file: collection-tree shaping, search token construction, leveled-list
-   recursion/caching, outfit description building, kit parsing, entry building,
-   and refresh orchestration.
-7. Catalog UI should be owned separately enough from workbench UI that it can
-   eventually be rendered in its own popout window with the same Gear/Outfits/
-   Kits/Slots/Conditions tab set.
+1. `Menu.h` is still a broad coordinator façade. The implementation has been
+   split, but pane-specific state types still live there and the menu still owns
+   too much of the state vocabulary directly.
+2. Catalog browser state is isolated, but the host concept is still implicit.
+   We want the catalog side to be separable enough that a future popout window
+   can render the same browser/condition tabs without first undoing ownership.
+3. `VariantWorkbench` still exposes widget-adapter-oriented types and builders,
+   especially `EquipmentWidgetItem` and the item-construction helpers used by UI
+   and serialization.
+4. The remaining worthwhile refactors are now mostly type-boundary refactors
+   rather than large translation-unit splits.
 
-### Phase 1: Extract Catalog Browser Ownership
+### Guiding Rules
 
-Status: completed
+- `src/ui/catalog/` should own catalog-pane host and browser state.
+- `src/ui/workbench/` should own workbench-pane state and filter vocabulary.
+- `src/ui/conditions/` should own condition-editor UI state types.
+- `src/workbench/` should own widget-adapter item types/factories that bridge
+  row data to UI widgets, rather than `VariantWorkbench` itself owning them.
+- `Menu` should host pane state and coordinate between panes, but avoid defining
+  pane-specific state structs inline where possible.
+
+### Phase 1: Extract Pane State Types From Menu
 
 Deliverables:
 
-- Introduce a dedicated catalog-browser state type under `src/ui/catalog/`.
-- Move catalog-specific state out of `Menu` and into that type:
-  - active browser tab
-  - catalog refresh/selection state
-  - favorites state
-  - catalog filters/search fields
-  - preview-selected state
-  - inventory-only / show-all toggles
-- Keep `Menu` as a host/coordinator that owns a `CatalogBrowserState` instance
-  instead of individually owning those fields.
-- Preserve current behavior while making future catalog popout hosting simpler.
+- Move `ConditionEditorState` into a dedicated condition UI header.
+- Move workbench filter state/option types into a dedicated workbench UI header.
+- Replace inline `Menu` state type definitions with imports/aliases from those
+  modules.
+- Keep behavior unchanged while shrinking `Menu.h`'s local vocabulary.
 
-Completed:
-
-- Added `src/ui/catalog/BrowserState.h`.
-- Moved catalog browser state out of `Menu`'s field list into
-  `catalogBrowser_`.
-- Updated catalog browser/filter/favorites code to flow through that state.
-
-### Phase 2: Separate Workbench UI Responsibilities
-
-Status: completed
+### Phase 2: Introduce a Popout-Ready Catalog Host State
 
 Deliverables:
 
-- Split `Menu.Workbench.cpp` into focused modules:
-  - toolbar/actions
-  - row table rendering
-  - tooltip/drag-drop helpers
-- Keep workbench filter policy separate from catalog browser state.
-- Ensure the workbench pane depends on explicit catalog/workbench bridge inputs,
-  not direct catalog-state ownership.
+- Replace the bare catalog browser field with a dedicated catalog pane/host
+  state type under `src/ui/catalog/`.
+- Include future-facing host metadata there, such as docked/popout host mode and
+  popout-open state, even if the popout window itself is not implemented yet.
+- Route menu-side catalog access through that host state instead of directly
+  owning the browser state as a top-level field.
 
-Completed:
-
-- Split the monolithic workbench pane into:
-  - `src/ui/Menu.Workbench.cpp` orchestration and payload handling
-  - `src/ui/Menu.Workbench.Toolbar.cpp`
-  - `src/ui/Menu.Workbench.Table.cpp`
-  - `src/ui/workbench/Common.h`
-  - `src/ui/workbench/Tooltips.h`
-  - `src/ui/workbench/Tooltips.cpp`
-
-### Phase 3: Split Condition Editor Support Modules
-
-Status: completed
+### Phase 3: Extract Workbench Item Types And Item Factory
 
 Deliverables:
 
-- Split `ui/conditions/EditorSupport.cpp` into:
-  - condition function metadata/registry
-  - draft validation helpers
-  - value editor widgets / numeric formatting helpers
-- Keep a thin compatibility façade only if needed.
-
-Completed:
-
-- Replaced `EditorSupport.cpp` with:
-  - `src/ui/conditions/FunctionRegistry.cpp`
-  - `src/ui/conditions/DraftValidation.cpp`
-  - `src/ui/conditions/ValueEditors.cpp`
-- Kept `src/ui/conditions/EditorSupport.h` as an umbrella compatibility header.
-
-### Phase 4: Split Condition Materialization Responsibilities
-
-Status: completed
-
-Deliverables:
-
-- Split `ConditionMaterializer` into separate modules for:
-  - graph metadata / reverse dependencies / cache invalidation
-  - CNF lowering / boolean algebra
-  - TESCondition emission / signature / refresh target generation
-- Keep the existing public API stable where practical.
-
-Completed:
-
-- `src/ConditionMaterializer.cpp` now owns cache orchestration only.
-- Lowering and emission moved into:
-  - `src/conditions/Lowering.h`
-  - `src/conditions/Lowering.cpp`
-
-### Phase 5: Reduce EquipmentCatalog Breadth
-
-Status: completed
-
-Deliverables:
-
-- Split `EquipmentCatalog.cpp` into focused helpers/modules for:
-  - entry/search text builders
-  - outfit/leveled-list description building
-  - kit parsing
-  - refresh orchestration
-- Keep `EquipmentCatalog` itself as the public façade.
-
-Completed:
-
-- Moved entry/search/description builder logic into:
-  - `src/catalog/EntryBuilders.h`
-  - `src/catalog/EntryBuilders.cpp`
-- `src/EquipmentCatalog.cpp` is now primarily the façade for refresh,
-  indexing, and derived option rebuilding.
+- Move `EquipmentWidgetItemKind` and `EquipmentWidgetItem` out of
+  `VariantWorkbench.h` into a dedicated workbench item header.
+- Move `BuildCatalogItem(...)` and `BuildSlotItem(...)` into a dedicated
+  workbench item-factory module.
+- Update UI/serialization code to use the extracted item factory instead of
+  asking `VariantWorkbench` to build widget-facing items.
+- Keep `VariantWorkbench` focused on row storage, row mutation, preview, sync,
+  and serialization.
 
 ### Validation Policy
 
 - After each phase:
   1. build and deploy with `./scripts/build-deploy.sh releasedbg`
-  2. run formatter/lint as needed for the touched slice
-  3. commit the slice before continuing
+  2. fix any fallout in the same slice
+  3. commit before starting the next phase
 
-### Execution Order
+### Final Review Checklist
 
-1. Extract catalog browser ownership.
-2. Split workbench UI rendering helpers.
-3. Split condition editor support helpers.
-4. Split condition materialization internals.
-5. Split EquipmentCatalog breadth where still needed.
-6. Review this plan against the final code shape and update statuses/notes.
-
-### Final Review
-
-1. Catalog UI ownership is materially cleaner.
-   - Catalog browser state is now isolated in `src/ui/catalog/BrowserState.h`.
-   - This is enough to support a future catalog popout without first undoing
-     workbench-specific ownership.
-
-2. Workbench UI responsibilities are now separated.
-   - The main workbench pane no longer owns toolbar, table, and tooltip logic in
-     one translation unit.
-
-3. Condition editor support is no longer a kitchen-sink helper layer.
-   - Metadata/lookup, draft validation, and value editors now live in distinct
-     modules.
-
-4. Condition materialization now has a real internal boundary.
-   - Cache/dependency orchestration and lowering/emission are split.
-
-5. Equipment catalog breadth is reduced.
-   - The public catalog façade is now narrower, with helper-heavy entry building
-     moved behind a dedicated module.
-
-### Residual Notes
-
-- `Menu.h` is still a broad coordinating façade. The major implementation-level
-  god-object pressure has been reduced, but the remaining state surface is still
-  centralized by design.
-- `VariantWorkbench` still exposes widget-adapter-oriented item types and build
-  helpers. That is the next natural seam if we later want a deeper domain/UI
-  split there, but it is no longer blocking the catalog/workbench ownership
-  boundary or the popout direction.
+- `Menu.h` should define fewer pane-specific types inline.
+- Catalog hosting should be ready for a later popout without another ownership
+  rewrite.
+- `VariantWorkbench.h` should no longer be the source of widget-item type
+  definitions or item-construction helpers.
+- Residual broad coordination in `Menu` should be documented explicitly if it
+  remains.

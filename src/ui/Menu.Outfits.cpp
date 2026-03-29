@@ -10,7 +10,7 @@ enum class OutfitColumn : ImGuiID { Name = 1, Plugin, Pieces };
 
 namespace sosr {
 bool Menu::DrawOutfitTab() {
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   auto rows = BuildFilteredOutfits();
   ImGui::Text("Results: %zu", rows.size());
   bool rowClicked = false;
@@ -98,7 +98,7 @@ bool Menu::DrawOutfitTab() {
           if (browser.selectedKey == outfit.id) {
             ClearCatalogSelection();
           } else {
-            catalogBrowser_.selectedKey = outfit.id;
+            CatalogBrowserState().selectedKey = outfit.id;
             if (browser.previewSelected) {
               PreviewOutfitEntry(outfit);
             } else {

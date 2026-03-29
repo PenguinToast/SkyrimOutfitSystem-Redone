@@ -9,7 +9,7 @@ constexpr std::string_view kFavoritePrefix = "\xEE\x83\xB5 ";
 
 namespace sosr {
 void Menu::ClearCatalogSelection() {
-  catalogBrowser_.selectedKey.clear();
+  CatalogBrowserState().selectedKey.clear();
   workbench_.ClearPreview();
 }
 
@@ -42,19 +42,20 @@ std::string Menu::BuildFavoriteKey(const ui::catalog::BrowserTab a_tab,
 
 bool Menu::IsFavorite(const ui::catalog::BrowserTab a_tab,
                       const std::string_view a_id) const {
-  return catalogBrowser_.favoriteKeys.contains(BuildFavoriteKey(a_tab, a_id));
+  return CatalogBrowserState().favoriteKeys.contains(
+      BuildFavoriteKey(a_tab, a_id));
 }
 
 void Menu::SetFavorite(const ui::catalog::BrowserTab a_tab,
                        const std::string_view a_id, const bool a_favorite) {
   const auto key = BuildFavoriteKey(a_tab, a_id);
   if (a_favorite) {
-    catalogBrowser_.favoriteKeys.insert(key);
+    CatalogBrowserState().favoriteKeys.insert(key);
   } else {
-    catalogBrowser_.favoriteKeys.erase(key);
-    if (catalogBrowser_.favoritesOnly &&
-        catalogBrowser_.activeTab == a_tab &&
-        catalogBrowser_.selectedKey == a_id) {
+    CatalogBrowserState().favoriteKeys.erase(key);
+    if (CatalogBrowserState().favoritesOnly &&
+        CatalogBrowserState().activeTab == a_tab &&
+        CatalogBrowserState().selectedKey == a_id) {
       ClearCatalogSelection();
     }
   }
@@ -71,7 +72,7 @@ std::string Menu::BuildFavoriteLabel(const std::string_view a_name,
 }
 
 void Menu::QueueCatalogRefresh(const ui::catalog::RefreshMode a_mode) {
-  auto &browser = catalogBrowser_;
+  auto &browser = CatalogBrowserState();
   browser.refreshQueued = true;
   browser.queuedRefreshMode = a_mode;
   if (a_mode == ui::catalog::RefreshMode::Full) {
@@ -82,7 +83,7 @@ void Menu::QueueCatalogRefresh(const ui::catalog::RefreshMode a_mode) {
 }
 
 void Menu::UpdateCatalogRefresh() {
-  auto &browser = catalogBrowser_;
+  auto &browser = CatalogBrowserState();
   auto &catalog = EquipmentCatalog::Get();
   if (browser.refreshQueued && !catalog.IsRefreshing()) {
     catalog.StartRefreshFromGame(browser.queuedRefreshMode ==
@@ -155,7 +156,7 @@ void Menu::PreviewOutfitEntry(const OutfitEntry &a_entry) {
 }
 
 void Menu::DrawWindow() {
-  auto &browser = catalogBrowser_;
+  auto &browser = CatalogBrowserState();
   auto &io = ImGui::GetIO();
   ImGui::SetNextWindowSize(
       ImVec2(io.DisplaySize.x * 0.50f, io.DisplaySize.y * 0.50f),

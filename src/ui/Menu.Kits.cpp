@@ -34,7 +34,7 @@ std::string NormalizeKitCollection(std::string_view a_collection) {
 
 namespace sosr {
 bool Menu::DrawKitTab() {
-  const auto &browser = catalogBrowser_;
+  const auto &browser = CatalogBrowserState();
   auto rows = BuildFilteredKits();
   ImGui::Text("Results: %zu", rows.size());
   bool rowClicked = false;
@@ -131,7 +131,7 @@ bool Menu::DrawKitTab() {
           if (browser.selectedKey == kit.id) {
             ClearCatalogSelection();
           } else {
-            catalogBrowser_.selectedKey = kit.id;
+            CatalogBrowserState().selectedKey = kit.id;
             if (browser.previewSelected) {
               PreviewKitEntry(kit);
             } else {
@@ -298,11 +298,11 @@ bool Menu::SavePendingKit() {
   file << data.dump(4) << '\n';
   file.close();
 
-  catalogBrowser_.pendingSelectionAfterRefresh =
+  CatalogBrowserState().pendingSelectionAfterRefresh =
       "kit:" + relativePath.generic_string();
   QueueCatalogRefresh(ui::catalog::RefreshMode::KitsOnly);
-  catalogBrowser_.selectedKey.clear();
-  catalogBrowser_.activeTab = ui::catalog::BrowserTab::Kits;
+  CatalogBrowserState().selectedKey.clear();
+  CatalogBrowserState().activeTab = ui::catalog::BrowserTab::Kits;
   openCreateKitDialog_ = false;
   pendingKitFormIDs_.clear();
   createKitError_.clear();
@@ -327,16 +327,16 @@ bool Menu::DeletePendingKit() {
     return false;
   }
 
-  catalogBrowser_.favoriteKeys.erase(
+  CatalogBrowserState().favoriteKeys.erase(
       BuildFavoriteKey(ui::catalog::BrowserTab::Kits, pendingDeleteKitId_));
   SaveFavorites();
 
-  if (catalogBrowser_.selectedKey == pendingDeleteKitId_) {
+  if (CatalogBrowserState().selectedKey == pendingDeleteKitId_) {
     ClearCatalogSelection();
   }
 
   QueueCatalogRefresh(ui::catalog::RefreshMode::KitsOnly);
-  catalogBrowser_.activeTab = ui::catalog::BrowserTab::Kits;
+  CatalogBrowserState().activeTab = ui::catalog::BrowserTab::Kits;
   pendingDeleteKitId_.clear();
   pendingDeleteKitName_.clear();
   pendingDeleteKitPath_.clear();
