@@ -2,6 +2,7 @@
 
 #include "ConditionMaterializer.h"
 #include "conditions/Defaults.h"
+#include "conditions/Validation.h"
 #include "RE/C/CommandTable.h"
 #include "imgui_internal.h"
 #include "ui/ConditionFunctionMetadata.h"
@@ -144,9 +145,6 @@ RE::SCRIPT_PARAM_TYPE ResolveEditorParamType(std::string_view a_functionName,
                                              RE::SCRIPT_PARAM_TYPE a_type);
 const std::vector<ConditionFunctionInfo> &GetConditionFunctionInfos();
 const ConditionFunctionInfo *FindConditionFunctionInfo(std::string_view a_name);
-const ConditionDefinition *FindConditionDefinitionByName(
-    const std::vector<ConditionDefinition> &a_conditions,
-    std::string_view a_name, std::string_view a_excludedId = {});
 
 void CopyTextToBuffer(const std::string &a_text, char *a_buffer,
                       const std::size_t a_bufferSize) {
@@ -292,7 +290,8 @@ std::string BuildSuggestedConditionName(
     const std::function<bool(std::string_view)> &a_extraConflict = {}) {
   auto conflicts = [&](std::string_view a_candidate) {
     if (FindConditionFunctionInfo(a_candidate) != nullptr ||
-        FindConditionDefinitionByName(a_conditions, a_candidate) != nullptr) {
+        conditions::FindDefinitionByName(a_conditions, a_candidate) !=
+            nullptr) {
       return true;
     }
 
@@ -322,44 +321,12 @@ std::string BuildSectionEntry(std::string_view a_label) {
   return entry;
 }
 
-const ConditionDefinition *FindConditionDefinitionById(
-    const std::vector<ConditionDefinition> &a_conditions,
-    std::string_view a_id);
-
-const ConditionDefinition *ResolveConditionDefinitionForValidation(
-    const std::vector<ConditionDefinition> &a_conditions,
-    const ConditionDefinition &a_draft, std::string_view a_conditionId) {
-  if (!a_draft.id.empty() && a_conditionId == a_draft.id) {
-    return std::addressof(a_draft);
-  }
-  return FindConditionDefinitionById(a_conditions, a_conditionId);
-}
-
-const ConditionDefinition *FindConditionDefinitionById(
-    const std::vector<ConditionDefinition> &a_conditions,
-    std::string_view a_id) {
-  const auto it =
-      std::ranges::find(a_conditions, a_id, &ConditionDefinition::id);
-  return it != a_conditions.end() ? std::addressof(*it) : nullptr;
-}
-
-const ConditionDefinition *FindConditionDefinitionByName(
-    const std::vector<ConditionDefinition> &a_conditions,
-    std::string_view a_name, std::string_view a_excludedId) {
-  const auto it = std::ranges::find_if(
-      a_conditions, [&](const ConditionDefinition &condition) {
-        return condition.id != a_excludedId &&
-               CompareTextInsensitive(condition.name, a_name) == 0;
-      });
-  return it != a_conditions.end() ? std::addressof(*it) : nullptr;
-}
-
 const ConditionFunctionInfo *ResolveConditionFunctionInfo(
     const ConditionClause &a_clause,
     const std::vector<ConditionDefinition> &a_conditions,
     std::optional<ConditionFunctionInfo> &a_customInfo) {
   if (!a_clause.customConditionId.empty()) {
-    if (const auto *condition = FindConditionDefinitionById(
+    if (const auto *condition = conditions::FindDefinitionById(
             a_conditions, a_clause.customConditionId);
         condition != nullptr) {
       a_customInfo = ConditionFunctionInfo{};
@@ -377,7 +344,7 @@ std::string
 ResolveClauseDisplayName(const ConditionClause &a_clause,
                          const std::vector<ConditionDefinition> &a_conditions) {
   if (!a_clause.customConditionId.empty()) {
-    if (const auto *condition = FindConditionDefinitionById(
+    if (const auto *condition = conditions::FindDefinitionById(
             a_conditions, a_clause.customConditionId);
         condition != nullptr) {
       return condition->name;
@@ -416,63 +383,6 @@ std::vector<std::string> BuildConditionFunctionNames(
   return names;
 }
 
-bool HasConditionDependencyCycle(
-    const ConditionDefinition &a_draft,
-    const std::vector<ConditionDefinition> &a_conditions) {
-  std::vector<std::string_view> ids;
-  ids.reserve(a_conditions.size() + (a_draft.id.empty() ? 0u : 1u));
-  for (const auto &condition : a_conditions) {
-    if (condition.id.empty()) {
-      continue;
-    }
-    ids.push_back(condition.id);
-  }
-  if (!a_draft.id.empty() &&
-      std::ranges::find(ids, std::string_view{a_draft.id}) == ids.end()) {
-    ids.push_back(a_draft.id);
-  }
-
-  std::vector<std::uint8_t> states(ids.size(), 0);
-  std::function<bool(std::string_view)> visit = [&](const std::string_view id) {
-    const auto idIt = std::ranges::find(ids, id);
-    if (idIt == ids.end()) {
-      return false;
-    }
-
-    const auto index =
-        static_cast<std::size_t>(std::distance(ids.begin(), idIt));
-    if (states[index] == 1) {
-      return true;
-    }
-    if (states[index] == 2) {
-      return false;
-    }
-
-    states[index] = 1;
-    if (const auto *condition =
-            ResolveConditionDefinitionForValidation(a_conditions, a_draft, id);
-        condition != nullptr) {
-      for (const auto &clause : condition->clauses) {
-        if (clause.customConditionId.empty()) {
-          continue;
-        }
-        if (visit(clause.customConditionId)) {
-          return true;
-        }
-      }
-    }
-    states[index] = 2;
-    return false;
-  };
-
-  for (const auto id : ids) {
-    if (visit(id)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 std::string FormatNumberString(const double a_value) {
   std::ostringstream stream;
   stream.setf(std::ios::fixed, std::ios::floatfield);
@@ -506,27 +416,12 @@ bool ParseBooleanComparand(std::string_view a_text, bool a_defaultValue) {
 std::string
 ValidateConditionDraft(const ConditionDefinition &a_definition,
                        const std::vector<ConditionDefinition> &a_conditions) {
-  const auto name = TrimText(a_definition.name);
-  if (name.empty()) {
-    return "Condition name is required.";
-  }
-
-  if (FindConditionFunctionInfo(name) != nullptr) {
-    return "Condition name conflicts with an existing condition function.";
-  }
-
-  if (FindConditionDefinitionByName(a_conditions, name, a_definition.id) !=
-      nullptr) {
-    return "Condition name conflicts with another custom condition.";
-  }
-
-  if (a_definition.clauses.empty()) {
-    return "At least one clause is required.";
-  }
-
-  if (HasConditionDependencyCycle(a_definition, a_conditions)) {
-    return "Custom condition references must not contain circular "
-           "dependencies.";
+  if (const auto baseValidation = conditions::ValidateDefinitionNameAndGraph(
+          a_definition, a_conditions, [](std::string_view a_name) {
+            return FindConditionFunctionInfo(a_name) != nullptr;
+          });
+      !baseValidation.empty()) {
+    return baseValidation;
   }
 
   for (std::size_t index = 0; index < a_definition.clauses.size(); ++index) {
@@ -1574,8 +1469,8 @@ void Menu::DrawConditionEditorDialog() {
             const auto *customCondition =
                 clause.customConditionId.empty()
                     ? nullptr
-                    : FindConditionDefinitionById(conditions_,
-                                                  clause.customConditionId);
+                    : conditions::FindDefinitionById(conditions_,
+                                                     clause.customConditionId);
             float functionWidth = ImGui::GetContentRegionAvail().x;
             if (customCondition != nullptr) {
               const float swatchSize = ImGui::GetFrameHeight() - 2.0f;
@@ -1594,9 +1489,9 @@ void Menu::DrawConditionEditorDialog() {
               clause.arguments[0].clear();
               clause.arguments[1].clear();
               if (const auto *selectedCustomCondition =
-                      FindConditionDefinitionByName(conditions_,
-                                                    selectedFunctionName,
-                                                    editor.sourceConditionId);
+                      conditions::FindDefinitionByName(
+                          conditions_, selectedFunctionName,
+                          editor.sourceConditionId);
                   selectedCustomCondition != nullptr) {
                 clause.customConditionId = selectedCustomCondition->id;
                 clause.functionName.clear();

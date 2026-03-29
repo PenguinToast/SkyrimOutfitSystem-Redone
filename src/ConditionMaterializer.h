@@ -2,6 +2,7 @@
 
 #include "ConditionRefreshTargets.h"
 #include "conditions/Definition.h"
+#include "conditions/Validation.h"
 
 #include <RE/Skyrim.h>
 
@@ -17,14 +18,6 @@ struct MaterializedCondition {
   std::string signature;
   RefreshTargets refreshTargets;
 };
-
-[[nodiscard]] const Definition *
-FindDefinitionById(const std::vector<Definition> &a_conditions,
-                   std::string_view a_id);
-
-[[nodiscard]] Definition *
-FindDefinitionById(std::vector<Definition> &a_conditions,
-                   std::string_view a_id);
 
 void RebuildConditionDependencyMetadata(std::vector<Definition> &a_conditions);
 

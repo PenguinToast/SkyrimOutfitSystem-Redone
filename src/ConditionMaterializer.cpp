@@ -606,19 +606,6 @@ BuildConditionItemData(const NativeLiteral &a_literal,
 } // namespace
 
 namespace sosr::conditions {
-const Definition *
-FindDefinitionById(const std::vector<Definition> &a_conditions,
-                   const std::string_view a_id) {
-  const auto it = std::ranges::find(a_conditions, a_id, &Definition::id);
-  return it != a_conditions.end() ? std::addressof(*it) : nullptr;
-}
-
-Definition *FindDefinitionById(std::vector<Definition> &a_conditions,
-                               const std::string_view a_id) {
-  const auto it = std::ranges::find(a_conditions, a_id, &Definition::id);
-  return it != a_conditions.end() ? std::addressof(*it) : nullptr;
-}
-
 void RebuildConditionDependencyMetadata(std::vector<Definition> &a_conditions) {
   for (auto &condition : a_conditions) {
     condition.referencedConditionIds.clear();
